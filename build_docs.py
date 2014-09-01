@@ -60,7 +60,7 @@ def shell_out(cmd):
     try:
         subprocess.check_output(cmd, shell=True, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
-        logging.error("command failed with output %r", e.output)
+        logging.error("command failed with output %r", e.output.decode("utf-8"))
         raise
 
 def build_one(checkout, target, isdev, quick):
