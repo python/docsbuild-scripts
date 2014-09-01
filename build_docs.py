@@ -68,7 +68,7 @@ def build_one(checkout, target, isdev, quick):
     os.chdir(checkout)
 
     logging.info("Updating checkout")
-    shell_out("hg pull -U")
+    shell_out("hg pull -u")
 
     maketarget = "autobuild-" + ("html" if quick else ("dev" if isdev else "stable"))
     logging.info("Running make %s", maketarget)
