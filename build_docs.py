@@ -56,7 +56,7 @@ def _file_unchanged(old, new):
     return True
 
 def shell_out(cmd):
-    logging.debug("Running cmd %r", cmd)
+    logging.debug("Running command %r", cmd)
     try:
         subprocess.check_output(cmd, shell=True, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
