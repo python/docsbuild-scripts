@@ -117,7 +117,7 @@ def build_one(checkout, target, isdev, quick):
 
 def build_devguide():
     logging.info("Building devguide")
-    shell_out("hg pull -u -R %s" (DEVGUIDE_CHECKOUT,))
+    shell_out("hg pull -u -R %s" % (DEVGUIDE_CHECKOUT,))
     shell_out("%s %s %s" % (SPHINXBUILD, DEVGUIDE_CHECKOUT, DEVGUIDE_TARGET))
     # TODO Do Fastly invalidation.
 
