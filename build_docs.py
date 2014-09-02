@@ -36,6 +36,8 @@ BRANCHES = [
     (BUILDROOT + "/python35", WWWROOT + "/3.5", True),
     (BUILDROOT + "/python27", WWWROOT + "/2.7", False),
 ]
+DEVGUIDE_CHECKOUT = BUILDROOT + "/devguide"
+DEVGUIDE_TARGET = WWWROOT + "/devguide"
 
 
 def _file_unchanged(old, new):
@@ -113,6 +115,12 @@ def build_one(checkout, target, isdev, quick):
 
     logging.info("Finished %s", checkout)
 
+def build_devguide():
+    logging.info("Building devguide")
+    shell_out("hg pull -u -R %s" (DEVGUIDE_CHECKOUT,))
+    shell_out("%s %s %s" % (SPHINXBUILD, DEVGUIDE_CHECKOUT, DEVGUIDE_TARGET))
+    # TODO Do Fastly invalidation.
+
 def usage():
     print("Usage:")
     print("  {}".format(sys.argv[0]))
@@ -150,5 +158,6 @@ if __name__ == '__main__':
         else:
             for checkout, dest, devel in BRANCHES:
                 build_one(checkout, dest, devel, quick)
+            build_devguide()
     except Exception:
         logging.exception("docs build raised exception")
