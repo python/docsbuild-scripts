@@ -135,7 +135,7 @@ if __name__ == '__main__':
                             stream=sys.stderr)
     else:
         logging.basicConfig(format="%(levelname)s:%(asctime)s:%(message)s",
-                            file="/var/log/docsbuild/docsbuild.log")
+                            filename="/var/log/docsbuild/docsbuild.log")
     logging.root.setLevel(logging.DEBUG)
 
     try:
