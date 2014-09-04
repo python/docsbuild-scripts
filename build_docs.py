@@ -74,7 +74,9 @@ def build_one(checkout, target, isdev, quick):
 
     maketarget = "autobuild-" + ("html" if quick else ("dev" if isdev else "stable"))
     logging.info("Running make %s", maketarget)
-    shell_out("cd Doc; make SPHINXBUILD=%s %s" % (SPHINXBUILD, maketarget))
+    logname = os.path.basename(checkout) + ".log"
+    shell_out("cd Doc; make SPHINXBUILD=%s %s >> /var/log/docsbuild/%s. 2>&1" %
+              (SPHINXBUILD, maketarget, logname))
 
     logging.info("Computing changed files")
     changed = []
