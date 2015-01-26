@@ -92,6 +92,7 @@ def build_one(checkout, target, isdev, quick):
 
     logging.info("Copying HTML files to %s", target)
     shell_out("chown -R :docs Doc/build/html/")
+    shell_out("chmod -R o+r Doc/build/html/")
     shell_out("cp -a Doc/build/html/* %s" % target)
     if not quick:
         logging.debug("Copying dist files")
@@ -121,6 +122,7 @@ def build_devguide():
     logging.info("Building devguide")
     shell_out("hg pull -u -R %s" % (DEVGUIDE_CHECKOUT,))
     shell_out("%s %s %s" % (SPHINXBUILD, DEVGUIDE_CHECKOUT, DEVGUIDE_TARGET))
+    shell_out("chown -R o+r %s" % (DEVGUIDE_TARGET,))
     # TODO Do Fastly invalidation.
 
 def usage():
