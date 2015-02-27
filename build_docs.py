@@ -96,7 +96,10 @@ def build_one(checkout, target, isdev, quick):
     shell_out("cp -a Doc/build/html/* %s" % target)
     if not quick:
         logging.debug("Copying dist files")
-        shell_out("mkdir -p %s/archives" % target)
+        shell_out("chown -R :docs Doc/dist/")
+        shell_out("chmod -R o+r Doc/dist/")
+        shell_out("mkdir -m o+rx -p %s/archives" % target)
+        shell_out("chown :docs %s/archives" % target)
         shell_out("cp -a Doc/dist/* %s/archives" % target)
         changed.append("archives/")
         for fn in os.listdir(os.path.join(target, "archives")):
