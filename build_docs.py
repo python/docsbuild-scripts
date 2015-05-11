@@ -130,7 +130,7 @@ def build_devguide():
 
 def usage():
     print("Usage:")
-    print("  {}".format(sys.argv[0]))
+    print("  {} (to build all branches)".format(sys.argv[0]))
     print("or")
     print("  {} [-d] <checkout> <target>".format(sys.argv[0]))
     sys.exit(2)
