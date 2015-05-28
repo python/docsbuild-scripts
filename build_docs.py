@@ -94,7 +94,7 @@ def build_one(checkout, target, isdev, quick):
     logging.info("Copying HTML files to %s", target)
     shell_out("chown -R :docs Doc/build/html/")
     shell_out("chmod -R o+r Doc/build/html/")
-    shell_out("find Doc/build/html/ -type d -exec chmod o+x ';'")
+    shell_out("find Doc/build/html/ -type d -exec chmod o+x {} ';'")
     shell_out("cp -a Doc/build/html/* %s" % target)
     if not quick:
         logging.debug("Copying dist files")
