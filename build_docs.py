@@ -24,6 +24,7 @@ import logging
 import os
 import subprocess
 import sys
+from shlex import quote
 
 
 BUILDROOT = "/srv/docsbuild"
@@ -37,6 +38,19 @@ BRANCHES = [
     (BUILDROOT + "/python36", WWWROOT + "/3.6", True),
     (BUILDROOT + "/python27", WWWROOT + "/2.7", False),
 ]
+
+TRANSLATIONS = {
+    "fr": {'po_files_repo': 'https://github.com/AFPy/python_doc_fr.git',
+           'branches': [
+               # version, target, isdev
+               ('3.4', WWWROOT + "/3.4", False),
+               ('3.5', WWWROOT + "/3.5", False),
+               ('3.6', WWWROOT + "/3.6", True),
+               ('2.7', WWWROOT + "/2.7", False)
+           ]
+    }
+}
+
 DEVGUIDE_CHECKOUT = BUILDROOT + "/devguide"
 DEVGUIDE_TARGET = WWWROOT + "/devguide"
 
@@ -58,6 +72,21 @@ def _file_unchanged(old, new):
                 break
     return True
 
+
+def changed_files(source, target):
+    changed = []
+    for dirpath, dirnames, filenames in os.walk(source):
+        dir_rel = dirpath[len(source):]
+        for fn in filenames:
+            local_path = os.path.join(dirpath, fn)
+            rel_path = os.path.join(dir_rel, fn)
+            target_path = os.path.join(target, rel_path)
+            if (os.path.exists(target_path) and
+                not _file_unchanged(target_path, local_path)):
+                changed.append(rel_path)
+    return changed
+
+
 def shell_out(cmd):
     logging.debug("Running command %r", cmd)
     try:
@@ -66,47 +95,26 @@ def shell_out(cmd):
         logging.error("command failed with output %r", e.output.decode("utf-8"))
         raise
 
-def build_one(checkout, target, isdev, quick):
-    logging.info("Doc autobuild started in %s", checkout)
-    os.chdir(checkout)
-
-    logging.info("Updating checkout")
-    shell_out("hg pull -u")
-
-    maketarget = "autobuild-" + ("html" if quick else ("dev" if isdev else "stable"))
-    logging.info("Running make %s", maketarget)
-    logname = os.path.basename(checkout) + ".log"
-    shell_out("cd Doc; make SPHINXBUILD=%s %s >> /var/log/docsbuild/%s 2>&1" %
-              (SPHINXBUILD, maketarget, logname))
-
-    logging.info("Computing changed files")
-    changed = []
-    for dirpath, dirnames, filenames in os.walk("Doc/build/html/"):
-        dir_rel = dirpath[len("Doc/build/html/"):]
-        for fn in filenames:
-            local_path = os.path.join(dirpath, fn)
-            rel_path = os.path.join(dir_rel, fn)
-            target_path = os.path.join(target, rel_path)
-            if (os.path.exists(target_path) and
-                not _file_unchanged(target_path, local_path)):
-                changed.append(rel_path)
-
-    logging.info("Copying HTML files to %s", target)
-    shell_out("chown -R :docs Doc/build/html/")
-    shell_out("chmod -R o+r Doc/build/html/")
-    shell_out("find Doc/build/html/ -type d -exec chmod o+x {} ';'")
-    shell_out("cp -a Doc/build/html/* %s" % target)
+def copy_to_www(source, target, quick):
+    changed = changed_files(source, target)
+    logging.info("Copying HTML files from %s to %s",
+                 quote(source), quote(target))
+    shell_out("chown -R :docs {}".format(quote(source)))
+    shell_out("chmod -R o+r {}".format(quote(source)))
+    shell_out("find {} -type d -exec chmod o+x {{}} ';'".format(quote(source)))
+    shell_out("mkdir -p {}".format(quote(target)))
+    shell_out("cp -a {}* {}".format(source, quote(target)))
     if not quick:
         logging.debug("Copying dist files")
-        shell_out("chown -R :docs Doc/dist/")
-        shell_out("chmod -R o+r Doc/dist/")
-        shell_out("mkdir -m o+rx -p %s/archives" % target)
-        shell_out("chown :docs %s/archives" % target)
-        shell_out("cp -a Doc/dist/* %s/archives" % target)
+        source_dist = source.replace('/build/html/', '/dist/')
+        shell_out("chown -R :docs {}".format(quote(source_dist)))
+        shell_out("chmod -R o+r {}".format(quote(source_dist)))
+        shell_out("mkdir -m o+rx -p {}/archives".format(quote(target)))
+        shell_out("chown :docs {}/archives".format(quote(target)))
+        shell_out("cp -a {}/* {}/archives".format(source_dist, quote(target)))
         changed.append("archives/")
         for fn in os.listdir(os.path.join(target, "archives")):
             changed.append("archives/" + fn)
-
     logging.info("%s files changed", len(changed))
     if changed:
         target_ino = os.stat(target).st_ino
@@ -120,8 +128,39 @@ def build_one(checkout, target, isdev, quick):
             to_purge.extend(prefix + "/" + p for p in changed)
         logging.info("Running CDN purge")
         shell_out("curl -X PURGE \"https://docs.python.org/{%s}\"" % ",".join(to_purge))
+    logging.info("HTML copy from %s to %s finished", source, target)
 
-    logging.info("Finished %s", checkout)
+
+def build_translation(git_repo, lang='fr', version='3.5', isdev=False,
+                      quick=False):
+    source = "gen/src/{}/Doc/build/html/".format(version)
+    target = os.path.join(WWWROOT, lang, version)
+    lang_root = os.path.join(BUILDROOT, lang)
+    if not os.path.exists(lang_root):
+        shell_out("git clone {} {}".format(quote(git_repo), quote(lang_root)))
+    os.chdir(lang_root)
+    logging.info("Running make for translation %s version %s", lang, version)
+    logname = os.path.join("/var/log/docsbuild/" + lang + '-' + version + ".log")
+    maketarget = "autobuild-" + ("html" if quick else ("dev" if isdev else "stable"))
+    shell_out("make build MODE={} RELEASE={} >> {} 2>&1".format(
+        maketarget, quote(version), quote(logname)))
+    copy_to_www(source, target, quick)
+
+
+def build_one(checkout, target, isdev, quick):
+    logging.info("Doc autobuild started in %s", checkout)
+    os.chdir(checkout)
+
+    logging.info("Updating checkout")
+    shell_out("hg pull -u")
+
+    maketarget = "autobuild-" + ("html" if quick else ("dev" if isdev else "stable"))
+    logging.info("Running make %s", maketarget)
+    logname = os.path.basename(checkout) + ".log"
+    shell_out("cd Doc; make SPHINXBUILD=%s %s >> /var/log/docsbuild/%s 2>&1" %
+              (SPHINXBUILD, maketarget, logname))
+    copy_to_www('Doc/build/html/', target, quick)
+
 
 def build_devguide():
     logging.info("Building devguide")
@@ -135,6 +174,7 @@ def usage():
     print("  {} (to build all branches)".format(sys.argv[0]))
     print("or")
     print("  {} [-d] <checkout> <target>".format(sys.argv[0]))
+    print("  {} [-l] <lang> (to build all branches for a given language)".format(sys.argv[0]))
     sys.exit(2)
 
 
@@ -148,15 +188,17 @@ if __name__ == '__main__':
     logging.root.setLevel(logging.DEBUG)
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "dq")
+        opts, args = getopt.getopt(sys.argv[1:], "dql:")
     except getopt.error:
         usage()
-    quick = devel = False
-    for opt, _ in opts:
+    quick = devel = lang = False
+    for opt, value in opts:
         if opt == "-q":
             quick = True
         if opt == "-d":
             devel = True
+        if opt == "-l":
+            lang = value
     if devel and not args:
         usage()
     try:
@@ -164,6 +206,16 @@ if __name__ == '__main__':
             if len(args) != 2:
                 usage()
             build_one(os.path.abspath(args[0]), os.path.abspath(args[1]), devel, quick)
+        elif lang:
+            try:
+                po_files_repo = TRANSLATIONS[lang]['po_files_repo']
+            except KeyError:
+                print("Unknown lang")
+                sys.exit(1)
+            else:
+                for version, target, devel in TRANSLATIONS[lang]['branches']:
+                    build_translation(po_files_repo,
+                                      lang, version, devel, quick)
         else:
             for checkout, dest, devel in BRANCHES:
                 build_one(checkout, dest, devel, quick)
