@@ -73,7 +73,7 @@ def build_one(checkout, target, isdev, quick):
     logging.info("Updating checkout")
     shell_out("hg pull -u")
 
-    maketarget = "autobuild-" + ("html" if quick else ("dev" if isdev else "stable"))
+    maketarget = "autobuild-" + ("dev" if isdev else "stable") + ("-html" if quick else "")
     logging.info("Running make %s", maketarget)
     logname = os.path.basename(checkout) + ".log"
     shell_out("cd Doc; make SPHINXBUILD=%s %s >> /var/log/docsbuild/%s 2>&1" %
