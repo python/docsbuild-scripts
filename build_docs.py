@@ -32,7 +32,6 @@ WWWROOT = "/srv/docs.python.org"
 
 BRANCHES = [
     # checkout, target, isdev
-    (BUILDROOT + "/python34", WWWROOT + "/3.4", False),
     (BUILDROOT + "/python35", WWWROOT + "/3.5", False),
     (BUILDROOT + "/python36", WWWROOT + "/3.6", True),
     (BUILDROOT + "/python27", WWWROOT + "/2.7", False),
