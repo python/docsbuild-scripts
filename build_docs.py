@@ -115,7 +115,7 @@ def build_one(checkout, target, isdev, quick):
         for fn in os.listdir(targets_dir):
             if os.stat(os.path.join(targets_dir, fn)).st_ino == target_ino:
                 prefixes.append(fn)
-        to_purge = []
+        to_purge = prefixes[:]
         for prefix in prefixes:
             to_purge.extend(prefix + "/" + p for p in changed)
         logging.info("Running CDN purge")
