@@ -34,6 +34,7 @@ BRANCHES = [
     # checkout, target, isdev
     (BUILDROOT + "/python35", WWWROOT + "/3.5", False),
     (BUILDROOT + "/python36", WWWROOT + "/3.6", True),
+    (BUILDROOT + "/python37", WWWROOT + "/3.7", True),
     (BUILDROOT + "/python27", WWWROOT + "/2.7", False),
 ]
 DEVGUIDE_CHECKOUT = BUILDROOT + "/devguide"
