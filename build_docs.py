@@ -34,6 +34,7 @@ BRANCHES = [
     # checkout, target, isdev
     (BUILDROOT + "/python35", WWWROOT + "/3.5", False),
     (BUILDROOT + "/python36", WWWROOT + "/3.6", True),
+    (BUILDROOT + "/python37", WWWROOT + "/3.7", True),
     (BUILDROOT + "/python27", WWWROOT + "/2.7", False),
 ]
 DEVGUIDE_CHECKOUT = BUILDROOT + "/devguide"
@@ -114,7 +115,7 @@ def build_one(checkout, target, isdev, quick):
         for fn in os.listdir(targets_dir):
             if os.stat(os.path.join(targets_dir, fn)).st_ino == target_ino:
                 prefixes.append(fn)
-        to_purge = []
+        to_purge = prefixes[:]
         for prefix in prefixes:
             to_purge.extend(prefix + "/" + p for p in changed)
         logging.info("Running CDN purge")
