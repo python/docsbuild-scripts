@@ -2,18 +2,19 @@
 
 # Runs a build of the Python docs for various branches.
 #
-# Usages:
+# Usage:
 #
-#   dailybuild.py [-q]
+#   build_docs.py [-h] [-d] [-q] [-b 3.6] [-r BUILD_ROOT] [-w WWW_ROOT]
+#                 [--devguide-checkout DEVGUIDE_CHECKOUT]
+#                 [--devguide-target DEVGUIDE_TARGET]
 #
-# without any arguments builds docs for all branches configured in the global
-# BRANCHES value. -q selects "quick build", which means to build only HTML.
+# Without any arguments builds docs for all branches configured in the
+# global BRANCHES value, ignoring the -d flag as it's given in the
+# BRANCHES configuration.
 #
-#   dailybuild.py [-q] [-d] <checkout> <target>
+# -q selects "quick build", which means to build only HTML.
 #
-# builds one version, where <checkout> is a HG checkout directory of the Python
-# branch to build docs for, and <target> is the directory where the result
-# should be placed. If -d is given, the docs are built even if the branch is in
+# -d allow the docs to be built even if the branch is in
 # development mode (i.e. version contains a, b or c).
 #
 # This script was originally created and by Georg Brandl in March 2010. Modified
@@ -26,19 +27,13 @@ import subprocess
 import sys
 
 
-BUILDROOT = "/srv/docsbuild"
-SPHINXBUILD = os.path.join(BUILDROOT, "environment/bin/sphinx-build")
-WWWROOT = "/srv/docs.python.org"
-
 BRANCHES = [
-    # checkout, target, isdev
-    (BUILDROOT + "/python35", WWWROOT + "/3.5", False),
-    (BUILDROOT + "/python36", WWWROOT + "/3.6", True),
-    (BUILDROOT + "/python37", WWWROOT + "/3.7", True),
-    (BUILDROOT + "/python27", WWWROOT + "/2.7", False),
+    # version, isdev
+    (3.5, False),
+    (3.6, True),
+    (3.7, True),
+    (2.7, False)
 ]
-DEVGUIDE_CHECKOUT = BUILDROOT + "/devguide"
-DEVGUIDE_TARGET = WWWROOT + "/devguide"
 
 
 def _file_unchanged(old, new):
@@ -58,6 +53,7 @@ def _file_unchanged(old, new):
                 break
     return True
 
+
 def shell_out(cmd):
     logging.debug("Running command %r", cmd)
     try:
@@ -66,7 +62,10 @@ def shell_out(cmd):
         logging.error("command failed with output %r", e.output.decode("utf-8"))
         raise
 
-def build_one(checkout, target, isdev, quick):
+
+def build_one(version, isdev, quick, sphinxbuild, build_root, www_root):
+    checkout = build_root + "/python" + str(version).replace('.', '')
+    target = www_root + "/" + str(version)
     logging.info("Doc autobuild started in %s", checkout)
     os.chdir(checkout)
 
@@ -77,7 +76,7 @@ def build_one(checkout, target, isdev, quick):
     logging.info("Running make %s", maketarget)
     logname = os.path.basename(checkout) + ".log"
     shell_out("cd Doc; make SPHINXBUILD=%s %s >> /var/log/docsbuild/%s 2>&1" %
-              (SPHINXBUILD, maketarget, logname))
+              (sphinxbuild, maketarget, logname))
 
     logging.info("Computing changed files")
     changed = []
@@ -123,19 +122,49 @@ def build_one(checkout, target, isdev, quick):
 
     logging.info("Finished %s", checkout)
 
-def build_devguide():
+
+def build_devguide(devguide_checkout, devguide_target, sphinxbuild):
     logging.info("Building devguide")
-    shell_out("git -C %s pull" % (DEVGUIDE_CHECKOUT,))
-    shell_out("%s %s %s" % (SPHINXBUILD, DEVGUIDE_CHECKOUT, DEVGUIDE_TARGET))
-    shell_out("chmod -R o+r %s" % (DEVGUIDE_TARGET,))
+    shell_out("git -C %s pull" % (devguide_checkout,))
+    shell_out("%s %s %s" % (sphinxbuild, devguide_checkout, devguide_target))
+    shell_out("chmod -R o+r %s" % (devguide_target,))
     # TODO Do Fastly invalidation.
 
-def usage():
-    print("Usage:")
-    print("  {} (to build all branches)".format(sys.argv[0]))
-    print("or")
-    print("  {} [-d] <checkout> <target>".format(sys.argv[0]))
-    sys.exit(2)
+
+def parse_args():
+    from argparse import ArgumentParser
+    parser = ArgumentParser(
+        description="Runs a build of the Python docs for various branches.")
+    parser.add_argument(
+        "-d", "--devel",
+        action="store_true",
+        help="Use make autobuild-dev instead of autobuild-stable")
+    parser.add_argument(
+        "-q", "--quick",
+        action="store_true",
+        help="Make HTML files only (Makefile rules suffixed with -html).")
+    parser.add_argument(
+        "-b", "--branch",
+        metavar=3.6,
+        type=float,
+        help="Version to build (defaults to all maintained branches).")
+    parser.add_argument(
+        "-r", "--build-root",
+        help="Path to a directory containing a checkout per branch.",
+        default="/srv/docsbuild")
+    parser.add_argument(
+        "-w", "--www-root",
+        help="Path where generated files will be copied.",
+        default="/srv/docs.python.org")
+    parser.add_argument(
+        "--devguide-checkout",
+        help="Path to a devguide checkout.",
+        default="/srv/docsbuild/devguide")
+    parser.add_argument(
+        "--devguide-target",
+        help="Path where the generated devguide should be copied.",
+        default="/srv/docs.python.org/devguide")
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
@@ -146,27 +175,16 @@ if __name__ == '__main__':
         logging.basicConfig(format="%(levelname)s:%(asctime)s:%(message)s",
                             filename="/var/log/docsbuild/docsbuild.log")
     logging.root.setLevel(logging.DEBUG)
-
+    args = parse_args()
+    sphinxbuild = os.path.join(args.build_root, "environment/bin/sphinx-build")
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "dq")
-    except getopt.error:
-        usage()
-    quick = devel = False
-    for opt, _ in opts:
-        if opt == "-q":
-            quick = True
-        if opt == "-d":
-            devel = True
-    if devel and not args:
-        usage()
-    try:
-        if args:
-            if len(args) != 2:
-                usage()
-            build_one(os.path.abspath(args[0]), os.path.abspath(args[1]), devel, quick)
+        if args.branch:
+            build_one(args.branch, args.devel, args.quick, sphinxbuild,
+                      args.build_root, args.www_root)
         else:
-            for checkout, dest, devel in BRANCHES:
-                build_one(checkout, dest, devel, quick)
-            build_devguide()
+            for version, devel in BRANCHES:
+                build_one(version, devel, args.quick, sphinxbuild,
+                          args.build_root, args.www_root)
+            build_devguide(devguide_checkout, devguide_target, sphinxbuild)
     except Exception:
         logging.exception("docs build raised exception")
