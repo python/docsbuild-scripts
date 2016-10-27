@@ -63,7 +63,8 @@ def shell_out(cmd):
         raise
 
 
-def build_one(version, isdev, quick, sphinxbuild, build_root, www_root):
+def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
+              skip_cache_invalidation=False):
     checkout = build_root + "/python" + str(version).replace('.', '')
     target = www_root + "/" + str(version)
     logging.info("Doc autobuild started in %s", checkout)
@@ -107,7 +108,7 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root):
             changed.append("archives/" + fn)
 
     logging.info("%s files changed", len(changed))
-    if changed:
+    if changed and not skip_cache_invalidation:
         target_ino = os.stat(target).st_ino
         targets_dir = os.path.dirname(target)
         prefixes = []
@@ -123,12 +124,15 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root):
     logging.info("Finished %s", checkout)
 
 
-def build_devguide(devguide_checkout, devguide_target, sphinxbuild):
+def build_devguide(devguide_checkout, devguide_target, sphinxbuild,
+                   skip_cache_invalidation=False):
     logging.info("Building devguide")
     shell_out("git -C %s pull" % (devguide_checkout,))
     shell_out("%s %s %s" % (sphinxbuild, devguide_checkout, devguide_target))
     shell_out("chmod -R o+r %s" % (devguide_target,))
-    # TODO Do Fastly invalidation.
+    if not skip_cache_invalidation:
+        # TODO Do Fastly invalidation.
+        pass
 
 
 def parse_args():
@@ -164,6 +168,10 @@ def parse_args():
         "--devguide-target",
         help="Path where the generated devguide should be copied.",
         default="/srv/docs.python.org/devguide")
+    parser.add_argument(
+        "--skip-cache-invalidation",
+        help="Skip fastly cache invalidation.",
+        action="store_true")
     return parser.parse_args()
 
 
@@ -180,11 +188,14 @@ if __name__ == '__main__':
     try:
         if args.branch:
             build_one(args.branch, args.devel, args.quick, sphinxbuild,
-                      args.build_root, args.www_root)
+                      args.build_root, args.www_root,
+                      args.skip_cache_invalidation)
         else:
             for version, devel in BRANCHES:
                 build_one(version, devel, args.quick, sphinxbuild,
-                          args.build_root, args.www_root)
-            build_devguide(args.devguide_checkout, args.devguide_target, sphinxbuild)
+                          args.build_root, args.www_root,
+                          args.skip_cache_invalidation)
+            build_devguide(args.devguide_checkout, args.devguide_target,
+                           sphinxbuild, args.skip_cache_invalidation)
     except Exception:
         logging.exception("docs build raised exception")
