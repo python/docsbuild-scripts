@@ -185,6 +185,6 @@ if __name__ == '__main__':
             for version, devel in BRANCHES:
                 build_one(version, devel, args.quick, sphinxbuild,
                           args.build_root, args.www_root)
-            build_devguide(devguide_checkout, devguide_target, sphinxbuild)
+            build_devguide(args.devguide_checkout, args.devguide_target, sphinxbuild)
     except Exception:
         logging.exception("docs build raised exception")
