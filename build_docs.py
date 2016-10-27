@@ -64,7 +64,8 @@ def shell_out(cmd):
 
 
 def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
-              skip_cache_invalidation=False, group='docs', git=False):
+              skip_cache_invalidation=False, group='docs', git=False,
+              log_directory='/var/log/docsbuild/'):
     checkout = build_root + "/python" + str(version).replace('.', '')
     target = www_root + "/" + str(version)
     logging.info("Doc autobuild started in %s", checkout)
@@ -80,8 +81,8 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
     maketarget = "autobuild-" + ("dev" if isdev else "stable") + ("-html" if quick else "")
     logging.info("Running make %s", maketarget)
     logname = os.path.basename(checkout) + ".log"
-    shell_out("cd Doc; make SPHINXBUILD=%s %s >> /var/log/docsbuild/%s 2>&1" %
-              (sphinxbuild, maketarget, logname))
+    shell_out("cd Doc; make SPHINXBUILD=%s %s >> %s 2>&1" %
+              (sphinxbuild, maketarget, os.path.join(log_directory, logname)))
 
     logging.info("Computing changed files")
     changed = []
@@ -184,30 +185,36 @@ def parse_args():
         "--git",
         help="Use git instead of mercurial.",
         action="store_true")
+    parser.add_argument(
+        "--log-directory",
+        help="Directory used to store logs.",
+        default="/var/log/docsbuild/")
     return parser.parse_args()
 
 
 if __name__ == '__main__':
+    args = parse_args()
     if sys.stderr.isatty():
         logging.basicConfig(format="%(levelname)s:%(message)s",
                             stream=sys.stderr)
     else:
         logging.basicConfig(format="%(levelname)s:%(asctime)s:%(message)s",
-                            filename="/var/log/docsbuild/docsbuild.log")
+                            filename=os.path.join(args.log_directory,
+                                                  "docsbuild.log"))
     logging.root.setLevel(logging.DEBUG)
-    args = parse_args()
     sphinxbuild = os.path.join(args.build_root, "environment/bin/sphinx-build")
     try:
         if args.branch:
             build_one(args.branch, args.devel, args.quick, sphinxbuild,
                       args.build_root, args.www_root,
                       args.skip_cache_invalidation,
-                      args.group, args.git)
+                      args.group, args.git, args.log_directory)
         else:
             for version, devel in BRANCHES:
                 build_one(version, devel, args.quick, sphinxbuild,
                           args.build_root, args.www_root,
-                          args.skip_cache_invalidation, args.group, args.git)
+                          args.skip_cache_invalidation, args.group, args.git,
+                          args.log_directory)
             build_devguide(args.devguide_checkout, args.devguide_target,
                            sphinxbuild, args.skip_cache_invalidation)
     except Exception:
