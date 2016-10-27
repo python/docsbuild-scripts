@@ -64,7 +64,7 @@ def shell_out(cmd):
 
 
 def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
-              skip_cache_invalidation=False):
+              skip_cache_invalidation=False, group='docs'):
     checkout = build_root + "/python" + str(version).replace('.', '')
     target = www_root + "/" + str(version)
     logging.info("Doc autobuild started in %s", checkout)
@@ -92,16 +92,16 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
                 changed.append(rel_path)
 
     logging.info("Copying HTML files to %s", target)
-    shell_out("chown -R :docs Doc/build/html/")
+    shell_out("chown -R :{} Doc/build/html/".format(group))
     shell_out("chmod -R o+r Doc/build/html/")
     shell_out("find Doc/build/html/ -type d -exec chmod o+x {} ';'")
     shell_out("cp -a Doc/build/html/* %s" % target)
     if not quick:
         logging.debug("Copying dist files")
-        shell_out("chown -R :docs Doc/dist/")
+        shell_out("chown -R :{} Doc/dist/".format(group))
         shell_out("chmod -R o+r Doc/dist/")
         shell_out("mkdir -m o+rx -p %s/archives" % target)
-        shell_out("chown :docs %s/archives" % target)
+        shell_out("chown :{} {}/archives".format(group, target))
         shell_out("cp -a Doc/dist/* %s/archives" % target)
         changed.append("archives/")
         for fn in os.listdir(os.path.join(target, "archives")):
@@ -172,6 +172,10 @@ def parse_args():
         "--skip-cache-invalidation",
         help="Skip fastly cache invalidation.",
         action="store_true")
+    parser.add_argument(
+        "--group",
+        help="Group files on targets and www-root file should get.",
+        default="docs")
     return parser.parse_args()
 
 
@@ -189,12 +193,13 @@ if __name__ == '__main__':
         if args.branch:
             build_one(args.branch, args.devel, args.quick, sphinxbuild,
                       args.build_root, args.www_root,
-                      args.skip_cache_invalidation)
+                      args.skip_cache_invalidation,
+                      args.group)
         else:
             for version, devel in BRANCHES:
                 build_one(version, devel, args.quick, sphinxbuild,
                           args.build_root, args.www_root,
-                          args.skip_cache_invalidation)
+                          args.skip_cache_invalidation, args.group)
             build_devguide(args.devguide_checkout, args.devguide_target,
                            sphinxbuild, args.skip_cache_invalidation)
     except Exception:
