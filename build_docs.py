@@ -137,13 +137,20 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
 
 def build_devguide(devguide_checkout, devguide_target, sphinxbuild,
                    skip_cache_invalidation=False):
+    build_directory = os.path.join(devguide_checkout, "build/html")
     logging.info("Building devguide")
     shell_out("git -C %s pull" % (devguide_checkout,))
-    shell_out("%s %s %s" % (sphinxbuild, devguide_checkout, devguide_target))
+    shell_out("%s %s %s" % (sphinxbuild, devguide_checkout, build_directory))
+    changed = changed_files(build_directory, devguide_target)
+    shell_out("mkdir -p {}".format(devguide_target))
+    shell_out("cp -a {}/* {}".format(build_directory, devguide_target))
     shell_out("chmod -R o+r %s" % (devguide_target,))
-    if not skip_cache_invalidation:
-        # TODO Do Fastly invalidation.
-        pass
+    if changed and not skip_cache_invalidation:
+        prefix = os.path.basename(devguide_target)
+        to_purge = [prefix]
+        to_purge.extend(prefix + "/" + p for p in changed)
+        logging.info("Running CDN purge")
+        shell_out("curl -X PURGE \"https://docs.python.org/{%s}\"" % ",".join(to_purge))
 
 
 def parse_args():
