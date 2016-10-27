@@ -64,14 +64,18 @@ def shell_out(cmd):
 
 
 def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
-              skip_cache_invalidation=False, group='docs'):
+              skip_cache_invalidation=False, group='docs', git=False):
     checkout = build_root + "/python" + str(version).replace('.', '')
     target = www_root + "/" + str(version)
     logging.info("Doc autobuild started in %s", checkout)
     os.chdir(checkout)
 
     logging.info("Updating checkout")
-    shell_out("hg pull -u")
+    if git:
+        shell_out("git reset --hard HEAD")
+        shell_out("git pull --ff-only")
+    else:
+        shell_out("hg pull -u")
 
     maketarget = "autobuild-" + ("dev" if isdev else "stable") + ("-html" if quick else "")
     logging.info("Running make %s", maketarget)
@@ -176,6 +180,10 @@ def parse_args():
         "--group",
         help="Group files on targets and www-root file should get.",
         default="docs")
+    parser.add_argument(
+        "--git",
+        help="Use git instead of mercurial.",
+        action="store_true")
     return parser.parse_args()
 
 
@@ -194,12 +202,12 @@ if __name__ == '__main__':
             build_one(args.branch, args.devel, args.quick, sphinxbuild,
                       args.build_root, args.www_root,
                       args.skip_cache_invalidation,
-                      args.group)
+                      args.group, args.git)
         else:
             for version, devel in BRANCHES:
                 build_one(version, devel, args.quick, sphinxbuild,
                           args.build_root, args.www_root,
-                          args.skip_cache_invalidation, args.group)
+                          args.skip_cache_invalidation, args.group, args.git)
             build_devguide(args.devguide_checkout, args.devguide_target,
                            sphinxbuild, args.skip_cache_invalidation)
     except Exception:
