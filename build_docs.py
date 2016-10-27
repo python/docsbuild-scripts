@@ -63,6 +63,23 @@ def shell_out(cmd):
         raise
 
 
+def changed_files(directory, other):
+    logging.info("Computing changed files")
+    changed = []
+    if directory[-1] != '/':
+        directory += '/'
+    for dirpath, dirnames, filenames in os.walk(directory):
+        dir_rel = dirpath[len(directory):]
+        for fn in filenames:
+            local_path = os.path.join(dirpath, fn)
+            rel_path = os.path.join(dir_rel, fn)
+            target_path = os.path.join(other, rel_path)
+            if (os.path.exists(target_path) and
+                not _file_unchanged(target_path, local_path)):
+                changed.append(rel_path)
+    return changed
+
+
 def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
               skip_cache_invalidation=False, group='docs', git=False,
               log_directory='/var/log/docsbuild/'):
@@ -84,18 +101,7 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
     shell_out("cd Doc; make SPHINXBUILD=%s %s >> %s 2>&1" %
               (sphinxbuild, maketarget, os.path.join(log_directory, logname)))
 
-    logging.info("Computing changed files")
-    changed = []
-    for dirpath, dirnames, filenames in os.walk("Doc/build/html/"):
-        dir_rel = dirpath[len("Doc/build/html/"):]
-        for fn in filenames:
-            local_path = os.path.join(dirpath, fn)
-            rel_path = os.path.join(dir_rel, fn)
-            target_path = os.path.join(target, rel_path)
-            if (os.path.exists(target_path) and
-                not _file_unchanged(target_path, local_path)):
-                changed.append(rel_path)
-
+    changed = changed_files(os.path.join(checkout, "Doc/build/html"), target)
     logging.info("Copying HTML files to %s", target)
     shell_out("chown -R :{} Doc/build/html/".format(group))
     shell_out("chmod -R o+r Doc/build/html/")
