@@ -63,51 +63,63 @@ def shell_out(cmd):
         raise
 
 
-def build_one(version, isdev, quick, sphinxbuild, build_root, www_root):
+def changed_files(directory, other):
+    logging.info("Computing changed files")
+    changed = []
+    if directory[-1] != '/':
+        directory += '/'
+    for dirpath, dirnames, filenames in os.walk(directory):
+        dir_rel = dirpath[len(directory):]
+        for fn in filenames:
+            local_path = os.path.join(dirpath, fn)
+            rel_path = os.path.join(dir_rel, fn)
+            target_path = os.path.join(other, rel_path)
+            if (os.path.exists(target_path) and
+                not _file_unchanged(target_path, local_path)):
+                changed.append(rel_path)
+    return changed
+
+
+def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
+              skip_cache_invalidation=False, group='docs', git=False,
+              log_directory='/var/log/docsbuild/'):
     checkout = build_root + "/python" + str(version).replace('.', '')
     target = www_root + "/" + str(version)
     logging.info("Doc autobuild started in %s", checkout)
     os.chdir(checkout)
 
     logging.info("Updating checkout")
-    shell_out("hg pull -u")
+    if git:
+        shell_out("git reset --hard HEAD")
+        shell_out("git pull --ff-only")
+    else:
+        shell_out("hg pull -u")
 
     maketarget = "autobuild-" + ("dev" if isdev else "stable") + ("-html" if quick else "")
     logging.info("Running make %s", maketarget)
     logname = os.path.basename(checkout) + ".log"
-    shell_out("cd Doc; make SPHINXBUILD=%s %s >> /var/log/docsbuild/%s 2>&1" %
-              (sphinxbuild, maketarget, logname))
+    shell_out("cd Doc; make SPHINXBUILD=%s %s >> %s 2>&1" %
+              (sphinxbuild, maketarget, os.path.join(log_directory, logname)))
 
-    logging.info("Computing changed files")
-    changed = []
-    for dirpath, dirnames, filenames in os.walk("Doc/build/html/"):
-        dir_rel = dirpath[len("Doc/build/html/"):]
-        for fn in filenames:
-            local_path = os.path.join(dirpath, fn)
-            rel_path = os.path.join(dir_rel, fn)
-            target_path = os.path.join(target, rel_path)
-            if (os.path.exists(target_path) and
-                not _file_unchanged(target_path, local_path)):
-                changed.append(rel_path)
-
+    changed = changed_files(os.path.join(checkout, "Doc/build/html"), target)
     logging.info("Copying HTML files to %s", target)
-    shell_out("chown -R :docs Doc/build/html/")
+    shell_out("chown -R :{} Doc/build/html/".format(group))
     shell_out("chmod -R o+r Doc/build/html/")
     shell_out("find Doc/build/html/ -type d -exec chmod o+x {} ';'")
     shell_out("cp -a Doc/build/html/* %s" % target)
     if not quick:
         logging.debug("Copying dist files")
-        shell_out("chown -R :docs Doc/dist/")
+        shell_out("chown -R :{} Doc/dist/".format(group))
         shell_out("chmod -R o+r Doc/dist/")
         shell_out("mkdir -m o+rx -p %s/archives" % target)
-        shell_out("chown :docs %s/archives" % target)
+        shell_out("chown :{} {}/archives".format(group, target))
         shell_out("cp -a Doc/dist/* %s/archives" % target)
         changed.append("archives/")
         for fn in os.listdir(os.path.join(target, "archives")):
             changed.append("archives/" + fn)
 
     logging.info("%s files changed", len(changed))
-    if changed:
+    if changed and not skip_cache_invalidation:
         target_ino = os.stat(target).st_ino
         targets_dir = os.path.dirname(target)
         prefixes = []
@@ -123,12 +135,22 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root):
     logging.info("Finished %s", checkout)
 
 
-def build_devguide(devguide_checkout, devguide_target, sphinxbuild):
+def build_devguide(devguide_checkout, devguide_target, sphinxbuild,
+                   skip_cache_invalidation=False):
+    build_directory = os.path.join(devguide_checkout, "build/html")
     logging.info("Building devguide")
     shell_out("git -C %s pull" % (devguide_checkout,))
-    shell_out("%s %s %s" % (sphinxbuild, devguide_checkout, devguide_target))
+    shell_out("%s %s %s" % (sphinxbuild, devguide_checkout, build_directory))
+    changed = changed_files(build_directory, devguide_target)
+    shell_out("mkdir -p {}".format(devguide_target))
+    shell_out("cp -a {}/* {}".format(build_directory, devguide_target))
     shell_out("chmod -R o+r %s" % (devguide_target,))
-    # TODO Do Fastly invalidation.
+    if changed and not skip_cache_invalidation:
+        prefix = os.path.basename(devguide_target)
+        to_purge = [prefix]
+        to_purge.extend(prefix + "/" + p for p in changed)
+        logging.info("Running CDN purge")
+        shell_out("curl -X PURGE \"https://docs.python.org/{%s}\"" % ",".join(to_purge))
 
 
 def parse_args():
@@ -164,27 +186,49 @@ def parse_args():
         "--devguide-target",
         help="Path where the generated devguide should be copied.",
         default="/srv/docs.python.org/devguide")
+    parser.add_argument(
+        "--skip-cache-invalidation",
+        help="Skip fastly cache invalidation.",
+        action="store_true")
+    parser.add_argument(
+        "--group",
+        help="Group files on targets and www-root file should get.",
+        default="docs")
+    parser.add_argument(
+        "--git",
+        help="Use git instead of mercurial.",
+        action="store_true")
+    parser.add_argument(
+        "--log-directory",
+        help="Directory used to store logs.",
+        default="/var/log/docsbuild/")
     return parser.parse_args()
 
 
 if __name__ == '__main__':
+    args = parse_args()
     if sys.stderr.isatty():
         logging.basicConfig(format="%(levelname)s:%(message)s",
                             stream=sys.stderr)
     else:
         logging.basicConfig(format="%(levelname)s:%(asctime)s:%(message)s",
-                            filename="/var/log/docsbuild/docsbuild.log")
+                            filename=os.path.join(args.log_directory,
+                                                  "docsbuild.log"))
     logging.root.setLevel(logging.DEBUG)
-    args = parse_args()
     sphinxbuild = os.path.join(args.build_root, "environment/bin/sphinx-build")
     try:
         if args.branch:
             build_one(args.branch, args.devel, args.quick, sphinxbuild,
-                      args.build_root, args.www_root)
+                      args.build_root, args.www_root,
+                      args.skip_cache_invalidation,
+                      args.group, args.git, args.log_directory)
         else:
             for version, devel in BRANCHES:
                 build_one(version, devel, args.quick, sphinxbuild,
-                          args.build_root, args.www_root)
-            build_devguide(args.devguide_checkout, args.devguide_target, sphinxbuild)
+                          args.build_root, args.www_root,
+                          args.skip_cache_invalidation, args.group, args.git,
+                          args.log_directory)
+            build_devguide(args.devguide_checkout, args.devguide_target,
+                           sphinxbuild, args.skip_cache_invalidation)
     except Exception:
         logging.exception("docs build raised exception")
