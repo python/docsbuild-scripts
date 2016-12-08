@@ -143,6 +143,7 @@ def build_devguide(devguide_checkout, devguide_target, sphinxbuild,
     shell_out("%s %s %s" % (sphinxbuild, devguide_checkout, build_directory))
     changed = changed_files(build_directory, devguide_target)
     shell_out("mkdir -p {}".format(devguide_target))
+    shell_out("find %s -type d -exec chmod o+x {} ';'" % (build_directory,))
     shell_out("cp -a {}/* {}".format(build_directory, devguide_target))
     shell_out("chmod -R o+r %s" % (devguide_target,))
     if changed and not skip_cache_invalidation:
