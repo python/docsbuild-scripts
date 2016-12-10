@@ -116,6 +116,7 @@ def clone_repo(dest, branch, git=False):
 def build_one(version, branch, isdev, quick, sphinxbuild, build_root, www_root,
               skip_cache_invalidation=False, group='docs', git=False,
               log_directory='/var/log/docsbuild/'):
+    os.makedirs(log_directory, mode=0o750, exist_ok=True)
     checkout = build_root + "/python" + str(version).replace('.', '')
     target = www_root + "/" + str(version)
     logging.info("Doc autobuild started in %s", checkout)
@@ -129,6 +130,7 @@ def build_one(version, branch, isdev, quick, sphinxbuild, build_root, www_root,
 
     changed = changed_files(os.path.join(checkout, "Doc/build/html"), target)
     logging.info("Copying HTML files to %s", target)
+    os.makedirs(target, mode=0o775, exist_ok=True)
     shell_out("chown -R :{} Doc/build/html/".format(group))
     shell_out("chmod -R o+r Doc/build/html/")
     shell_out("find Doc/build/html/ -type d -exec chmod o+x {} ';'")
@@ -232,6 +234,13 @@ def parse_args():
     return parser.parse_args()
 
 
+def check_environment(build_root):
+    venv_path = os.path.join(build_root, "environment")
+    if not os.path.isdir(venv_path):
+        logging.error("venv is missing in %s, salt should have built it.",
+                      venv_path)
+        exit(1)
+
 if __name__ == '__main__':
     args = parse_args()
     if sys.stderr.isatty():
@@ -242,6 +251,7 @@ if __name__ == '__main__':
                             filename=os.path.join(args.log_directory,
                                                   "docsbuild.log"))
     logging.root.setLevel(logging.DEBUG)
+    check_environment(args.build_root)
     sphinxbuild = os.path.join(args.build_root, "environment/bin/sphinx-build")
     try:
         if args.branch:
