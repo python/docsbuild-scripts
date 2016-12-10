@@ -25,14 +25,18 @@ import logging
 import os
 import subprocess
 import sys
+import shutil
 
+
+CPYTHON_GIT = "https://github.com/python/cpython.git"
+CPYTHON_HG = "https://hg.python.org/cpython"
 
 BRANCHES = [
-    # version, isdev
-    (3.5, False),
-    (3.6, True),
-    (3.7, True),
-    (2.7, False)
+    # version, branch, isdev
+    (3.5, '3.5', False),
+    (3.6, '3.6', True),
+    (3.7, 'master', True),
+    (2.7, '2.7', False)
 ]
 
 
@@ -80,21 +84,43 @@ def changed_files(directory, other):
     return changed
 
 
-def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
+def update_repo(dest, branch, git=False):
+    logging.info("Updating repository %s", dest)
+    if git:
+        shell_out("git -C {} reset --hard HEAD".format(dest))
+        shell_out("git -C {} checkout {}".format(dest, branch))
+        shell_out("git -C {} pull --ff-only".format(dest))
+    else:
+        shell_out("hg --cwd {} pull -u".format(dest))
+
+
+def clone_repo(dest, branch, git=False):
+    """This function will remove a clone if the update fails, and re-clone
+    it from scratch.
+
+    This mean that switching from hg to git and vice-versa
+    is now a seamless operation.
+    """
+    vcs = 'git' if git else 'hg'
+    upstream = CPYTHON_GIT if git else CPYTHON_HG
+    try:
+        update_repo(dest, branch, git)
+    except subprocess.CalledProcessError:
+        if os.path.exists(dest):
+            shutil.rmtree(dest)
+        logging.info("Cloning cpython")
+        os.makedirs(dest, mode=0o775)
+        shell_out("{} clone {} {}".format(vcs, upstream, dest))
+        shell_out("{} checkout {}".format(vcs, branch))
+
+def build_one(version, branch, isdev, quick, sphinxbuild, build_root, www_root,
               skip_cache_invalidation=False, group='docs', git=False,
               log_directory='/var/log/docsbuild/'):
     checkout = build_root + "/python" + str(version).replace('.', '')
     target = www_root + "/" + str(version)
     logging.info("Doc autobuild started in %s", checkout)
+    clone_repo(checkout, branch, git)
     os.chdir(checkout)
-
-    logging.info("Updating checkout")
-    if git:
-        shell_out("git reset --hard HEAD")
-        shell_out("git pull --ff-only")
-    else:
-        shell_out("hg pull -u")
-
     maketarget = "autobuild-" + ("dev" if isdev else "stable") + ("-html" if quick else "")
     logging.info("Running make %s", maketarget)
     logname = os.path.basename(checkout) + ".log"
@@ -219,13 +245,14 @@ if __name__ == '__main__':
     sphinxbuild = os.path.join(args.build_root, "environment/bin/sphinx-build")
     try:
         if args.branch:
-            build_one(args.branch, args.devel, args.quick, sphinxbuild,
+            build_one(args.branch, args.branch, args.devel, args.quick,
+                      sphinxbuild,
                       args.build_root, args.www_root,
                       args.skip_cache_invalidation,
                       args.group, args.git, args.log_directory)
         else:
-            for version, devel in BRANCHES:
-                build_one(version, devel, args.quick, sphinxbuild,
+            for version, branch, devel in BRANCHES:
+                build_one(version, branch, devel, args.quick, sphinxbuild,
                           args.build_root, args.www_root,
                           args.skip_cache_invalidation, args.group, args.git,
                           args.log_directory)
