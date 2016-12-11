@@ -25,16 +25,45 @@ import logging
 import os
 import subprocess
 import sys
+import shutil
+from collections import namedtuple
 
+
+CPYTHON_GIT = "https://github.com/python/cpython.git"
+CPYTHON_HG = "https://hg.python.org/cpython"
 
 BRANCHES = [
-    # version, isdev
-    (3.5, False),
-    (3.6, True),
-    (3.7, True),
-    (2.7, False)
+    # version, branch, isdev
+    (3.5, '3.5', False),
+    (3.6, '3.6', True),
+    (3.7, 'master', True),
+    (2.7, '2.7', False)
 ]
 
+Repository = namedtuple('Repository', 'name url')
+Translation = namedtuple('Translation', 'lang repo branch po_path')
+
+AFPY = Repository('afpy', 'https://github.com/AFPy/python_doc_fr.git')
+JA_35 = Repository('ja_3.5', 'https://github.com/python-doc-ja/py35-locale.git')
+JA_27 = Repository('ja_2.7', 'https://github.com/python-doc-ja/py27-locale.git')
+TW = Repository('tw', 'https://github.com/python-doc-tw/cpython-tw.git')
+
+# Only use lowercased tranlation names, with dash (no underscore) for
+# URL consistency, as the name is used in the docs.python.org URL.
+I18N_CONF = [
+    {  # French
+        'default': Translation('fr', AFPY, 'master', '3.6'),
+        3.5: Translation('fr', AFPY, 'master', '3.5'),
+        2.7: Translation('fr', AFPY, 'master', '2.7'),
+    },
+    {  # Japanese
+        'default': Translation('ja', JA_35, 'master', 'ja/LC_MESSAGES'),
+        2.7: Translation('ja', JA_27, 'master', 'ja/LC_MESSAGES'),
+    },
+    {  # Chienese as spoken in Taiwan
+        'default': Translation('zh', TW, 'tw-3.5', 'Doc/locale/zh_Hant/LC_MESSAGES'),
+    }
+]
 
 def _file_unchanged(old, new):
     with open(old, "rb") as fp1, open(new, "rb") as fp2:
@@ -80,29 +109,62 @@ def changed_files(directory, other):
     return changed
 
 
-def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
+def update_repo(dest, branch, git=False):
+    logging.info("Updating repository %s", dest)
+    if git:
+        shell_out("git -C {} reset --hard HEAD".format(dest))
+        shell_out("git -C {} checkout {}".format(dest, branch))
+        shell_out("git -C {} pull --ff-only".format(dest))
+    else:
+        shell_out("hg --cwd {} pull -u".format(dest))
+
+
+def clone_repo(url, dest, branch, git=False):
+    """This function will remove a clone if the update fails, and re-clone
+    it from scratch.
+
+    This mean that switching from hg to git and vice-versa
+    is now a seamless operation.
+    """
+    vcs = 'git' if git else 'hg'
+    try:
+        update_repo(dest, branch, git)
+    except subprocess.CalledProcessError:
+        if os.path.exists(dest):
+            shutil.rmtree(dest)
+        logging.info("Cloning %s", url)
+        os.makedirs(dest, mode=0o775)
+        shell_out("{} clone {} {}".format(vcs, url, dest))
+        if git:
+            shell_out("git -C {} checkout {}".format(dest, branch))
+        else:
+            shell_out("hg --cwd {} checkout {}".format(dest, branch))
+
+
+def build_one(version, branch, isdev, quick, sphinxbuild, build_root, www_root,
+              translation=None,
               skip_cache_invalidation=False, group='docs', git=False,
               log_directory='/var/log/docsbuild/'):
+    os.makedirs(log_directory, mode=0o750, exist_ok=True)
     checkout = build_root + "/python" + str(version).replace('.', '')
-    target = www_root + "/" + str(version)
+    target = www_root + "/" + (translation.lang + "/" if translation else "") + str(version)
     logging.info("Doc autobuild started in %s", checkout)
+    clone_repo(CPYTHON_GIT if git else CPYTHON_HG,
+               checkout, branch, git)
     os.chdir(checkout)
-
-    logging.info("Updating checkout")
-    if git:
-        shell_out("git reset --hard HEAD")
-        shell_out("git pull --ff-only")
-    else:
-        shell_out("hg pull -u")
-
     maketarget = "autobuild-" + ("dev" if isdev else "stable") + ("-html" if quick else "")
+    sphinxopts = ""
+    if translation:
+        sphinxopts = 'SPHINXOPTS="-D gettext_compact=0 -D locale_dirs=../locale -D language={}"'.format(
+            translation.lang)
     logging.info("Running make %s", maketarget)
     logname = os.path.basename(checkout) + ".log"
-    shell_out("cd Doc; make SPHINXBUILD=%s %s >> %s 2>&1" %
-              (sphinxbuild, maketarget, os.path.join(log_directory, logname)))
-
+    shell_out("cd Doc; make %s SPHINXBUILD=%s %s >> %s 2>&1" %
+              (sphinxopts, sphinxbuild, maketarget,
+               os.path.join(log_directory, logname)))
     changed = changed_files(os.path.join(checkout, "Doc/build/html"), target)
     logging.info("Copying HTML files to %s", target)
+    os.makedirs(target, mode=0o775, exist_ok=True)
     shell_out("chown -R :{} Doc/build/html/".format(group))
     shell_out("chmod -R o+r Doc/build/html/")
     shell_out("find Doc/build/html/ -type d -exec chmod o+x {} ';'")
@@ -133,6 +195,21 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
         shell_out("curl -X PURGE \"https://docs.python.org/{%s}\"" % ",".join(to_purge))
 
     logging.info("Finished %s", checkout)
+
+
+def copy_po_files(translation, version, build_root):
+    locale_dir = os.path.join(build_root,
+                              "python" + str(version).replace('.', ''),
+                              'locale',
+                              translation.lang,
+                              'LC_MESSAGES')
+    os.makedirs(locale_dir, mode=0o775, exist_ok=True)
+    shell_out("rsync -a --include '*.po' --include '*/' --exclude '*' {}/ {}".format(
+        os.path.join(build_root,
+                     'i18n',
+                     translation.repo.name,
+                     translation.po_path),
+        locale_dir))
 
 
 def build_devguide(devguide_checkout, devguide_target, sphinxbuild,
@@ -206,6 +283,13 @@ def parse_args():
     return parser.parse_args()
 
 
+def check_environment(build_root):
+    venv_path = os.path.join(build_root, "environment")
+    if not os.path.isdir(venv_path):
+        logging.error("venv is missing in %s, salt should have built it.",
+                      venv_path)
+        exit(1)
+
 if __name__ == '__main__':
     args = parse_args()
     if sys.stderr.isatty():
@@ -216,19 +300,34 @@ if __name__ == '__main__':
                             filename=os.path.join(args.log_directory,
                                                   "docsbuild.log"))
     logging.root.setLevel(logging.DEBUG)
+    check_environment(args.build_root)
     sphinxbuild = os.path.join(args.build_root, "environment/bin/sphinx-build")
     try:
         if args.branch:
-            build_one(args.branch, args.devel, args.quick, sphinxbuild,
-                      args.build_root, args.www_root,
+            build_one(args.branch, args.branch, args.devel, args.quick,
+                      sphinxbuild,
+                      args.build_root, args.www_root, None,
                       args.skip_cache_invalidation,
                       args.group, args.git, args.log_directory)
         else:
-            for version, devel in BRANCHES:
-                build_one(version, devel, args.quick, sphinxbuild,
-                          args.build_root, args.www_root,
+            for version, branch, devel in BRANCHES:
+                build_one(version, branch, devel, args.quick, sphinxbuild,
+                          args.build_root, args.www_root, None,
                           args.skip_cache_invalidation, args.group, args.git,
                           args.log_directory)
+                for translations in I18N_CONF:
+                    translation = translations.get(branch, translations['default'])
+                    clone_repo(translation.repo.url,
+                               os.path.join(args.build_root,
+                                            'i18n',
+                                            translation.repo.name),
+                               translation.branch, True)
+                    copy_po_files(translation, version, args.build_root)
+                    build_one(version, branch, devel, args.quick, sphinxbuild,
+                              args.build_root, args.www_root, translation,
+                              args.skip_cache_invalidation, args.group, args.git,
+                              args.log_directory)
+
             build_devguide(args.devguide_checkout, args.devguide_target,
                            sphinxbuild, args.skip_cache_invalidation)
     except Exception:
