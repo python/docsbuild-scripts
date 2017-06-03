@@ -206,7 +206,7 @@ def parse_args():
     return parser.parse_args()
 
 
-if __name__ == '__main__':
+def main():
     args = parse_args()
     if sys.stderr.isatty():
         logging.basicConfig(format="%(levelname)s:%(message)s",
@@ -233,3 +233,7 @@ if __name__ == '__main__':
                            sphinxbuild, args.skip_cache_invalidation)
     except Exception:
         logging.exception("docs build raised exception")
+
+
+if __name__ == '__main__':
+    main()
