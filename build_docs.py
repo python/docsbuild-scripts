@@ -217,20 +217,20 @@ def main():
                                                   "docsbuild.log"))
     logging.root.setLevel(logging.DEBUG)
     sphinxbuild = os.path.join(args.build_root, "environment/bin/sphinx-build")
-    try:
-        if args.branch:
-            branches_to_do = [(args.branch, args.devel)]
-        else:
-            branches_to_do = BRANCHES
-        for version, devel in branches_to_do:
+    if args.branch:
+        branches_to_do = [(args.branch, args.devel)]
+    else:
+        branches_to_do = BRANCHES
+    for version, devel in branches_to_do:
+        try:
             build_one(version, devel, args.quick, sphinxbuild,
                       args.build_root, args.www_root,
                       args.skip_cache_invalidation, args.group, args.git,
                       args.log_directory)
-        build_devguide(args.devguide_checkout, args.devguide_target,
-                       sphinxbuild, args.skip_cache_invalidation)
-    except Exception:
-        logging.exception("docs build raised exception")
+        except Exception:
+            logging.exception("docs build raised exception")
+    build_devguide(args.devguide_checkout, args.devguide_target,
+                   sphinxbuild, args.skip_cache_invalidation)
 
 
 if __name__ == '__main__':
