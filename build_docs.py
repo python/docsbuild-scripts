@@ -219,18 +219,16 @@ def main():
     sphinxbuild = os.path.join(args.build_root, "environment/bin/sphinx-build")
     try:
         if args.branch:
-            build_one(args.branch, args.devel, args.quick, sphinxbuild,
-                      args.build_root, args.www_root,
-                      args.skip_cache_invalidation,
-                      args.group, args.git, args.log_directory)
+            branches_to_do = [(args.branch, args.devel)]
         else:
-            for version, devel in BRANCHES:
-                build_one(version, devel, args.quick, sphinxbuild,
-                          args.build_root, args.www_root,
-                          args.skip_cache_invalidation, args.group, args.git,
-                          args.log_directory)
-            build_devguide(args.devguide_checkout, args.devguide_target,
-                           sphinxbuild, args.skip_cache_invalidation)
+            branches_to_do = BRANCHES
+        for version, devel in branches_to_do:
+            build_one(version, devel, args.quick, sphinxbuild,
+                      args.build_root, args.www_root,
+                      args.skip_cache_invalidation, args.group, args.git,
+                      args.log_directory)
+        build_devguide(args.devguide_checkout, args.devguide_target,
+                       sphinxbuild, args.skip_cache_invalidation)
     except Exception:
         logging.exception("docs build raised exception")
 
