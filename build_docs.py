@@ -7,6 +7,10 @@
 #   build_docs.py [-h] [-d] [-q] [-b 3.6] [-r BUILD_ROOT] [-w WWW_ROOT]
 #                 [--devguide-checkout DEVGUIDE_CHECKOUT]
 #                 [--devguide-target DEVGUIDE_TARGET]
+#                 [--skip-cache-invalidation] [--group GROUP] [--git]
+#                 [--log-directory LOG_DIRECTORY]
+#                 [--languages [fr [fr ...]]]
+#
 #
 # Without any arguments builds docs for all branches configured in the
 # global BRANCHES value, ignoring the -d flag as it's given in the
@@ -17,6 +21,11 @@
 # -d allow the docs to be built even if the branch is in
 # development mode (i.e. version contains a, b or c).
 #
+# Translations are fetched from github repositories according to PEP
+# 545.  --languages allow select translations, use "--languages" to
+# build all translations (default) or "--languages en" to skip all
+# translations (as en is the untranslated version)..
+#
 # This script was originally created and by Georg Brandl in March 2010. Modified
 # by Benjamin Peterson to do CDN cache invalidation.
 
@@ -25,6 +34,7 @@ import logging
 import os
 import subprocess
 import sys
+import shutil
 
 
 BRANCHES = [
@@ -33,6 +43,11 @@ BRANCHES = [
     (3.6, False),
     (3.7, True),
     (2.7, False)
+]
+
+LANGUAGES = [
+    'en',
+    'fr'
 ]
 
 
@@ -80,11 +95,57 @@ def changed_files(directory, other):
     return changed
 
 
+def git_clone(repository, directory, branch='master'):
+    """Clone or update the given branch of the given repository in the
+    given directory.
+    """
+    logging.info("Updating repository %s in %s", repository, directory)
+    try:
+        shell_out("git -C {} checkout {}".format(directory, branch))
+        shell_out("git -C {} pull --ff-only".format(directory))
+    except subprocess.CalledProcessError:
+        if os.path.exists(directory):
+            shutil.rmtree(directory)
+        logging.info("Cloning %s into %s", repository, repository)
+        os.makedirs(directory, mode=0o775)
+        shell_out("git clone --depth 1 --no-single-branch {} {}".format(
+            repository, directory))
+        shell_out("git -C {} checkout {}".format(directory, branch))
+
+
+def pep_545_tag_to_gettext_tag(tag):
+    """Transforms PEP 545 language tags like "pt-br" to gettext language
+    tags like "pt_BR". (Note that none of those are IETF language tags
+    like "pt-BR").
+    """
+    if '-' not in tag:
+        return tag
+    language, region = tag.split('-')
+    return language + '_' + region.upper()
+
+
 def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
               skip_cache_invalidation=False, group='docs', git=False,
-              log_directory='/var/log/docsbuild/'):
+              log_directory='/var/log/docsbuild/', language='en'):
     checkout = build_root + "/python" + str(version).replace('.', '')
-    target = www_root + "/" + str(version)
+    sphinxopts = ''
+    if not language or language == 'en':
+        target = os.path.join(www_root, str(version))
+    else:
+        target = os.path.join(www_root, language, str(version))
+        gettext_language_tag = pep_545_tag_to_gettext_tag(language)
+        locale_dirs = os.path.join(build_root, 'locale')
+        locale_clone_dir = os.path.join(
+            locale_dirs, gettext_language_tag, 'LC_MESSAGES')
+        locale_repo = 'https://github.com/python/python-docs-{}.git'.format(
+            language)
+        git_clone(locale_repo, locale_clone_dir, version)
+        sphinxopts += ('-D locale_dirs={} '
+                       '-D language={} '
+                       '-D gettext_compact=0').format(locale_dirs,
+                                                      gettext_language_tag)
+    if not os.path.exists(target):
+        os.makedirs(target, mode=0o775)
     logging.info("Doc autobuild started in %s", checkout)
     os.chdir(checkout)
 
@@ -98,8 +159,9 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
     maketarget = "autobuild-" + ("dev" if isdev else "stable") + ("-html" if quick else "")
     logging.info("Running make %s", maketarget)
     logname = os.path.basename(checkout) + ".log"
-    shell_out("cd Doc; make SPHINXBUILD=%s %s >> %s 2>&1" %
-              (sphinxbuild, maketarget, os.path.join(log_directory, logname)))
+    shell_out("cd Doc; make SPHINXBUILD=%s SPHINXOPTS='%s' %s >> %s 2>&1" %
+              (sphinxbuild, sphinxopts, maketarget,
+               os.path.join(log_directory, logname)))
 
     changed = changed_files(os.path.join(checkout, "Doc/build/html"), target)
     logging.info("Copying HTML files to %s", target)
@@ -203,10 +265,17 @@ def parse_args():
         "--log-directory",
         help="Directory used to store logs.",
         default="/var/log/docsbuild/")
+    parser.add_argument(
+        "--languages",
+        nargs='*',
+        default=LANGUAGES,
+        help="Language translation, as a PEP 545 language tag like"
+        " 'fr' or 'pt-br'.",
+        metavar='fr')
     return parser.parse_args()
 
 
-if __name__ == '__main__':
+def main():
     args = parse_args()
     if sys.stderr.isatty():
         logging.basicConfig(format="%(levelname)s:%(message)s",
@@ -217,19 +286,27 @@ if __name__ == '__main__':
                                                   "docsbuild.log"))
     logging.root.setLevel(logging.DEBUG)
     sphinxbuild = os.path.join(args.build_root, "environment/bin/sphinx-build")
-    try:
-        if args.branch:
-            build_one(args.branch, args.devel, args.quick, sphinxbuild,
-                      args.build_root, args.www_root,
-                      args.skip_cache_invalidation,
-                      args.group, args.git, args.log_directory)
-        else:
-            for version, devel in BRANCHES:
+    if args.branch:
+        branches_to_do = [(args.branch, args.devel)]
+    else:
+        branches_to_do = BRANCHES
+    if not args.languages:
+        # Allow "--languages" to build all languages (as if not given)
+        # instead of none.  "--languages en" builds *no* translation,
+        # as "en" is the untranslated one.
+        args.languages = LANGUAGES
+    for version, devel in branches_to_do:
+        for language in args.languages:
+            try:
                 build_one(version, devel, args.quick, sphinxbuild,
                           args.build_root, args.www_root,
                           args.skip_cache_invalidation, args.group, args.git,
-                          args.log_directory)
-            build_devguide(args.devguide_checkout, args.devguide_target,
-                           sphinxbuild, args.skip_cache_invalidation)
-    except Exception:
-        logging.exception("docs build raised exception")
+                          args.log_directory, language)
+            except Exception:
+                logging.exception("docs build raised exception")
+    build_devguide(args.devguide_checkout, args.devguide_target,
+                   sphinxbuild, args.skip_cache_invalidation)
+
+
+if __name__ == '__main__':
+    main()
