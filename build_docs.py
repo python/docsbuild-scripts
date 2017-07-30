@@ -72,9 +72,12 @@ def _file_unchanged(old, new):
 def shell_out(cmd):
     logging.debug("Running command %r", cmd)
     try:
-        subprocess.check_output(cmd, shell=True, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
+        return subprocess.check_output(cmd, shell=True,
+                                       stdin=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT,
+                                       universal_newlines=True)
     except subprocess.CalledProcessError as e:
-        logging.error("command failed with output %r", e.output.decode("utf-8"))
+        logging.debug("Command failed with output %r", e.output)
         raise
 
 
@@ -95,13 +98,14 @@ def changed_files(directory, other):
     return changed
 
 
-def git_clone(repository, directory, branch='master'):
-    """Clone or update the given branch of the given repository in the
-    given directory.
+def git_clone(repository, directory, branch=None):
+    """Clone or update the given repository in the given directory.
+    Optionally checking out a branch.
     """
     logging.info("Updating repository %s in %s", repository, directory)
     try:
-        shell_out("git -C {} checkout {}".format(directory, branch))
+        if branch:
+            shell_out("git -C {} checkout {}".format(directory, branch))
         shell_out("git -C {} pull --ff-only".format(directory))
     except subprocess.CalledProcessError:
         if os.path.exists(directory):
@@ -110,7 +114,8 @@ def git_clone(repository, directory, branch='master'):
         os.makedirs(directory, mode=0o775)
         shell_out("git clone --depth 1 --no-single-branch {} {}".format(
             repository, directory))
-        shell_out("git -C {} checkout {}".format(directory, branch))
+        if branch:
+            shell_out("git -C {} checkout {}".format(directory, branch))
 
 
 def pep_545_tag_to_gettext_tag(tag):
@@ -122,6 +127,27 @@ def pep_545_tag_to_gettext_tag(tag):
         return tag
     language, region = tag.split('-')
     return language + '_' + region.upper()
+
+
+def translation_branch(locale_repo, locale_clone_dir, needed_version):
+    """Some cpython versions may be untranslated, being either too old or
+    too new.
+
+    This function looks for remote branches on the given repo, and
+    returns the name of the nearest existing branch.
+    """
+    git_clone(locale_repo, locale_clone_dir)
+    remote_branches = shell_out(
+        "git -C {} branch -r".format(locale_clone_dir))
+    translated_branches = []
+    for translated_branch in remote_branches.split('\n'):
+        if not translated_branch:
+            continue
+        try:
+            translated_branches.append(float(translated_branch.split('/')[1]))
+        except ValueError:
+            pass  # Skip non-version branches like 'master' if they exists.
+    return sorted(translated_branches, key=lambda x: abs(needed_version - x))[0]
 
 
 def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
@@ -139,7 +165,9 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
             locale_dirs, gettext_language_tag, 'LC_MESSAGES')
         locale_repo = 'https://github.com/python/python-docs-{}.git'.format(
             language)
-        git_clone(locale_repo, locale_clone_dir, version)
+        git_clone(locale_repo, locale_clone_dir,
+                  translation_branch(locale_repo, locale_clone_dir,
+                                     version))
         sphinxopts += ('-D locale_dirs={} '
                        '-D language={} '
                        '-D gettext_compact=0').format(locale_dirs,
