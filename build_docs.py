@@ -174,6 +174,7 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
                                                       gettext_language_tag)
     if not os.path.exists(target):
         os.makedirs(target, mode=0o775)
+    shell_out("chgrp -R {group} {file}".format(group=group, file=target))
     logging.info("Doc autobuild started in %s", checkout)
     os.chdir(checkout)
 
