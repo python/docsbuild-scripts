@@ -158,7 +158,10 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
     if not language or language == 'en':
         target = os.path.join(www_root, str(version))
     else:
-        target = os.path.join(www_root, language, str(version))
+        language_dir = os.path.join(www_root, language)
+        os.makedirs(language_dir, exist_ok=True)
+        os.chmod(language_dir, 0o775)
+        target = os.path.join(language_dir, str(version))
         gettext_language_tag = pep_545_tag_to_gettext_tag(language)
         locale_dirs = os.path.join(build_root, 'locale')
         locale_clone_dir = os.path.join(
@@ -172,8 +175,8 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
                        '-D language={} '
                        '-D gettext_compact=0').format(locale_dirs,
                                                       gettext_language_tag)
-    if not os.path.exists(target):
-        os.makedirs(target, mode=0o775)
+    os.makedirs(target, exist_ok=True)
+    os.chmod(target, 0o775)
     shell_out("chgrp -R {group} {file}".format(group=group, file=target))
     logging.info("Doc autobuild started in %s", checkout)
     os.chdir(checkout)
