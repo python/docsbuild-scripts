@@ -176,7 +176,10 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
                        '-D gettext_compact=0').format(locale_dirs,
                                                       gettext_language_tag)
     os.makedirs(target, exist_ok=True)
-    os.chmod(target, 0o775)
+    try:
+        os.chmod(target, 0o775)
+    except PermissionError as err:
+        logging.warning("Can't chmod %s: %s", target, str(err))
     shell_out("chgrp -R {group} {file}".format(group=group, file=target))
     logging.info("Doc autobuild started in %s", checkout)
     os.chdir(checkout)
