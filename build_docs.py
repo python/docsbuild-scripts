@@ -218,12 +218,10 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
 
     logging.info("%s files changed", len(changed))
     if changed and not skip_cache_invalidation:
-        target_ino = os.stat(target).st_ino
         targets_dir = os.path.dirname(target)
-        prefixes = []
-        for fn in os.listdir(targets_dir):
-            if os.stat(os.path.join(targets_dir, fn)).st_ino == target_ino:
-                prefixes.append(fn)
+        prefixes = shell_out('find -L {} -samefile {}'.format(
+            targets_dir, target)).replace(targets_dir + '/', '')
+        prefixes = [prefix for prefix in prefixes.split('\n') if prefix]
         to_purge = prefixes[:]
         for prefix in prefixes:
             to_purge.extend(prefix + "/" + p for p in changed)
