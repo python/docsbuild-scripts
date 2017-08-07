@@ -178,9 +178,10 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
     os.makedirs(target, exist_ok=True)
     try:
         os.chmod(target, 0o775)
-    except PermissionError as err:
-        logging.warning("Can't chmod %s: %s", target, str(err))
-    shell_out("chgrp -R {group} {file}".format(group=group, file=target))
+        shell_out("chgrp -R {group} {file}".format(group=group, file=target))
+    except (PermissionError, subprocess.CalledProcessError) as err:
+        logging.warning("Can't change mod or group of %s: %s",
+                        target, str(err))
     logging.info("Doc autobuild started in %s", checkout)
     os.chdir(checkout)
 
