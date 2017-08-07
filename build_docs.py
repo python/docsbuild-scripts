@@ -150,7 +150,7 @@ def translation_branch(locale_repo, locale_clone_dir, needed_version):
     return sorted(translated_branches, key=lambda x: abs(needed_version - x))[0]
 
 
-def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
+def build_one(version, isdev, quick, venv, build_root, www_root,
               skip_cache_invalidation=False, group='docs', git=False,
               log_directory='/var/log/docsbuild/', language='en'):
     checkout = build_root + "/python" + str(version).replace('.', '')
@@ -191,10 +191,12 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
     maketarget = "autobuild-" + ("dev" if isdev else "stable") + ("-html" if quick else "")
     logging.info("Running make %s", maketarget)
     logname = os.path.basename(checkout) + ".log"
-    shell_out("cd Doc; make SPHINXBUILD=%s SPHINXOPTS='%s' %s >> %s 2>&1" %
-              (sphinxbuild, sphinxopts, maketarget,
-               os.path.join(log_directory, logname)))
-
+    python = os.path.join(venv, "bin/python")
+    sphinxbuild = os.path.join(venv, "bin/sphinx-build")
+    shell_out(
+        "cd Doc; make PYTHON=%s SPHINXBUILD=%s SPHINXOPTS='%s' %s >> %s 2>&1" %
+        (python, sphinxbuild, sphinxopts, maketarget,
+         os.path.join(log_directory, logname)))
     changed = changed_files(os.path.join(checkout, "Doc/build/html"), target)
     logging.info("Copying HTML files to %s", target)
     shell_out("chown -R :{} Doc/build/html/".format(group))
@@ -229,11 +231,12 @@ def build_one(version, isdev, quick, sphinxbuild, build_root, www_root,
     logging.info("Finished %s", checkout)
 
 
-def build_devguide(devguide_checkout, devguide_target, sphinxbuild,
+def build_devguide(devguide_checkout, devguide_target, venv,
                    skip_cache_invalidation=False):
     build_directory = os.path.join(devguide_checkout, "build/html")
     logging.info("Building devguide")
     shell_out("git -C %s pull" % (devguide_checkout,))
+    sphinxbuild = os.path.join(venv, "bin/sphinx-build")
     shell_out("%s %s %s" % (sphinxbuild, devguide_checkout, build_directory))
     changed = changed_files(build_directory, devguide_target)
     shell_out("mkdir -p {}".format(devguide_target))
@@ -317,7 +320,7 @@ def main():
                             filename=os.path.join(args.log_directory,
                                                   "docsbuild.log"))
     logging.root.setLevel(logging.DEBUG)
-    sphinxbuild = os.path.join(args.build_root, "environment/bin/sphinx-build")
+    venv = os.path.join(args.build_root, "venv")
     if args.branch:
         branches_to_do = [(args.branch, args.devel)]
     else:
@@ -330,14 +333,14 @@ def main():
     for version, devel in branches_to_do:
         for language in args.languages:
             try:
-                build_one(version, devel, args.quick, sphinxbuild,
+                build_one(version, devel, args.quick, venv,
                           args.build_root, args.www_root,
                           args.skip_cache_invalidation, args.group, args.git,
                           args.log_directory, language)
             except Exception:
                 logging.exception("docs build raised exception")
     build_devguide(args.devguide_checkout, args.devguide_target,
-                   sphinxbuild, args.skip_cache_invalidation)
+                   venv, args.skip_cache_invalidation)
 
 
 if __name__ == '__main__':
