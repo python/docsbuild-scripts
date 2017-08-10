@@ -153,10 +153,14 @@ def translation_branch(locale_repo, locale_clone_dir, needed_version):
 
 def build_one(version, isdev, quick, venv, build_root, www_root,
               skip_cache_invalidation=False, group='docs', git=False,
-              log_directory='/var/log/docsbuild/', language='en'):
+              log_directory='/var/log/docsbuild/', language=None):
+    if not language:
+        language = 'en'
     checkout = build_root + "/python" + str(version).replace('.', '')
+    logging.info("Bulid start for version: %s, language: %s",
+                 str(version), language)
     sphinxopts = ''
-    if not language or language == 'en':
+    if language == 'en':
         target = os.path.join(www_root, str(version))
     else:
         language_dir = os.path.join(www_root, language)
@@ -183,7 +187,6 @@ def build_one(version, isdev, quick, venv, build_root, www_root,
     except (PermissionError, subprocess.CalledProcessError) as err:
         logging.warning("Can't change mod or group of %s: %s",
                         target, str(err))
-    logging.info("Doc autobuild started in %s", checkout)
     os.chdir(checkout)
 
     logging.info("Updating checkout")
@@ -195,7 +198,7 @@ def build_one(version, isdev, quick, venv, build_root, www_root,
 
     maketarget = "autobuild-" + ("dev" if isdev else "stable") + ("-html" if quick else "")
     logging.info("Running make %s", maketarget)
-    logname = os.path.basename(checkout) + ".log"
+    logname = "{}-{}.log".format(os.path.basename(checkout), language)
     python = os.path.join(venv, "bin/python")
     sphinxbuild = os.path.join(venv, "bin/sphinx-build")
     shell_out(
