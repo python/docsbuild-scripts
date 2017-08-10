@@ -1,13 +1,24 @@
-alabaster==0.7.8
-Babel==2.3.4
-docutils==0.12
+alabaster==0.7.10
+Babel==2.4.0
+certifi==2017.4.17
+chardet==3.0.4
+docutils==0.13.1
+idna==2.5
 imagesize==0.7.1
-Jinja2==2.8
-MarkupSafe==0.23
-Pygments==2.1.3
-pytz==2016.4
+Jinja2==2.9.6
+MarkupSafe==1.0
+Pygments==2.2.0
+pytz==2017.2
+requests==2.17.3
 six==1.10.0
 snowballstemmer==1.2.1
-Sphinx==1.3.3
+Sphinx==1.6.2
 sphinx-rtd-theme==0.1.9
 blurb==1.0.4
+sphinxcontrib-websupport==1.0.1
+typing==3.6.1
+urllib3==1.21.1
+# The theme used for 3.7+ is distributed separately. It is not published to
+# PyPI to avoid having the CPython maintainers deal with an intermediate
+# build step.
+git+https://github.com/python/python-docs-theme.git#egg=python-docs-theme
