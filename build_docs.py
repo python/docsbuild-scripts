@@ -224,10 +224,10 @@ def build_one(version, isdev, quick, venv, build_root, www_root,
         targets_dir = os.path.dirname(target)
         prefixes = shell_out('find -L {} -samefile {}'.format(
             targets_dir, target)).replace(targets_dir + '/', '')
-        prefixes = [prefix for prefix in prefixes.split('\n') if prefix]
+        prefixes = [prefix + '/' for prefix in prefixes.split('\n') if prefix]
         to_purge = prefixes[:]
         for prefix in prefixes:
-            to_purge.extend(prefix + "/" + p for p in changed)
+            to_purge.extend(prefix + p for p in changed)
         logging.info("Running CDN purge")
         shell_out("curl -X PURGE \"https://docs.python.org/{%s}\"" % ",".join(to_purge))
 
