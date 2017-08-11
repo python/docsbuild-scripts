@@ -207,7 +207,7 @@ def build_one(version, isdev, quick, venv, build_root, www_root,
     shell_out("chown -R :{} Doc/build/html/".format(group))
     shell_out("chmod -R o+r Doc/build/html/")
     shell_out("find Doc/build/html/ -type d -exec chmod o+x {} ';'")
-    shell_out("cp -a Doc/build/html/* %s" % target)
+    shell_out("rsync -a --delete-delay Doc/build/html/ %s" % target)
     if not quick:
         logging.debug("Copying dist files")
         shell_out("chown -R :{} Doc/dist/".format(group))
@@ -244,7 +244,8 @@ def build_devguide(devguide_checkout, devguide_target, venv,
     changed = changed_files(build_directory, devguide_target)
     shell_out("mkdir -p {}".format(devguide_target))
     shell_out("find %s -type d -exec chmod o+x {} ';'" % (build_directory,))
-    shell_out("cp -a {}/* {}".format(build_directory, devguide_target))
+    shell_out("rsync -a --delete-delay {}/ {}".format(
+        build_directory, devguide_target))
     shell_out("chmod -R o+r %s" % (devguide_target,))
     if changed and not skip_cache_invalidation:
         prefix = os.path.basename(devguide_target)
