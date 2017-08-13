@@ -26,8 +26,10 @@
 # build all translations (default) or "--languages en" to skip all
 # translations (as en is the untranslated version)..
 #
-# This script was originally created and by Georg Brandl in March 2010. Modified
-# by Benjamin Peterson to do CDN cache invalidation.
+# This script was originally created and by Georg Brandl in March
+# 2010.
+# Modified by Benjamin Peterson to do CDN cache invalidation.
+# Modified by Julien Palard to build translations.
 
 import getopt
 import logging
