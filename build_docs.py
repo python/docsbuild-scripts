@@ -33,7 +33,6 @@ Modified by Julien Palard to build translations.
 
 """
 
-import getopt
 import logging
 import os
 import subprocess
