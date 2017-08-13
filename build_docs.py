@@ -1,35 +1,37 @@
 #!/usr/bin/env python3
 
-# Runs a build of the Python docs for various branches.
-#
-# Usage:
-#
-#   build_docs.py [-h] [-d] [-q] [-b 3.6] [-r BUILD_ROOT] [-w WWW_ROOT]
-#                 [--devguide-checkout DEVGUIDE_CHECKOUT]
-#                 [--devguide-target DEVGUIDE_TARGET]
-#                 [--skip-cache-invalidation] [--group GROUP] [--git]
-#                 [--log-directory LOG_DIRECTORY]
-#                 [--languages [fr [fr ...]]]
-#
-#
-# Without any arguments builds docs for all branches configured in the
-# global BRANCHES value, ignoring the -d flag as it's given in the
-# BRANCHES configuration.
-#
-# -q selects "quick build", which means to build only HTML.
-#
-# -d allow the docs to be built even if the branch is in
-# development mode (i.e. version contains a, b or c).
-#
-# Translations are fetched from github repositories according to PEP
-# 545.  --languages allow select translations, use "--languages" to
-# build all translations (default) or "--languages en" to skip all
-# translations (as en is the untranslated version)..
-#
-# This script was originally created and by Georg Brandl in March
-# 2010.
-# Modified by Benjamin Peterson to do CDN cache invalidation.
-# Modified by Julien Palard to build translations.
+"""Build the Python docs for various branches and various languages.
+
+Usage:
+
+  build_docs.py [-h] [-d] [-q] [-b 3.6] [-r BUILD_ROOT] [-w WWW_ROOT]
+                [--devguide-checkout DEVGUIDE_CHECKOUT]
+                [--devguide-target DEVGUIDE_TARGET]
+                [--skip-cache-invalidation] [--group GROUP] [--git]
+                [--log-directory LOG_DIRECTORY]
+                [--languages [fr [fr ...]]]
+
+
+Without any arguments builds docs for all branches configured in the
+global BRANCHES value and all languages configured in LANGUAGES,
+ignoring the -d flag as it's given in the BRANCHES configuration.
+
+-q selects "quick build", which means to build only HTML.
+
+-d allow the docs to be built even if the branch is in
+development mode (i.e. version contains a, b or c).
+
+Translations are fetched from github repositories according to PEP
+545.  --languages allow select translations, use "--languages" to
+build all translations (default) or "--languages en" to skip all
+translations (as en is the untranslated version)..
+
+This script was originally created and by Georg Brandl in March
+2010.
+Modified by Benjamin Peterson to do CDN cache invalidation.
+Modified by Julien Palard to build translations.
+
+"""
 
 import getopt
 import logging
