@@ -152,7 +152,7 @@ def translation_branch(locale_repo, locale_clone_dir, needed_version):
 
 
 def build_one(version, isdev, quick, venv, build_root, www_root,
-              skip_cache_invalidation=False, group='docs', git=False,
+              skip_cache_invalidation=False, group='docs',
               log_directory='/var/log/docsbuild/', language=None):
     if not language:
         language = 'en'
@@ -190,12 +190,8 @@ def build_one(version, isdev, quick, venv, build_root, www_root,
     os.chdir(checkout)
 
     logging.info("Updating checkout")
-    if git:
-        shell_out("git reset --hard HEAD")
-        shell_out("git pull --ff-only")
-    else:
-        shell_out("hg pull -u")
-
+    shell_out("git reset --hard HEAD")
+    shell_out("git pull --ff-only")
     maketarget = "autobuild-" + ("dev" if isdev else "stable") + ("-html" if quick else "")
     logging.info("Running make %s", maketarget)
     logname = "{}-{}.log".format(os.path.basename(checkout), language)
@@ -300,7 +296,9 @@ def parse_args():
         default="docs")
     parser.add_argument(
         "--git",
-        help="Use git instead of mercurial.",
+        default=True,
+        help="Deprecated: Use git instead of mercurial. "
+        "Defaults to True for compatibility.",
         action="store_true")
     parser.add_argument(
         "--log-directory",
@@ -341,7 +339,7 @@ def main():
             try:
                 build_one(version, devel, args.quick, venv,
                           args.build_root, args.www_root,
-                          args.skip_cache_invalidation, args.group, args.git,
+                          args.skip_cache_invalidation, args.group,
                           args.log_directory, language)
             except Exception:
                 logging.exception("docs build raised exception")
