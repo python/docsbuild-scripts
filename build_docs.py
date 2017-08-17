@@ -208,6 +208,8 @@ def build_one(version, isdev, quick, venv, build_root, www_root,
         "cd Doc; make PYTHON=%s SPHINXBUILD=%s SPHINXOPTS='%s' %s >> %s 2>&1" %
         (python, sphinxbuild, sphinxopts, maketarget,
          os.path.join(log_directory, logname)))
+    shell_out("chgrp -R {group} {file}".format(
+        group=group, file=log_directory))
     changed = changed_files(os.path.join(checkout, "Doc/build/html"), target)
     logging.info("Copying HTML files to %s", target)
     shell_out("chown -R :{} Doc/build/html/".format(group))
