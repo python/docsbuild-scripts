@@ -215,7 +215,9 @@ def build_one(version, isdev, quick, venv, build_root, www_root,
     shell_out("chown -R :{} Doc/build/html/".format(group))
     shell_out("chmod -R o+r Doc/build/html/")
     shell_out("find Doc/build/html/ -type d -exec chmod o+x {} ';'")
-    shell_out("rsync -a --delete-delay Doc/build/html/ %s" % target)
+    shell_out("rsync -a {delete} Doc/build/html/ {target}".format(
+        delete="" if quick else "--delete-delay",
+        target=target))
     if not quick:
         logging.debug("Copying dist files")
         shell_out("chown -R :{} Doc/dist/".format(group))
