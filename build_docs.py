@@ -200,9 +200,10 @@ def build_one(version, isdev, quick, venv, build_root, www_root,
     logname = "{}-{}.log".format(os.path.basename(checkout), language)
     python = os.path.join(venv, "bin/python")
     sphinxbuild = os.path.join(venv, "bin/sphinx-build")
+    blurb = os.path.join(venv, "bin/blurb")
     shell_out(
-        "cd Doc; make PYTHON=%s SPHINXBUILD=%s SPHINXOPTS='%s' %s >> %s 2>&1" %
-        (python, sphinxbuild, sphinxopts, maketarget,
+        "cd Doc; make PYTHON=%s SPHINXBUILD=%s BLURB=%s VENVDIR=%s SPHINXOPTS='%s' %s >> %s 2>&1" %
+        (python, sphinxbuild, blurb, venv, sphinxopts, maketarget,
          os.path.join(log_directory, logname)))
     shell_out("chgrp -R {group} {file}".format(
         group=group, file=log_directory))
