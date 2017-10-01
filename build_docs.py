@@ -160,7 +160,7 @@ def build_one(version, isdev, quick, venv, build_root, www_root,
     if not language:
         language = 'en'
     checkout = build_root + "/python" + str(version).replace('.', '')
-    logging.info("Bulid start for version: %s, language: %s",
+    logging.info("Build start for version: %s, language: %s",
                  str(version), language)
     sphinxopts = ''
     if language == 'en':
