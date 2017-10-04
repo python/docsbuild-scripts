@@ -42,7 +42,6 @@ import shutil
 
 BRANCHES = [
     # version, isdev
-    (3.5, False),
     (3.6, False),
     (3.7, True),
     (2.7, False)
