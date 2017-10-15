@@ -163,7 +163,7 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
         lang=language if language != 'en' else ''))
     logging.info("Build start for version: %s, language: %s",
                  str(version), language)
-    sphinxopts = ''
+    sphinxopts = ['-j4']
     if language == 'en':
         target = os.path.join(www_root, str(version))
     else:
@@ -180,10 +180,10 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
         git_clone(locale_repo, locale_clone_dir,
                   translation_branch(locale_repo, locale_clone_dir,
                                      version))
-        sphinxopts += ('-D locale_dirs={} '
-                       '-D language={} '
-                       '-D gettext_compact=0').format(locale_dirs,
-                                                      gettext_language_tag)
+        sphinxopts.extend((
+            '-D locale_dirs={}'.format(locale_dirs),
+            '-D language={}'.format(gettext_language_tag),
+            '-D gettext_compact=0'))
     os.makedirs(target, exist_ok=True)
     try:
         os.chmod(target, 0o775)
@@ -202,7 +202,7 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
     blurb = os.path.join(venv, "bin/blurb")
     shell_out(
         "cd Doc; make PYTHON=%s SPHINXBUILD=%s BLURB=%s VENVDIR=%s SPHINXOPTS='%s' %s >> %s 2>&1" %
-        (python, sphinxbuild, blurb, venv, sphinxopts, maketarget,
+        (python, sphinxbuild, blurb, venv, ' '.join(sphinxopts), maketarget,
          os.path.join(log_directory, logname)), shell=True)
     shell_out(['chgrp', '-R', group, log_directory])
     changed = changed_files(os.path.join(checkout, "Doc/build/html"), target)
