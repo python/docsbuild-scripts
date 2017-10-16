@@ -53,6 +53,18 @@ LANGUAGES = [
     'ko'
 ]
 
+SPHINXOPTS = {
+    'ja': ['-D latex_engine=platex',
+           '-D latex_elements.inputenc=',
+           '-D latex_elements.fontenc='],
+    'fr': ['-D latex_engine=xelatex',
+           '-D latex_elements.inputenc=',
+           '-D latex_elements.fontenc='],
+    'en': ['-D latex_engine=xelatex',
+           '-D latex_elements.inputenc=',
+           '-D latex_elements.fontenc=']
+    }
+
 
 def _file_unchanged(old, new):
     with open(old, "rb") as fp1, open(new, "rb") as fp2:
@@ -163,7 +175,8 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
         lang=language if language != 'en' else ''))
     logging.info("Build start for version: %s, language: %s",
                  str(version), language)
-    sphinxopts = ['-j4']
+    sphinxopts = SPHINXOPTS[language].copy()
+    sphinxopts.append('-j4')
     if language == 'en':
         target = os.path.join(www_root, str(version))
     else:
