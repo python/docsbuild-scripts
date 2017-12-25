@@ -324,6 +324,12 @@ def parse_args():
 
 def main():
     args = parse_args()
+    if args.log_directory:
+        args.log_directory = os.path.abspath(args.log_directory)
+    if args.build_root:
+        args.build_root = os.path.abspath(args.build_root)
+    if args.www_root:
+        args.www_root = os.path.abspath(args.www_root)
     if sys.stderr.isatty():
         logging.basicConfig(format="%(levelname)s:%(message)s",
                             stream=sys.stderr)
