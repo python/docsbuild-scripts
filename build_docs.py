@@ -39,10 +39,10 @@ import shutil
 
 
 BRANCHES = [
-    # version, isdev
-    (3.6, False),
-    (3.7, True),
-    (2.7, False)
+    # version, git branch, isdev
+    (3.6, '3.6', False),
+    (3.7, 'master', True),
+    (2.7, '2.7', False)
 ]
 
 LANGUAGES = [
@@ -151,12 +151,14 @@ def translation_branch(locale_repo, locale_clone_dir, needed_version):
     return sorted(translated_branches, key=lambda x: abs(needed_version - x))[0]
 
 
-def build_one(version, isdev, quick, venv, build_root, www_root,
+def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
               skip_cache_invalidation=False, group='docs',
               log_directory='/var/log/docsbuild/', language=None):
     if not language:
         language = 'en'
-    checkout = build_root + "/python" + str(version).replace('.', '')
+    checkout = os.path.join(build_root, 'python{version}{lang}'.format(
+        version=str(version).replace('.', ''),
+        lang=language if language != 'en' else ''))
     logging.info("Build start for version: %s, language: %s",
                  str(version), language)
     sphinxopts = ''
@@ -187,11 +189,9 @@ def build_one(version, isdev, quick, venv, build_root, www_root,
     except (PermissionError, subprocess.CalledProcessError) as err:
         logging.warning("Can't change mod or group of %s: %s",
                         target, str(err))
+    git_clone('https://github.com/python/cpython.git',
+              checkout, git_branch)
     os.chdir(checkout)
-
-    logging.info("Updating checkout")
-    shell_out("git reset --hard HEAD")
-    shell_out("git pull --ff-only")
     maketarget = "autobuild-" + ("dev" if isdev else "stable") + ("-html" if quick else "")
     logging.info("Running make %s", maketarget)
     logname = "{}-{}.log".format(os.path.basename(checkout), language)
@@ -309,7 +309,7 @@ def main():
     logging.root.setLevel(logging.DEBUG)
     venv = os.path.join(args.build_root, "venv")
     if args.branch:
-        branches_to_do = [(args.branch, args.devel)]
+        branches_to_do = [(args.branch, args.branch, args.devel)]
     else:
         branches_to_do = BRANCHES
     if not args.languages:
@@ -317,10 +317,10 @@ def main():
         # instead of none.  "--languages en" builds *no* translation,
         # as "en" is the untranslated one.
         args.languages = LANGUAGES
-    for version, devel in branches_to_do:
+    for version, git_branch, devel in branches_to_do:
         for language in args.languages:
             try:
-                build_one(version, devel, args.quick, venv,
+                build_one(version, git_branch, devel, args.quick, venv,
                           args.build_root, args.www_root,
                           args.skip_cache_invalidation, args.group,
                           args.log_directory, language)
