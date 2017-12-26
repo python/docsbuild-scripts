@@ -5,8 +5,6 @@
 Usage:
 
   build_docs.py [-h] [-d] [-q] [-b 3.6] [-r BUILD_ROOT] [-w WWW_ROOT]
-                [--devguide-checkout DEVGUIDE_CHECKOUT]
-                [--devguide-target DEVGUIDE_TARGET]
                 [--skip-cache-invalidation] [--group GROUP] [--git]
                 [--log-directory LOG_DIRECTORY]
                 [--languages [fr [fr ...]]]
@@ -240,27 +238,6 @@ def build_one(version, isdev, quick, venv, build_root, www_root,
     logging.info("Finished %s", checkout)
 
 
-def build_devguide(devguide_checkout, devguide_target, venv,
-                   skip_cache_invalidation=False):
-    build_directory = os.path.join(devguide_checkout, "build/html")
-    logging.info("Building devguide")
-    shell_out("git -C %s pull" % (devguide_checkout,))
-    sphinxbuild = os.path.join(venv, "bin/sphinx-build")
-    shell_out("%s %s %s" % (sphinxbuild, devguide_checkout, build_directory))
-    changed = changed_files(build_directory, devguide_target)
-    shell_out("mkdir -p {}".format(devguide_target))
-    shell_out("find %s -type d -exec chmod o+x {} ';'" % (build_directory,))
-    shell_out("rsync -a --delete-delay {}/ {}".format(
-        build_directory, devguide_target))
-    shell_out("chmod -R o+r %s" % (devguide_target,))
-    if changed and not skip_cache_invalidation:
-        prefix = os.path.basename(devguide_target)
-        to_purge = [prefix]
-        to_purge.extend(prefix + "/" + p for p in changed)
-        logging.info("Running CDN purge")
-        shell_out("curl -X PURGE \"https://docs.python.org/{%s}\"" % ",".join(to_purge))
-
-
 def parse_args():
     from argparse import ArgumentParser
     parser = ArgumentParser(
@@ -286,14 +263,6 @@ def parse_args():
         "-w", "--www-root",
         help="Path where generated files will be copied.",
         default="/srv/docs.python.org")
-    parser.add_argument(
-        "--devguide-checkout",
-        help="Path to a devguide checkout.",
-        default="/srv/docsbuild/devguide")
-    parser.add_argument(
-        "--devguide-target",
-        help="Path where the generated devguide should be copied.",
-        default="/srv/docs.python.org/devguide")
     parser.add_argument(
         "--skip-cache-invalidation",
         help="Skip fastly cache invalidation.",
@@ -351,8 +320,6 @@ def main():
                           args.log_directory, language)
             except Exception:
                 logging.exception("docs build raised exception")
-    build_devguide(args.devguide_checkout, args.devguide_target,
-                   venv, args.skip_cache_invalidation)
 
 
 if __name__ == '__main__':
