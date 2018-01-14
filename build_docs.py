@@ -112,7 +112,7 @@ def git_clone(repository, directory, branch=None):
     except subprocess.CalledProcessError:
         if os.path.exists(directory):
             shutil.rmtree(directory)
-        logging.info("Cloning %s into %s", repository, repository)
+        logging.info("Cloning %s into %s", repository, directory)
         os.makedirs(directory, mode=0o775)
         shell_out("git clone --depth 1 --no-single-branch {} {}".format(
             repository, directory))
