@@ -18,7 +18,4 @@ blurb==1.0.4
 sphinxcontrib-websupport==1.0.1
 typing==3.6.1
 urllib3==1.21.1
-# The theme used for 3.7+ is distributed separately. It is not published to
-# PyPI to avoid having the CPython maintainers deal with an intermediate
-# build step.
-git+https://github.com/python/python-docs-theme.git#egg=python-docs-theme
+python-docs-theme==0.0.1
