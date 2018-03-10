@@ -49,7 +49,8 @@ BRANCHES = [
 LANGUAGES = [
     'en',
     'fr',
-    'ja'
+    'ja',
+    'ko'
 ]
 
 
