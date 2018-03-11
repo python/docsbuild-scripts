@@ -226,7 +226,7 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
 
     logging.info("%s files changed", len(changed))
     if changed and not skip_cache_invalidation:
-        targets_dir = os.path.dirname(target)
+        targets_dir = www_root
         prefixes = shell_out('find -L {} -samefile {}'.format(
             targets_dir, target)).replace(targets_dir + '/', '')
         prefixes = [prefix + '/' for prefix in prefixes.split('\n') if prefix]
