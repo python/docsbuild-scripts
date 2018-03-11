@@ -72,10 +72,10 @@ def _file_unchanged(old, new):
     return True
 
 
-def shell_out(cmd):
+def shell_out(cmd, shell=False):
     logging.debug("Running command %r", cmd)
     try:
-        return subprocess.check_output(cmd, shell=True,
+        return subprocess.check_output(cmd, shell=shell,
                                        stdin=subprocess.PIPE,
                                        stderr=subprocess.STDOUT,
                                        universal_newlines=True)
@@ -108,17 +108,17 @@ def git_clone(repository, directory, branch=None):
     logging.info("Updating repository %s in %s", repository, directory)
     try:
         if branch:
-            shell_out("git -C {} checkout {}".format(directory, branch))
-        shell_out("git -C {} pull --ff-only".format(directory))
+            shell_out(['git', '-C', directory, 'checkout', branch])
+        shell_out(['git', '-C', directory, 'pull', '--ff-only'])
     except subprocess.CalledProcessError:
         if os.path.exists(directory):
             shutil.rmtree(directory)
         logging.info("Cloning %s into %s", repository, directory)
         os.makedirs(directory, mode=0o775)
-        shell_out("git clone --depth 1 --no-single-branch {} {}".format(
-            repository, directory))
+        shell_out(['git', 'clone', '--depth=1', '--no-single-branch',
+                   repository, directory])
         if branch:
-            shell_out("git -C {} checkout {}".format(directory, branch))
+            shell_out(['git', '-C', directory, 'checkout', branch])
 
 
 def pep_545_tag_to_gettext_tag(tag):
@@ -140,8 +140,7 @@ def translation_branch(locale_repo, locale_clone_dir, needed_version):
     returns the name of the nearest existing branch.
     """
     git_clone(locale_repo, locale_clone_dir)
-    remote_branches = shell_out(
-        "git -C {} branch -r".format(locale_clone_dir))
+    remote_branches = shell_out(['git', '-C', locale_clone_dir, 'branch', '-r'])
     translated_branches = []
     for translated_branch in remote_branches.split('\n'):
         if not translated_branch:
@@ -150,7 +149,8 @@ def translation_branch(locale_repo, locale_clone_dir, needed_version):
             translated_branches.append(float(translated_branch.split('/')[1]))
         except ValueError:
             pass  # Skip non-version branches like 'master' if they exists.
-    return sorted(translated_branches, key=lambda x: abs(needed_version - x))[0]
+    return str(sorted(translated_branches,
+                      key=lambda x: abs(needed_version - x))[0])
 
 
 def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
@@ -187,7 +187,7 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
     os.makedirs(target, exist_ok=True)
     try:
         os.chmod(target, 0o775)
-        shell_out("chgrp -R {group} {file}".format(group=group, file=target))
+        shell_out(['chgrp', '-R', group, target])
     except (PermissionError, subprocess.CalledProcessError) as err:
         logging.warning("Can't change mod or group of %s: %s",
                         target, str(err))
@@ -203,24 +203,25 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
     shell_out(
         "cd Doc; make PYTHON=%s SPHINXBUILD=%s BLURB=%s VENVDIR=%s SPHINXOPTS='%s' %s >> %s 2>&1" %
         (python, sphinxbuild, blurb, venv, sphinxopts, maketarget,
-         os.path.join(log_directory, logname)))
-    shell_out("chgrp -R {group} {file}".format(
-        group=group, file=log_directory))
+         os.path.join(log_directory, logname)), shell=True)
+    shell_out(['chgrp', '-R', group, log_directory])
     changed = changed_files(os.path.join(checkout, "Doc/build/html"), target)
     logging.info("Copying HTML files to %s", target)
-    shell_out("chown -R :{} Doc/build/html/".format(group))
-    shell_out("chmod -R o+r Doc/build/html/")
-    shell_out("find Doc/build/html/ -type d -exec chmod o+x {} ';'")
-    shell_out("rsync -a {delete} Doc/build/html/ {target}".format(
-        delete="" if quick else "--delete-delay",
-        target=target))
+    shell_out(['chown', '-R', ':' + group, 'Doc/build/html/'])
+    shell_out(['chmod', '-R', 'o+r', 'Doc/build/html/'])
+    shell_out(['find', 'Doc/build/html/', '-type', 'd',
+               '-exec', 'chmod', 'o+x', '{}', ';'])
+    if quick:
+        shell_out(['rsync', '-a', 'Doc/build/html/', target])
+    else:
+        shell_out(['rsync', '-a', '--delete-delay', 'Doc/build/html/', target])
     if not quick:
         logging.debug("Copying dist files")
-        shell_out("chown -R :{} Doc/dist/".format(group))
-        shell_out("chmod -R o+r Doc/dist/")
-        shell_out("mkdir -m o+rx -p %s/archives" % target)
-        shell_out("chown :{} {}/archives".format(group, target))
-        shell_out("cp -a Doc/dist/* %s/archives" % target)
+        shell_out(['chown', '-R', ':' + group, 'Doc/dist/'])
+        shell_out(['chmod', '-R', 'o+r', 'Doc/dist/'])
+        shell_out(['mkdir', '-m', 'o+rx', '-p', target + '/archives'])
+        shell_out(['chown', ':' + group, target + '/archives'])
+        shell_out("cp -a Doc/dist/* %s/archives" % target, shell=True)
         changed.append("archives/")
         for fn in os.listdir(os.path.join(target, "archives")):
             changed.append("archives/" + fn)
@@ -228,14 +229,16 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
     logging.info("%s files changed", len(changed))
     if changed and not skip_cache_invalidation:
         targets_dir = www_root
-        prefixes = shell_out('find -L {} -samefile {}'.format(
-            targets_dir, target)).replace(targets_dir + '/', '')
+        prefixes = shell_out(['find', '-L', targets_dir,
+                              '-samefile', target])
+        prefixes = prefixes.replace(targets_dir + '/', '')
         prefixes = [prefix + '/' for prefix in prefixes.split('\n') if prefix]
         to_purge = prefixes[:]
         for prefix in prefixes:
             to_purge.extend(prefix + p for p in changed)
         logging.info("Running CDN purge")
-        shell_out("curl -X PURGE \"https://docs.python.org/{%s}\"" % ",".join(to_purge))
+        shell_out(['curl', '-XPURGE',
+                   'https://docs.python.org/{%s}' % ",".join(to_purge)])
 
     logging.info("Finished %s", checkout)
 
@@ -254,7 +257,7 @@ def parse_args():
         help="Make HTML files only (Makefile rules suffixed with -html).")
     parser.add_argument(
         "-b", "--branch",
-        metavar=3.6,
+        metavar='3.6',
         type=float,
         help="Version to build (defaults to all maintained branches).")
     parser.add_argument(
