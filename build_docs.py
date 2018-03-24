@@ -31,6 +31,7 @@ Modified by Julien Palard to build translations.
 
 """
 
+from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 import logging
 import os
 import subprocess
@@ -176,9 +177,8 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
               log_directory='/var/log/docsbuild/', language=None):
     if not language:
         language = 'en'
-    checkout = os.path.join(build_root, 'python{version}{lang}'.format(
-        version=str(version).replace('.', ''),
-        lang=language if language != 'en' else ''))
+    checkout = os.path.join(
+        build_root, str(version), 'cpython-{lang}'.format(lang=language))
     logging.info("Build start for version: %s, language: %s",
                  str(version), language)
     sphinxopts = SPHINXOPTS[language].copy()
@@ -196,7 +196,7 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
         os.chmod(language_dir, 0o775)
         target = os.path.join(language_dir, str(version))
         gettext_language_tag = pep_545_tag_to_gettext_tag(language)
-        locale_dirs = os.path.join(build_root, 'locale')
+        locale_dirs = os.path.join(build_root, str(version), 'locale')
         locale_clone_dir = os.path.join(
             locale_dirs, gettext_language_tag, 'LC_MESSAGES')
         locale_repo = 'https://github.com/python/python-docs-{}.git'.format(
@@ -227,8 +227,8 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
     sphinxbuild = os.path.join(venv, "bin/sphinx-build")
     blurb = os.path.join(venv, "bin/blurb")
     shell_out(
-        "cd Doc; make PYTHON=%s SPHINXBUILD=%s BLURB=%s VENVDIR=%s SPHINXOPTS='%s' %s >> %s 2>&1" %
-        (python, sphinxbuild, blurb, venv, ' '.join(sphinxopts), maketarget,
+        "make -C %s PYTHON=%s SPHINXBUILD=%s BLURB=%s VENVDIR=%s SPHINXOPTS='%s' %s >> %s 2>&1" %
+        (os.path.join(checkout, 'Doc'), python, sphinxbuild, blurb, venv, ' '.join(sphinxopts), maketarget,
          os.path.join(log_directory, logname)), shell=True)
     shell_out(['chgrp', '-R', group, log_directory])
     changed = changed_files(os.path.join(checkout, "Doc/build/html"), target)
@@ -319,6 +319,12 @@ def parse_args():
         help="Language translation, as a PEP 545 language tag like"
         " 'fr' or 'pt-br'.",
         metavar='fr')
+    parser.add_argument(
+        "--jobs", "-j",
+        type=int,
+        default=4,
+        help="Specifies the number of jobs (languages, versions) "
+        "to run simultaneously.")
     return parser.parse_args()
 
 
@@ -348,15 +354,21 @@ def main():
         # instead of none.  "--languages en" builds *no* translation,
         # as "en" is the untranslated one.
         args.languages = LANGUAGES
-    for version, git_branch, devel in branches_to_do:
-        for language in args.languages:
-            try:
-                build_one(version, git_branch, devel, args.quick, venv,
-                          args.build_root, args.www_root,
-                          args.skip_cache_invalidation, args.group,
-                          args.log_directory, language)
-            except Exception:
-                logging.exception("docs build raised exception")
+    with ThreadPoolExecutor(max_workers=args.jobs) as executor:
+        futures = []
+        for version, git_branch, devel in branches_to_do:
+            for language in args.languages:
+                futures.append((version, language, executor.submit(
+                    build_one, version, git_branch, devel, args.quick, venv,
+                    args.build_root, args.www_root,
+                    args.skip_cache_invalidation, args.group,
+                    args.log_directory, language)))
+        wait([future[2] for future in futures], return_when=ALL_COMPLETED)
+        for version, language, future in futures:
+            if future.exception():
+                logging.error("Exception while building %s version %s: %s",
+                              language, version,
+                              future.exception())
 
 
 if __name__ == '__main__':
