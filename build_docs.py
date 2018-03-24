@@ -219,10 +219,9 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
         logging.warning("Can't change group of %s: %s", target, str(err))
     git_clone('https://github.com/python/cpython.git',
               checkout, git_branch)
-    os.chdir(checkout)
     maketarget = "autobuild-" + ("dev" if isdev else "stable") + ("-html" if quick else "")
     logging.info("Running make %s", maketarget)
-    logname = "{}-{}.log".format(os.path.basename(checkout), language)
+    logname = "{}.log".format(os.path.basename(checkout))
     python = os.path.join(venv, "bin/python")
     sphinxbuild = os.path.join(venv, "bin/sphinx-build")
     blurb = os.path.join(venv, "bin/blurb")
@@ -233,20 +232,20 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
     shell_out(['chgrp', '-R', group, log_directory])
     changed = changed_files(os.path.join(checkout, "Doc/build/html"), target)
     logging.info("Copying HTML files to %s", target)
-    shell_out(['chown', '-R', ':' + group, 'Doc/build/html/'])
-    shell_out(['chmod', '-R', 'o+r', 'Doc/build/html/'])
-    shell_out(['find', 'Doc/build/html/', '-type', 'd',
+    shell_out(['chown', '-R', ':' + group, os.path.join(checkout, 'Doc/build/html/')])
+    shell_out(['chmod', '-R', 'o+r', os.path.join(checkout, 'Doc/build/html/')])
+    shell_out(['find', os.path.join(checkout, 'Doc/build/html/'), '-type', 'd',
                '-exec', 'chmod', 'o+x', '{}', ';'])
     if quick:
-        shell_out(['rsync', '-a', 'Doc/build/html/', target])
+        shell_out(['rsync', '-a', os.path.join(checkout, 'Doc/build/html/'), target])
     else:
-        shell_out(['rsync', '-a', '--delete-delay', 'Doc/build/html/', target])
+        shell_out(['rsync', '-a', '--delete-delay', os.path.join(checkout, 'Doc/build/html/'), target])
     if not quick:
         logging.debug("Copying dist files")
-        shell_out(['chown', '-R', ':' + group, 'Doc/dist/'])
-        shell_out(['chmod', '-R', 'o+r', 'Doc/dist/'])
-        shell_out(['mkdir', '-m', 'o+rx', '-p', target + '/archives'])
-        shell_out(['chown', ':' + group, target + '/archives'])
+        shell_out(['chown', '-R', ':' + group, os.path.join(checkout, 'Doc/dist/')])
+        shell_out(['chmod', '-R', 'o+r', os.path.join('Doc/dist/')])
+        shell_out(['mkdir', '-m', 'o+rx', '-p', os.path.join(target, 'archives')])
+        shell_out(['chown', ':' + group, os.path.join(target, 'archives')])
         shell_out("cp -a Doc/dist/* %s/archives" % target, shell=True)
         changed.append("archives/")
         for fn in os.listdir(os.path.join(target, "archives")):
