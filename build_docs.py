@@ -32,6 +32,7 @@ Modified by Julien Palard to build translations.
 """
 
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
+from datetime import datetime
 import logging
 import os
 import subprocess
@@ -89,13 +90,19 @@ def _file_unchanged(old, new):
     return True
 
 
-def shell_out(cmd, shell=False):
+def shell_out(cmd, shell=False, logfile=None):
     logging.debug("Running command %r", cmd)
     try:
-        return subprocess.check_output(cmd, shell=shell,
-                                       stdin=subprocess.PIPE,
-                                       stderr=subprocess.STDOUT,
-                                       universal_newlines=True)
+        output = subprocess.check_output(cmd, shell=shell,
+                                         stdin=subprocess.PIPE,
+                                         stderr=subprocess.STDOUT,
+                                         universal_newlines=True)
+        if logfile:
+            with open(logfile, 'a+') as log:
+                log.write("#" + str(datetime.now()))
+                log.write(output)
+                log.write("\n\n")
+        return output
     except subprocess.CalledProcessError as e:
         logging.debug("Command failed with output %r", e.output)
         raise
@@ -226,9 +233,15 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
     sphinxbuild = os.path.join(venv, "bin/sphinx-build")
     blurb = os.path.join(venv, "bin/blurb")
     shell_out(
-        "make -C %s PYTHON=%s SPHINXBUILD=%s BLURB=%s VENVDIR=%s SPHINXOPTS='%s' %s >> %s 2>&1" %
-        (os.path.join(checkout, 'Doc'), python, sphinxbuild, blurb, venv, ' '.join(sphinxopts), maketarget,
-         os.path.join(log_directory, logname)), shell=True)
+        ["make",
+         "-C", os.path.join(checkout, 'Doc'),
+         "PYTHON=" + python,
+         "SPHINXBUILD=" + sphinxbuild,
+         "BLURB=" + blurb,
+         "VENVDIR=" + venv,
+         "SPHINXOPTS=" + ' '.join(sphinxopts),
+         maketarget],
+        logfile=os.path.join(log_directory, logname))
     shell_out(['chgrp', '-R', group, log_directory])
     changed = changed_files(os.path.join(checkout, "Doc/build/html"), target)
     logging.info("Copying HTML files to %s", target)
