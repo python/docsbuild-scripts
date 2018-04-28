@@ -203,10 +203,13 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
     os.makedirs(target, exist_ok=True)
     try:
         os.chmod(target, 0o775)
-        shell_out(['chgrp', '-R', group, target])
-    except (PermissionError, subprocess.CalledProcessError) as err:
-        logging.warning("Can't change mod or group of %s: %s",
-                        target, str(err))
+    except PermissionError as err:
+        logging.warning("Can't change mod of %s: %s", target, str(err))
+    try:
+        shell_out(['chgrp', '-R', group, www_root])
+    except subprocess.CalledProcessError as err:
+        logging.warning("Can't change group of %s: %s", www_root, str(err))
+
     git_clone('https://github.com/python/cpython.git',
               checkout, git_branch)
     os.chdir(checkout)
