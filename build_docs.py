@@ -185,6 +185,11 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
     else:
         language_dir = os.path.join(www_root, language)
         os.makedirs(language_dir, exist_ok=True)
+        try:
+            shell_out(['chgrp', '-R', group, language_dir])
+        except subprocess.CalledProcessError as err:
+            logging.warning("Can't change group of %s: %s", language_dir,
+                            str(err))
         os.chmod(language_dir, 0o775)
         target = os.path.join(language_dir, str(version))
         gettext_language_tag = pep_545_tag_to_gettext_tag(language)
@@ -206,10 +211,9 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
     except PermissionError as err:
         logging.warning("Can't change mod of %s: %s", target, str(err))
     try:
-        shell_out(['chgrp', '-R', group, www_root])
+        shell_out(['chgrp', '-R', group, target])
     except subprocess.CalledProcessError as err:
-        logging.warning("Can't change group of %s: %s", www_root, str(err))
-
+        logging.warning("Can't change group of %s: %s", target, str(err))
     git_clone('https://github.com/python/cpython.git',
               checkout, git_branch)
     os.chdir(checkout)
