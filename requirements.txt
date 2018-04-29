@@ -13,7 +13,7 @@ pytz==2018.4
 requests==2.18.4
 six==1.11.0
 snowballstemmer==1.2.1
-Sphinx==1.7.2
+Sphinx==1.7.4
 sphinx-rtd-theme==0.3.0
 blurb==1.0.6
 sphinxcontrib-websupport==1.0.1
