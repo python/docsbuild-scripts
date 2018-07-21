@@ -340,7 +340,7 @@ def main():
     logging.root.setLevel(logging.DEBUG)
     venv = os.path.join(args.build_root, "venv")
     if args.branch:
-        branches_to_do = [(args.branch, args.branch, args.devel)]
+        branches_to_do = [(args.branch, str(args.branch), args.devel)]
     else:
         branches_to_do = BRANCHES
     if not args.languages:
