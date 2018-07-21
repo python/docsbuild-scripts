@@ -228,7 +228,7 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
               checkout, git_branch)
     maketarget = "autobuild-" + ("dev" if isdev else "stable") + ("-html" if quick else "")
     logging.info("Running make %s", maketarget)
-    logname = "{}.log".format(os.path.basename(checkout))
+    logname = 'cpython-{lang}-{version}.log'.format(lang=language, version=version)
     python = os.path.join(venv, "bin/python")
     sphinxbuild = os.path.join(venv, "bin/sphinx-build")
     blurb = os.path.join(venv, "bin/blurb")
