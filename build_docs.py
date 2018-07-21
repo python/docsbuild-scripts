@@ -99,7 +99,7 @@ def shell_out(cmd, shell=False, logfile=None):
                                          universal_newlines=True)
         if logfile:
             with open(logfile, 'a+') as log:
-                log.write("#" + str(datetime.now()))
+                log.write("#" + str(datetime.now()) + "\n")
                 log.write(output)
                 log.write("\n\n")
         return output
