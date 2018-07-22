@@ -264,7 +264,7 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
     if not quick:
         logging.debug("Copying dist files")
         shell_out(['chown', '-R', ':' + group, os.path.join(checkout, 'Doc/dist/')])
-        shell_out(['chmod', '-R', 'o+r', os.path.join('Doc/dist/')])
+        shell_out(['chmod', '-R', 'o+r', os.path.join(checkout, os.path.join('Doc/dist/'))])
         shell_out(['mkdir', '-m', 'o+rx', '-p', os.path.join(target, 'archives')])
         shell_out(['chown', ':' + group, os.path.join(target, 'archives')])
         shell_out("cp -a Doc/dist/* %s/archives" % target, shell=True)
