@@ -91,6 +91,7 @@ def _file_unchanged(old, new):
 
 def shell_out(cmd, shell=False, logfile=None):
     logging.debug("Running command %r", cmd)
+    now = str(datetime.now())
     try:
         output = subprocess.check_output(cmd, shell=shell,
                                          stdin=subprocess.PIPE,
@@ -98,13 +99,21 @@ def shell_out(cmd, shell=False, logfile=None):
                                          universal_newlines=True)
         if logfile:
             with open(logfile, 'a+') as log:
-                log.write("#" + str(datetime.now()) + "\n")
+                log.write("# " + now + "\n")
+                log.write(f"# Command {cmd!r} ran successfully:")
                 log.write(output)
                 log.write("\n\n")
         return output
     except subprocess.CalledProcessError as e:
-        logging.debug("Command failed with output %r", e.output)
-        raise
+        if logfile:
+            with open(logfile, 'a+') as log:
+                log.write("# " + now + "\n")
+                log.write(f"# Command {cmd!r} failed:")
+                log.write(output)
+                log.write("\n\n")
+            logging.error("Command failed (see %s at %s)", logfile, now)
+        else:
+            logging.error("Command failed with output %r", e.output)
 
 
 def changed_files(directory, other):
