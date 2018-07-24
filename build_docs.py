@@ -197,7 +197,7 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
     logging.info("Build start for version: %s, language: %s",
                  str(version), language)
     sphinxopts = SPHINXOPTS[language].copy()
-    sphinxopts.append('-j4')
+    sphinxopts.extend(['-j4', '-q'])
     if language == 'en':
         target = os.path.join(www_root, str(version))
     else:
