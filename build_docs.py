@@ -109,7 +109,7 @@ def shell_out(cmd, shell=False, logfile=None):
             with open(logfile, 'a+') as log:
                 log.write("# " + now + "\n")
                 log.write("# Command {cmd!r} failed:".format(cmd=cmd))
-                log.write(output)
+                log.write(e.output)
                 log.write("\n\n")
             logging.error("Command failed (see %s at %s)", logfile, now)
         else:
