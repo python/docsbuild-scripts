@@ -52,7 +52,9 @@ LANGUAGES = [
     'en',
     'fr',
     'ja',
-    'ko'
+    'ko',
+    'zh-cn',
+    'zh-tw'
 ]
 
 SPHINXOPTS = {
@@ -67,7 +69,13 @@ SPHINXOPTS = {
            '-D latex_elements.fontenc='],
     'en': ['-D latex_engine=xelatex',
            '-D latex_elements.inputenc=',
-           '-D latex_elements.fontenc=']
+           '-D latex_elements.fontenc='],
+    'zh-cn': ['-D latex_engine=platex',
+              '-D latex_elements.inputenc=',
+              '-D latex_elements.fontenc='],
+    'zh-tw': ['-D latex_engine=platex',
+              '-D latex_elements.inputenc=',
+              '-D latex_elements.fontenc=']
     }
 
 
