@@ -115,6 +115,7 @@ def shell_out(cmd, shell=False, logfile=None):
                 log.write("\n\n")
         return output
     except subprocess.CalledProcessError as e:
+        sentry_sdk.capture_exception(e)
         if logfile:
             with open(logfile, 'a+') as log:
                 log.write("# " + now + "\n")
