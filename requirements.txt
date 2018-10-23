@@ -11,7 +11,7 @@ MarkupSafe==1.0
 packaging==18.0
 Pygments==2.2.0
 pyparsing==2.2.2
-python-docs-theme==2018.2
+python-docs-theme==2018.7
 pytz==2018.5
 requests==2.19.1
 six==1.11.0
