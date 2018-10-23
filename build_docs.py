@@ -39,6 +39,8 @@ import subprocess
 import sys
 import shutil
 
+import sentry_sdk
+sentry_sdk.init()
 
 BRANCHES = [
     # version, git branch, isdev
