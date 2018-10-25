@@ -271,7 +271,8 @@ def build_one(version, git_branch, isdev, quick, venv, build_root, www_root,
     if quick:
         shell_out(['rsync', '-a', os.path.join(checkout, 'Doc/build/html/'), target])
     else:
-        shell_out(['rsync', '-a', '--delete-delay', os.path.join(checkout, 'Doc/build/html/'), target])
+        shell_out(['rsync', '-a', '--delete-delay', '--filter', 'P archives/',
+                   os.path.join(checkout, 'Doc/build/html/'), target])
     if not quick:
         logging.debug("Copying dist files")
         shell_out(['chown', '-R', ':' + group, os.path.join(checkout, 'Doc/dist/')])
