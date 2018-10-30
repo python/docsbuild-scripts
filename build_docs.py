@@ -39,8 +39,12 @@ import subprocess
 import sys
 import shutil
 
-import sentry_sdk
-sentry_sdk.init()
+try:
+    import sentry_sdk
+except ImportError:
+    sentry_sdk = None
+else:
+    sentry_sdk.init()
 
 BRANCHES = [
     # version, git branch, isdev
@@ -115,7 +119,8 @@ def shell_out(cmd, shell=False, logfile=None):
                 log.write("\n\n")
         return output
     except subprocess.CalledProcessError as e:
-        sentry_sdk.capture_exception(e)
+        if sentry_sdk:
+            sentry_sdk.capture_exception(e)
         if logfile:
             with open(logfile, 'a+') as log:
                 log.write("# " + now + "\n")
