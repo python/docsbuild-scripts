@@ -409,6 +409,8 @@ def main():
                 logging.error("Exception while building %s version %s: %s",
                               language, version,
                               future.exception())
+                if sentry_sdk:
+                    sentry_sdk.capture_exception(future.exception())
 
 
 if __name__ == '__main__':
