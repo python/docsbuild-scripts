@@ -219,8 +219,6 @@ def build_one(
     quick,
     venv,
     build_root,
-    www_root,
-    skip_cache_invalidation=False,
     group="docs",
     log_directory="/var/log/docsbuild/",
     language=None,
@@ -233,17 +231,7 @@ def build_one(
     logging.info("Build start for version: %s, language: %s", str(version), language)
     sphinxopts = SPHINXOPTS[language].copy()
     sphinxopts.extend(["-j4", "-q"])
-    if language == "en":
-        target = os.path.join(www_root, str(version))
-    else:
-        language_dir = os.path.join(www_root, language)
-        os.makedirs(language_dir, exist_ok=True)
-        try:
-            shell_out(["chgrp", "-R", group, language_dir])
-        except subprocess.CalledProcessError as err:
-            logging.warning("Can't change group of %s: %s", language_dir, str(err))
-        os.chmod(language_dir, 0o775)
-        target = os.path.join(language_dir, str(version))
+    if language != "en":
         gettext_language_tag = pep_545_tag_to_gettext_tag(language)
         locale_dirs = os.path.join(build_root, str(version), "locale")
         locale_clone_dir = os.path.join(
@@ -262,15 +250,6 @@ def build_one(
                 "-D gettext_compact=0",
             )
         )
-    os.makedirs(target, exist_ok=True)
-    try:
-        os.chmod(target, 0o775)
-    except PermissionError as err:
-        logging.warning("Can't change mod of %s: %s", target, str(err))
-    try:
-        shell_out(["chgrp", "-R", group, target])
-    except subprocess.CalledProcessError as err:
-        logging.warning("Can't change group of %s: %s", target, str(err))
     git_clone("https://github.com/python/cpython.git", checkout, git_branch)
     maketarget = (
         "autobuild-" + ("dev" if isdev else "stable") + ("-html" if quick else "")
@@ -295,6 +274,42 @@ def build_one(
         logfile=os.path.join(log_directory, logname),
     )
     shell_out(["chgrp", "-R", group, log_directory])
+    logging.info("Build done for version: %s, language: %s", str(version), language)
+
+
+def copy_build_to_webroot(
+    build_root, version, language, group, quick, skip_cache_invalidation, www_root
+):
+    """Copy a given build to the appropriate webroot with appropriate rights.
+    """
+    logging.info(
+        "Publishing start for version: %s, language: %s", str(version), language
+    )
+    checkout = os.path.join(
+        build_root, str(version), "cpython-{lang}".format(lang=language)
+    )
+    if language == "en":
+        target = os.path.join(www_root, str(version))
+    else:
+        language_dir = os.path.join(www_root, language)
+        os.makedirs(language_dir, exist_ok=True)
+        try:
+            shell_out(["chgrp", "-R", group, language_dir])
+        except subprocess.CalledProcessError as err:
+            logging.warning("Can't change group of %s: %s", language_dir, str(err))
+        os.chmod(language_dir, 0o775)
+        target = os.path.join(language_dir, str(version))
+
+    os.makedirs(target, exist_ok=True)
+    try:
+        os.chmod(target, 0o775)
+    except PermissionError as err:
+        logging.warning("Can't change mod of %s: %s", target, str(err))
+    try:
+        shell_out(["chgrp", "-R", group, target])
+    except subprocess.CalledProcessError as err:
+        logging.warning("Can't change group of %s: %s", target, str(err))
+
     changed = changed_files(os.path.join(checkout, "Doc/build/html"), target)
     logging.info("Copying HTML files to %s", target)
     shell_out(["chown", "-R", ":" + group, os.path.join(checkout, "Doc/build/html/")])
@@ -358,8 +373,9 @@ def build_one(
         shell_out(
             ["curl", "-XPURGE", "https://docs.python.org/{%s}" % ",".join(to_purge)]
         )
-
-    logging.info("Finished %s", checkout)
+    logging.info(
+        "Publishing done for version: %s, language: %s", str(version), language
+    )
 
 
 def parse_args():
@@ -481,8 +497,6 @@ def main():
                             args.quick,
                             venv,
                             args.build_root,
-                            args.www_root,
-                            args.skip_cache_invalidation,
                             args.group,
                             args.log_directory,
                             language,
@@ -497,6 +511,25 @@ def main():
                     language,
                     version,
                     future.exception(),
+                )
+                if sentry_sdk:
+                    sentry_sdk.capture_exception(future.exception())
+            try:
+                copy_build_to_webroot(
+                    args.build_root,
+                    version,
+                    language,
+                    args.group,
+                    args.quick,
+                    args.skip_cache_invalidation,
+                    args.www_root,
+                )
+            except Exception as ex:
+                logging.error(
+                    "Exception while copying to webroot %s version %s: %s",
+                    language,
+                    version,
+                    ex,
                 )
                 if sentry_sdk:
                     sentry_sdk.capture_exception(future.exception())
