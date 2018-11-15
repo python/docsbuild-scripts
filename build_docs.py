@@ -117,7 +117,8 @@ def shell_out(cmd, shell=False, logfile=None):
             shell=shell,
             stdin=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            universal_newlines=True,
+            encoding="utf-8",
+            errors="backslashreplace",
         )
         if logfile:
             with open(logfile, "a+") as log:
