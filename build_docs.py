@@ -33,8 +33,10 @@ Modified by Julien Palard to build translations.
 
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 from datetime import datetime
+import filecmp
 import logging
 import os
+import pathlib
 import subprocess
 import sys
 import shutil
@@ -90,24 +92,6 @@ SPHINXOPTS = {
 }
 
 
-def _file_unchanged(old, new):
-    with open(old, "rb") as fp1, open(new, "rb") as fp2:
-        st1 = os.fstat(fp1.fileno())
-        st2 = os.fstat(fp2.fileno())
-        if st1.st_size != st2.st_size:
-            return False
-        if st1.st_mtime >= st2.st_mtime:
-            return True
-        while True:
-            one = fp1.read(4096)
-            two = fp2.read(4096)
-            if one != two:
-                return False
-            if one == b"":
-                break
-    return True
-
-
 def shell_out(cmd, shell=False, logfile=None):
     logging.debug("Running command %r", cmd)
     now = str(datetime.now())
@@ -141,21 +125,19 @@ def shell_out(cmd, shell=False, logfile=None):
             logging.error("Command failed with output %r", e.output)
 
 
-def changed_files(directory, other):
-    logging.info("Computing changed files")
+def changed_files(left, right):
+    """Compute a list of different files between left and right, recursively.
+    Resulting paths are relative to left.
+    """
     changed = []
-    if directory[-1] != "/":
-        directory += "/"
-    for dirpath, dirnames, filenames in os.walk(directory):
-        dir_rel = dirpath[len(directory) :]
-        for fn in filenames:
-            local_path = os.path.join(dirpath, fn)
-            rel_path = os.path.join(dir_rel, fn)
-            target_path = os.path.join(other, rel_path)
-            if os.path.exists(target_path) and not _file_unchanged(
-                target_path, local_path
-            ):
-                changed.append(rel_path)
+
+    def traverse(dircmp_result):
+        base = pathlib.Path(dircmp_result.left).relative_to(left)
+        changed.extend(str(base / file) for file in dircmp_result.diff_files)
+        for dircomp in dircmp_result.subdirs.values():
+            traverse(dircomp)
+
+    traverse(filecmp.dircmp(left, right))
     return changed
 
 
