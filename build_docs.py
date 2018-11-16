@@ -31,15 +31,15 @@ Modified by Julien Palard to build translations.
 
 """
 
-from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
-from datetime import datetime
 import filecmp
 import logging
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
-import shutil
+from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
+from datetime import datetime
 
 try:
     import sentry_sdk
