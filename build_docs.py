@@ -252,6 +252,7 @@ def build_one(
             "BLURB=" + blurb,
             "VENVDIR=" + venv,
             "SPHINXOPTS=" + " ".join(sphinxopts),
+            "SPHINXERRORHANDLING=",
             maketarget,
         ],
         logfile=os.path.join(log_directory, logname),
