@@ -80,12 +80,12 @@ SPHINXOPTS = {
         "-D latex_elements.fontenc=",
     ],
     "zh-cn": [
-        "-D latex_engine=platex",
+        "-D latex_engine=xelatex",
         "-D latex_elements.inputenc=",
         "-D latex_elements.fontenc=",
     ],
     "zh-tw": [
-        "-D latex_engine=platex",
+        "-D latex_engine=xelatex",
         "-D latex_elements.inputenc=",
         "-D latex_elements.fontenc=",
     ],
