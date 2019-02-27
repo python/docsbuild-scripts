@@ -210,7 +210,7 @@ def build_one(
         language = "en"
     if sentry_sdk:
         with sentry_sdk.configure_scope() as scope:
-            scope.set_tag("version", version)
+            scope.set_tag("version", repr(version))
             scope.set_tag("language", language)
     checkout = os.path.join(
         build_root, str(version), "cpython-{lang}".format(lang=language)
@@ -495,7 +495,7 @@ def main():
         for version, language, future in futures:
             if sentry_sdk:
                 with sentry_sdk.configure_scope() as scope:
-                    scope.set_tag("version", version)
+                    scope.set_tag("version", repr(version))
                     scope.set_tag("language", language if language else 'en')
             if future.exception():
                 logging.error(
