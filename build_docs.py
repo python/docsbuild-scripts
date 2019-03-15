@@ -65,7 +65,7 @@ SPHINXOPTS = {
         "-D latex_elements.fontenc=",
     ],
     "ko": [
-        "-D latex_engine=platex",
+        "-D latex_engine=xelatex",
         "-D latex_elements.inputenc=",
         "-D latex_elements.fontenc=",
     ],
