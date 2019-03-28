@@ -82,12 +82,12 @@ SPHINXOPTS = {
     "zh-cn": [
         "-D latex_engine=xelatex",
         "-D latex_elements.inputenc=",
-        "-D latex_elements.fontenc=",
+        "-D latex_elements.fontenc='\\usepackage{xeCJK}'",
     ],
     "zh-tw": [
         "-D latex_engine=xelatex",
         "-D latex_elements.inputenc=",
-        "-D latex_elements.fontenc=",
+        "-D latex_elements.fontenc='\\usepackage{xeCJK}'",
     ],
 }
 
