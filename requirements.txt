@@ -7,22 +7,27 @@
 alabaster==0.7.12         # via sphinx
 babel==2.6.0              # via sphinx
 blurb==1.0.7
-certifi==2018.11.29       # via requests, sentry-sdk
+certifi==2019.3.9         # via requests, sentry-sdk
 chardet==3.0.4            # via requests
 docutils==0.14            # via sphinx
 idna==2.8                 # via requests
 imagesize==1.1.0          # via sphinx
-jinja2==2.10              # via sphinx
+jinja2==2.10.1            # via sphinx
 markupsafe==1.1.1         # via jinja2
 packaging==19.0           # via sphinx
-pygments==2.3.1           # via sphinx
-pyparsing==2.3.1          # via packaging
+pygments==2.4.0           # via sphinx
+pyparsing==2.4.0          # via packaging
 python-docs-theme==2018.7
-pytz==2018.9              # via babel
-requests==2.21.0
-sentry-sdk==0.7.3
-six==1.12.0               # via packaging, sphinx
+pytz==2019.1              # via babel
+requests==2.22.0
+sentry-sdk==0.8.0
+six==1.12.0               # via packaging
 snowballstemmer==1.2.1    # via sphinx
-sphinx==1.8.4
-sphinxcontrib-websupport==1.1.0  # via sphinx
-urllib3==1.24.1           # via requests, sentry-sdk
+sphinx==2.0.1
+sphinxcontrib-applehelp==1.0.1  # via sphinx
+sphinxcontrib-devhelp==1.0.1  # via sphinx
+sphinxcontrib-htmlhelp==1.0.2  # via sphinx
+sphinxcontrib-jsmath==1.0.1  # via sphinx
+sphinxcontrib-qthelp==1.0.2  # via sphinx
+sphinxcontrib-serializinghtml==1.1.3  # via sphinx
+urllib3==1.25.2           # via requests, sentry-sdk
