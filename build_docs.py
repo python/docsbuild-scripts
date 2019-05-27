@@ -48,6 +48,8 @@ except ImportError:
 else:
     sentry_sdk.init()
 
+VERSION = "19.0"
+
 BRANCHES = [
     # version, git branch, isdev
     (3.6, "3.6", False),
@@ -366,6 +368,33 @@ def copy_build_to_webroot(
     )
 
 
+def head(lines, n=10):
+    return "\n".join(lines.split("\n")[:n])
+
+
+def version_info():
+    platex_version = head(
+        subprocess.check_output(["platex", "--version"], text=True), n=3
+    )
+
+    xelatex_version = head(
+        subprocess.check_output(["xelatex", "--version"], text=True), n=2
+    )
+    print(
+        f"""build_docs: {VERSION}
+
+# platex
+
+{platex_version}
+
+
+# xelatex
+
+{xelatex_version}
+    """
+    )
+
+
 def parse_args():
     from argparse import ArgumentParser
 
@@ -440,11 +469,19 @@ def parse_args():
         help="Specifies the number of jobs (languages, versions) "
         "to run simultaneously.",
     )
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        help="Get build_docs and dependencies version info",
+    )
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+    if args.version:
+        version_info()
+        exit(0)
     if args.log_directory:
         args.log_directory = os.path.abspath(args.log_directory)
     if args.build_root:
@@ -496,7 +533,7 @@ def main():
             if sentry_sdk:
                 with sentry_sdk.configure_scope() as scope:
                     scope.set_tag("version", repr(version))
-                    scope.set_tag("language", language if language else 'en')
+                    scope.set_tag("language", language if language else "en")
             if future.exception():
                 logging.error(
                     "Exception while building %s version %s: %s",
