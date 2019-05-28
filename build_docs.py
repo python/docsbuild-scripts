@@ -41,6 +41,7 @@ import sys
 from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime
 
+
 try:
     import sentry_sdk
 except ImportError:
@@ -74,7 +75,7 @@ SPHINXOPTS = {
     "fr": [
         "-D latex_engine=xelatex",
         "-D latex_elements.inputenc=",
-        "-D latex_elements.fontenc=",
+        "-D latex_elements.fontenc=\\usepackage{fontspec}",
     ],
     "en": [
         "-D latex_engine=xelatex",
