@@ -375,11 +375,11 @@ def head(lines, n=10):
 
 def version_info():
     platex_version = head(
-        subprocess.check_output(["platex", "--version"], text=True), n=3
+        subprocess.check_output(["platex", "--version"], universal_newlines=True), n=3
     )
 
     xelatex_version = head(
-        subprocess.check_output(["xelatex", "--version"], text=True), n=2
+        subprocess.check_output(["xelatex", "--version"], universal_newlines=True), n=2
     )
     print(
         f"""build_docs: {VERSION}
