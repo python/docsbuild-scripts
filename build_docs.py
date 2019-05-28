@@ -75,7 +75,7 @@ SPHINXOPTS = {
     "fr": [
         "-D latex_engine=xelatex",
         "-D latex_elements.inputenc=",
-        "-D latex_elements.fontenc=\\usepackage{fontspec}",
+        r"-D latex_elements.fontenc=\\usepackage{fontspec}",
     ],
     "en": [
         "-D latex_engine=xelatex",
