@@ -117,7 +117,9 @@ def shell_out(cmd, shell=False, logfile=None):
         return output
     except subprocess.CalledProcessError as e:
         if sentry_sdk:
-            sentry_sdk.capture_exception(e)
+            with sentry_sdk.push_scope() as scope:
+                scope.fingerprint = ["{{ default }}", str(cmd)]
+                sentry_sdk.capture_exception(e)
         if logfile:
             with open(logfile, "a+") as log:
                 log.write("# " + now + "\n")
