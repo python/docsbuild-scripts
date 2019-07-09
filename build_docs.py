@@ -72,6 +72,7 @@ SPHINXOPTS = {
         "-D latex_engine=xelatex",
         "-D latex_elements.inputenc=",
         "-D latex_elements.fontenc=",
+        r"-D latex_elements.preamble=\\usepackage{kotex}\\setmainhangulfont{UnBatang}\\setsanshangulfont{UnDotum}\\setmonohangulfont{UnTaza}",
     ],
     "pt-br": [
         "-D latex_engine=xelatex",
