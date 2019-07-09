@@ -38,7 +38,7 @@ import pathlib
 import shutil
 import subprocess
 import sys
-from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
+from concurrent.futures import ALL_COMPLETED, ProcessPoolExecutor, wait
 from datetime import datetime
 
 
@@ -226,7 +226,7 @@ def build_one(
     )
     logging.info("Build start for version: %s, language: %s", str(version), language)
     sphinxopts = SPHINXOPTS[language].copy()
-    sphinxopts.extend(["-j4", "-q"])
+    sphinxopts.extend(["-q"])
     if language != "en":
         gettext_language_tag = pep_545_tag_to_gettext_tag(language)
         locale_dirs = os.path.join(build_root, str(version), "locale")
@@ -513,7 +513,7 @@ def main():
         # instead of none.  "--languages en" builds *no* translation,
         # as "en" is the untranslated one.
         args.languages = LANGUAGES
-    with ThreadPoolExecutor(max_workers=args.jobs) as executor:
+    with ProcessPoolExecutor(max_workers=args.jobs) as executor:
         futures = []
         for version, git_branch, devel in branches_to_do:
             for language in args.languages:
