@@ -4,7 +4,7 @@
 
 Usage:
 
-  build_docs.py [-h] [-d] [-q] [-b 3.6] [-r BUILD_ROOT] [-w WWW_ROOT]
+  build_docs.py [-h] [-d] [-q] [-b 3.7] [-r BUILD_ROOT] [-w WWW_ROOT]
                 [--skip-cache-invalidation] [--group GROUP] [--git]
                 [--log-directory LOG_DIRECTORY]
                 [--languages [fr [fr ...]]]
@@ -53,7 +53,6 @@ VERSION = "19.0"
 
 BRANCHES = [
     # version, git branch, isdev
-    (3.6, "3.6", False),
     (3.7, "3.7", False),
     (3.8, "3.8", True),
     (3.9, "master", True),
