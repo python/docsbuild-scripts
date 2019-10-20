@@ -59,7 +59,7 @@ BRANCHES = [
     (2.7, "2.7", False),
 ]
 
-LANGUAGES = ["en", "fr", "ja", "ko", "pt-br", "zh-cn", "zh-tw"]
+LANGUAGES = ["en", "fr", "ja", "ko", "pt-br", "zh-cn", "zh-tw", "id"]
 
 SPHINXOPTS = {
     "ja": [
@@ -97,6 +97,11 @@ SPHINXOPTS = {
         "-D latex_engine=xelatex",
         "-D latex_elements.inputenc=",
         r"-D latex_elements.fontenc=\\usepackage{xeCJK}",
+    ],
+    "id": [
+        "-D latex_engine=xelatex",
+        "-D latex_elements.inputenc=",
+        "-D latex_elements.fontenc=",
     ],
 }
 
