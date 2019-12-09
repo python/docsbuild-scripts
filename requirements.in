@@ -2,4 +2,4 @@ blurb
 python-docs-theme
 requests
 sentry-sdk
-sphinx
+sphinx==2.2.1
