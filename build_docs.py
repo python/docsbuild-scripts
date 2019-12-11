@@ -53,6 +53,7 @@ VERSION = "19.0"
 
 BRANCHES = [
     # version, git branch, isdev
+    (3.6, "3.6", False),
     (3.7, "3.7", False),
     (3.8, "3.8", True),
     (3.9, "master", True),
