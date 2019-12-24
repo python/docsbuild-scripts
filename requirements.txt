@@ -23,7 +23,7 @@ requests==2.22.0
 sentry-sdk==0.13.5
 six==1.13.0               # via packaging
 snowballstemmer==2.0.0    # via sphinx
-sphinx==2.2.1
+sphinx==2.3.1
 sphinxcontrib-applehelp==1.0.1  # via sphinx
 sphinxcontrib-devhelp==1.0.1  # via sphinx
 sphinxcontrib-htmlhelp==1.0.2  # via sphinx
