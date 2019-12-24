@@ -77,7 +77,10 @@ def search_sphinx_versions_in_cpython(repo: git.Repo):
 
 async def get_version_in_prod(language, version):
     url = f"https://docs.python.org/{language}/{version}".replace("/en/", "/")
-    response = await httpx.get(url, timeout=5)
+    try:
+        response = await httpx.get(url, timeout=5)
+    except httpx.exceptions.TimeoutException:
+        return "TIMED OUT"
     text = response.text.encode("ASCII", errors="ignore").decode("ASCII")
     if created_using := re.search(
         r"sphinx.pocoo.org.*?([0-9.]+[0-9])", text, flags=re.M
