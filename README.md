@@ -15,7 +15,7 @@ Install `tools-requirements.txt` then run ``python check_versions.py
 ../cpython/`` (pointing to a real cpython clone) to see which version
 of Sphinx we're using where::
 
-    Docs build server is configured to use sphinx==2.0.1
+    Docs build server is configured to use sphinx==2.2.1
 
     Sphinx configuration in various branches:
 
@@ -23,6 +23,7 @@ of Sphinx we're using where::
     branch    travis         azure          requirements.txt    conf.py               Makefile       Mac installer
     ========  =============  =============  ==================  ====================  =============  ===============
     2.7       sphinx~=2.0.1  ø              ø                   needs_sphinx='1.2'
+    3.6       sphinx==1.8.2  sphinx==1.8.2  ø                   needs_sphinx='1.2'
     3.7       sphinx==1.8.2  sphinx==1.8.2  ø                   needs_sphinx="1.6.6"
     3.8       sphinx==1.8.2  sphinx==1.8.2  ø                   needs_sphinx='1.8'                   Sphinx==2.0.1
     master    sphinx==2.2.0  sphinx==2.2.0  sphinx==2.2.0       needs_sphinx='1.8'    Sphinx==2.2.0  Sphinx==2.2.0
@@ -33,8 +34,9 @@ of Sphinx we're using where::
     ========  =====  =====  =====  =====  =======  =======  =======  =====
       branch  en     fr     ja     ko     pt-br    zh-cn    zh-tw    id
     ========  =====  =====  =====  =====  =======  =======  =======  =====
-         2.7  2.0.1  2.0.1  2.0.1  2.0.1  2.0.1    2.0.1    2.0.1    2.0.1
-         3.7  2.0.1  2.0.1  2.0.1  2.0.1  2.0.1    2.0.1    2.0.1    2.0.1
-         3.8  2.0.1  2.0.1  2.0.1  2.0.1  2.0.1    2.0.1    2.0.1    2.0.1
-         3.9  2.0.1  2.0.1  2.0.1  2.0.1  2.0.1    2.0.1    2.0.1    2.0.1
+         2.7  2.2.1  2.2.1  2.2.1  2.2.1  2.2.1    2.2.1    2.2.1    2.2.1
+         3.6  2.2.1  2.2.1  2.2.1  2.2.1  2.2.1    2.2.1    2.2.1    2.2.1
+         3.7  2.2.1  2.2.1  2.2.1  2.2.1  2.2.1    2.2.1    2.2.1    2.2.1
+         3.8  2.2.1  2.2.1  2.2.1  2.2.1  2.2.1    2.2.1    2.2.1    2.2.1
+         3.9  2.2.1  2.2.1  2.2.1  2.2.1  2.2.1    2.2.1    2.2.1    2.2.1
     ========  =====  =====  =====  =====  =======  =======  =======  =====
