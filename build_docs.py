@@ -166,9 +166,10 @@ def git_clone(repository, directory, branch=None):
     try:
         if not os.path.isdir(os.path.join(directory, ".git")):
             raise AssertionError("Not a git repository.")
+        shell_out(["git", "-C", directory, "fetch"])
         if branch:
             shell_out(["git", "-C", directory, "checkout", branch])
-        shell_out(["git", "-C", directory, "pull", "--ff-only"])
+            shell_out(["git", "-C", directory, "reset", "--hard", "origin/" + branch])
     except (subprocess.CalledProcessError, AssertionError):
         if os.path.exists(directory):
             shutil.rmtree(directory)
