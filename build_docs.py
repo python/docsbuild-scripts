@@ -4,7 +4,7 @@
 
 Usage:
 
-  build_docs.py [-h] [-d] [-q] [-b 3.7] [-r BUILD_ROOT] [-w WWW_ROOT]
+  build_docs.py [-h] [-d] [-q] [-o] [-b 3.7] [-r BUILD_ROOT] [-w WWW_ROOT]
                 [--skip-cache-invalidation] [--group GROUP] [--git]
                 [--log-directory LOG_DIRECTORY]
                 [--languages [fr [fr ...]]]
@@ -18,6 +18,8 @@ ignoring the -d flag as it's given in the BRANCHES configuration.
 
 -d allow the docs to be built even if the branch is in
 development mode (i.e. version contains a, b or c).
+
+-o builds a branch as though for an outdated version of Python.
 
 Translations are fetched from github repositories according to PEP
 545.  --languages allow select translations, use "--languages" to
@@ -52,12 +54,12 @@ else:
 VERSION = "19.0"
 
 BRANCHES = [
-    # version, git branch, isdev
-    (3.6, "3.6", False),
-    (3.7, "3.7", False),
-    (3.8, "3.8", True),
-    (3.9, "master", True),
-    (2.7, "2.7", False),
+    # version, git branch, isdev, outdated
+    (3.6, "3.6", False, False),
+    (3.7, "3.7", False, False),
+    (3.8, "3.8", True, False),
+    (3.9, "master", True, False),
+    (2.7, "2.7", False, True),
 ]
 
 LANGUAGES = ["en", "fr", "ja", "ko", "pt-br", "zh-cn", "zh-tw", "id"]
@@ -223,6 +225,7 @@ def build_one(
     group="docs",
     log_directory="/var/log/docsbuild/",
     language=None,
+    outdated=False,
 ):
     if not language:
         language = "en"
@@ -236,6 +239,8 @@ def build_one(
     logging.info("Build start for version: %s, language: %s", str(version), language)
     sphinxopts = SPHINXOPTS[language].copy()
     sphinxopts.extend(["-q"])
+    if outdated:
+        sphinxopts.extend(["-A outdated=1"])
     if language != "en":
         gettext_language_tag = pep_545_tag_to_gettext_tag(language)
         locale_dirs = os.path.join(build_root, str(version), "locale")
@@ -424,6 +429,12 @@ def parse_args():
         help="Use make autobuild-dev instead of autobuild-stable",
     )
     parser.add_argument(
+        "-o",
+        "--outdated",
+        action="store_true",
+        help="Build documentation for an outdated release",
+    )
+    parser.add_argument(
         "-q",
         "--quick",
         action="store_true",
@@ -514,7 +525,8 @@ def main():
     logging.root.setLevel(logging.DEBUG)
     venv = os.path.join(args.build_root, "venv")
     if args.branch:
-        branches_to_do = [(args.branch, str(args.branch), args.devel)]
+        branches_to_do = [(args.branch, str(args.branch), args.devel,
+                           args.outdated)]
     else:
         branches_to_do = BRANCHES
     if not args.languages:
@@ -524,7 +536,7 @@ def main():
         args.languages = LANGUAGES
     with ProcessPoolExecutor(max_workers=args.jobs) as executor:
         futures = []
-        for version, git_branch, devel in branches_to_do:
+        for version, git_branch, devel, outdated in branches_to_do:
             for language in args.languages:
                 futures.append(
                     (
@@ -541,6 +553,7 @@ def main():
                             args.group,
                             args.log_directory,
                             language,
+                            outdated,
                         ),
                     )
                 )
