@@ -19,8 +19,6 @@ ignoring the -d flag as it's given in the BRANCHES configuration.
 -d allow the docs to be built even if the branch is in
 development mode (i.e. version contains a, b or c).
 
--o builds a branch as though for an outdated version of Python.
-
 Translations are fetched from github repositories according to PEP
 545.  --languages allow select translations, use "--languages" to
 build all translations (default) or "--languages en" to skip all
@@ -429,12 +427,6 @@ def parse_args():
         help="Use make autobuild-dev instead of autobuild-stable",
     )
     parser.add_argument(
-        "-o",
-        "--outdated",
-        action="store_true",
-        help="Build documentation for an outdated release",
-    )
-    parser.add_argument(
         "-q",
         "--quick",
         action="store_true",
@@ -526,7 +518,7 @@ def main():
     venv = os.path.join(args.build_root, "venv")
     if args.branch:
         branches_to_do = [(args.branch, str(args.branch), args.devel,
-                           args.outdated)]
+                           False)]
     else:
         branches_to_do = BRANCHES
     if not args.languages:
