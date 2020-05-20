@@ -40,7 +40,6 @@ import re
 import shutil
 import subprocess
 import sys
-from concurrent.futures import ALL_COMPLETED, ProcessPoolExecutor, wait
 from datetime import datetime
 
 
@@ -548,44 +547,24 @@ def main():
         # instead of none.  "--languages en" builds *no* translation,
         # as "en" is the untranslated one.
         args.languages = LANGUAGES
-    with ProcessPoolExecutor(max_workers=args.jobs) as executor:
-        futures = []
-        for version, git_branch, devel in branches_to_do:
-            for language in args.languages:
-                futures.append(
-                    (
-                        version,
-                        language,
-                        executor.submit(
-                            build_one,
-                            version,
-                            git_branch,
-                            devel,
-                            args.quick,
-                            venv,
-                            args.build_root,
-                            args.group,
-                            args.log_directory,
-                            language,
-                        ),
-                    )
-                )
-        wait([future[2] for future in futures], return_when=ALL_COMPLETED)
-        for version, language, future in futures:
+    for version, git_branch, devel in branches_to_do:
+        for language in args.languages:
             if sentry_sdk:
                 with sentry_sdk.configure_scope() as scope:
                     scope.set_tag("version", version)
                     scope.set_tag("language", language if language else "en")
-            if future.exception():
-                logging.error(
-                    "Exception while building %s version %s: %s",
-                    language,
-                    version,
-                    future.exception(),
-                )
-                if sentry_sdk:
-                    sentry_sdk.capture_exception(future.exception())
             try:
+                build_one(
+                    version,
+                    git_branch,
+                    devel,
+                    args.quick,
+                    venv,
+                    args.build_root,
+                    args.group,
+                    args.log_directory,
+                    language,
+                )
                 copy_build_to_webroot(
                     args.build_root,
                     version,
@@ -595,15 +574,15 @@ def main():
                     args.skip_cache_invalidation,
                     args.www_root,
                 )
-            except Exception as ex:
+            except Exception as err:
                 logging.error(
-                    "Exception while copying to webroot %s version %s: %s",
+                    "Exception while building %s version %s: %s",
                     language,
                     version,
-                    ex,
+                    err,
                 )
                 if sentry_sdk:
-                    sentry_sdk.capture_exception(ex)
+                    sentry_sdk.capture_exception(err)
 
 
 if __name__ == "__main__":
