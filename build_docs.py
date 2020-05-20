@@ -433,7 +433,6 @@ def parse_args():
         "-b",
         "--branch",
         metavar="3.6",
-        type=float,
         help="Version to build (defaults to all maintained branches).",
     )
     parser.add_argument(
@@ -514,7 +513,11 @@ def main():
     logging.root.setLevel(logging.DEBUG)
     venv = os.path.join(args.build_root, "venv")
     if args.branch:
-        branches_to_do = [(args.branch, str(args.branch), args.devel)]
+        branches_to_do = [
+            branch
+            for branch in BRANCHES
+            if str(branch[0]) == args.branch or branch[1] == args.branch
+        ]
     else:
         branches_to_do = BRANCHES
     if not args.languages:
