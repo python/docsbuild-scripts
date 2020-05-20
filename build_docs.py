@@ -31,10 +31,12 @@ Modified by Julien Palard to build translations.
 
 """
 
+from bisect import bisect
 import filecmp
 import logging
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -53,11 +55,11 @@ VERSION = "19.0"
 
 BRANCHES = [
     # version, git branch, isdev
-    (3.6, "3.6", False),
-    (3.7, "3.7", False),
-    (3.8, "3.8", False),
-    (3.9, "3.9", True),
-    (3.10, "master", True),
+    ("3.6", "3.6", False),
+    ("3.7", "3.7", False),
+    ("3.8", "3.8", False),
+    ("3.9", "3.9", True),
+    ("3.10", "master", True),
 ]
 
 LANGUAGES = ["en", "fr", "ja", "ko", "pt-br", "zh-cn", "zh-tw", "id"]
@@ -193,6 +195,39 @@ def pep_545_tag_to_gettext_tag(tag):
     return language + "_" + region.upper()
 
 
+def locate_nearest_version(available_versions, target_version):
+    """Look for the nearest version of target_version in available_versions.
+    Versions are to be given as tuples, like (3, 7) for 3.7.
+
+    >>> locate_nearest_version(["2.7", "3.6", "3.7", "3.8"], "3.9")
+    '3.8'
+    >>> locate_nearest_version(["2.7", "3.6", "3.7", "3.8"], "3.5")
+    '3.6'
+    >>> locate_nearest_version(["2.7", "3.6", "3.7", "3.8"], "2.6")
+    '2.7'
+    >>> locate_nearest_version(["2.7", "3.6", "3.7", "3.8"], "3.10")
+    '3.8'
+    """
+
+    def version_to_tuple(version):
+        return tuple(int(part) for part in version.split("."))
+
+    def tuple_to_version(version_tuple):
+        return ".".join(str(part) for part in version_tuple)
+
+    available_versions_tuples = [
+        version_to_tuple(available_version) for available_version in available_versions
+    ]
+    target_version_tuple = version_to_tuple(target_version)
+    try:
+        found = available_versions_tuples[
+            bisect(available_versions_tuples, target_version_tuple)
+        ]
+    except IndexError:
+        found = available_versions_tuples[-1]
+    return tuple_to_version(found)
+
+
 def translation_branch(locale_repo, locale_clone_dir, needed_version):
     """Some cpython versions may be untranslated, being either too old or
     too new.
@@ -202,15 +237,11 @@ def translation_branch(locale_repo, locale_clone_dir, needed_version):
     """
     git_clone(locale_repo, locale_clone_dir)
     remote_branches = shell_out(["git", "-C", locale_clone_dir, "branch", "-r"])
-    translated_branches = []
-    for translated_branch in remote_branches.split("\n"):
-        if not translated_branch:
-            continue
-        try:
-            translated_branches.append(float(translated_branch.split("/")[1]))
-        except ValueError:
-            pass  # Skip non-version branches like 'master' if they exists.
-    return str(sorted(translated_branches, key=lambda x: abs(needed_version - x))[0])
+    branches = []
+    for branch in remote_branches.split("\n"):
+        if re.match(r".*/[0-9]+\.[0-9]+$", branch):
+            branches.append(branch.split("/")[-1])
+    return locate_nearest_version(branches, needed_version)
 
 
 def build_one(
@@ -228,17 +259,15 @@ def build_one(
         language = "en"
     if sentry_sdk:
         with sentry_sdk.configure_scope() as scope:
-            scope.set_tag("version", repr(version))
+            scope.set_tag("version", version)
             scope.set_tag("language", language)
-    checkout = os.path.join(
-        build_root, str(version), "cpython-{lang}".format(lang=language)
-    )
-    logging.info("Build start for version: %s, language: %s", str(version), language)
+    checkout = os.path.join(build_root, version, "cpython-{lang}".format(lang=language))
+    logging.info("Build start for version: %s, language: %s", version, language)
     sphinxopts = SPHINXOPTS[language].copy()
     sphinxopts.extend(["-q"])
     if language != "en":
         gettext_language_tag = pep_545_tag_to_gettext_tag(language)
-        locale_dirs = os.path.join(build_root, str(version), "locale")
+        locale_dirs = os.path.join(build_root, version, "locale")
         locale_clone_dir = os.path.join(
             locale_dirs, gettext_language_tag, "LC_MESSAGES"
         )
@@ -280,7 +309,7 @@ def build_one(
         logfile=os.path.join(log_directory, logname),
     )
     shell_out(["chgrp", "-R", group, log_directory])
-    logging.info("Build done for version: %s, language: %s", str(version), language)
+    logging.info("Build done for version: %s, language: %s", version, language)
 
 
 def copy_build_to_webroot(
@@ -288,14 +317,10 @@ def copy_build_to_webroot(
 ):
     """Copy a given build to the appropriate webroot with appropriate rights.
     """
-    logging.info(
-        "Publishing start for version: %s, language: %s", str(version), language
-    )
-    checkout = os.path.join(
-        build_root, str(version), "cpython-{lang}".format(lang=language)
-    )
+    logging.info("Publishing start for version: %s, language: %s", version, language)
+    checkout = os.path.join(build_root, version, "cpython-{lang}".format(lang=language))
     if language == "en":
-        target = os.path.join(www_root, str(version))
+        target = os.path.join(www_root, version)
     else:
         language_dir = os.path.join(www_root, language)
         os.makedirs(language_dir, exist_ok=True)
@@ -304,7 +329,7 @@ def copy_build_to_webroot(
         except subprocess.CalledProcessError as err:
             logging.warning("Can't change group of %s: %s", language_dir, str(err))
         os.chmod(language_dir, 0o775)
-        target = os.path.join(language_dir, str(version))
+        target = os.path.join(language_dir, version)
 
     os.makedirs(target, exist_ok=True)
     try:
@@ -379,9 +404,7 @@ def copy_build_to_webroot(
         shell_out(
             ["curl", "-XPURGE", "https://docs.python.org/{%s}" % ",".join(to_purge)]
         )
-    logging.info(
-        "Publishing done for version: %s, language: %s", str(version), language
-    )
+    logging.info("Publishing done for version: %s, language: %s", version, language)
 
 
 def head(lines, n=10):
@@ -551,7 +574,7 @@ def main():
         for version, language, future in futures:
             if sentry_sdk:
                 with sentry_sdk.configure_scope() as scope:
-                    scope.set_tag("version", repr(version))
+                    scope.set_tag("version", version)
                     scope.set_tag("language", language if language else "en")
             if future.exception():
                 logging.error(
