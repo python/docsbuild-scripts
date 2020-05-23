@@ -217,9 +217,12 @@ def locate_nearest_version(available_versions, target_version):
     def tuple_to_version(version_tuple):
         return ".".join(str(part) for part in version_tuple)
 
-    available_versions_tuples = [
-        version_to_tuple(available_version) for available_version in available_versions
-    ]
+    available_versions_tuples = sorted(
+        [
+            version_to_tuple(available_version)
+            for available_version in set(available_versions)
+        ]
+    )
     target_version_tuple = version_to_tuple(target_version)
     try:
         found = available_versions_tuples[
