@@ -31,7 +31,7 @@ Modified by Julien Palard to build translations.
 
 """
 
-from bisect import bisect
+from bisect import bisect_left as bisect
 import filecmp
 import logging
 import os
@@ -206,6 +206,8 @@ def locate_nearest_version(available_versions, target_version):
     '2.7'
     >>> locate_nearest_version(["2.7", "3.6", "3.7", "3.8"], "3.10")
     '3.8'
+    >>> locate_nearest_version(["2.7", "3.6", "3.7", "3.8"], "3.7")
+    '3.7'
     """
 
     def version_to_tuple(version):
