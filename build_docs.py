@@ -34,6 +34,7 @@ Modified by Julien Palard to build translations.
 from bisect import bisect_left as bisect
 import filecmp
 import logging
+import logging.handlers
 import os
 import pathlib
 import re
@@ -520,11 +521,12 @@ def setup_logging(log_directory):
     if sys.stderr.isatty():
         logging.basicConfig(format="%(levelname)s:%(message)s", stream=sys.stderr)
     else:
-        logging.basicConfig(
-            format="%(levelname)s:%(asctime)s:%(message)s",
-            filename=os.path.join(log_directory, "docsbuild.log"),
+        handler = logging.handlers.WatchedFileHandler(
+            os.path.join(log_directory, "docsbuild.log")
         )
-    logging.root.setLevel(logging.DEBUG)
+        handler.setFormatter(logging.Formatter("%(levelname)s:%(asctime)s:%(message)s"))
+        logging.getLogger().addHandler(handler)
+    logging.getLogger().setLevel(logging.DEBUG)
 
 
 def main():
