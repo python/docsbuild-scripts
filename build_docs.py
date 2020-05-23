@@ -516,6 +516,17 @@ def parse_args():
     return parser.parse_args()
 
 
+def setup_logging(log_directory):
+    if sys.stderr.isatty():
+        logging.basicConfig(format="%(levelname)s:%(message)s", stream=sys.stderr)
+    else:
+        logging.basicConfig(
+            format="%(levelname)s:%(asctime)s:%(message)s",
+            filename=os.path.join(log_directory, "docsbuild.log"),
+        )
+    logging.root.setLevel(logging.DEBUG)
+
+
 def main():
     args = parse_args()
     if args.version:
@@ -527,14 +538,7 @@ def main():
         args.build_root = os.path.abspath(args.build_root)
     if args.www_root:
         args.www_root = os.path.abspath(args.www_root)
-    if sys.stderr.isatty():
-        logging.basicConfig(format="%(levelname)s:%(message)s", stream=sys.stderr)
-    else:
-        logging.basicConfig(
-            format="%(levelname)s:%(asctime)s:%(message)s",
-            filename=os.path.join(args.log_directory, "docsbuild.log"),
-        )
-    logging.root.setLevel(logging.DEBUG)
+    setup_logging(args.log_directory)
     venv = os.path.join(args.build_root, "venv")
     if args.branch:
         branches_to_do = [
