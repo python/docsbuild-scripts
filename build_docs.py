@@ -62,7 +62,7 @@ BRANCHES = [
     ("3.10", "master", True),
 ]
 
-LANGUAGES = ["en", "fr", "ja", "ko", "pt-br", "zh-cn", "zh-tw", "id"]
+LANGUAGES = ["en", "es", "fr", "id", "ja", "ko", "pt-br", "zh-cn", "zh-tw"]
 
 SPHINXOPTS = {
     "ja": [
@@ -90,6 +90,11 @@ SPHINXOPTS = {
         "-D latex_engine=xelatex",
         "-D latex_elements.inputenc=",
         "-D latex_elements.fontenc=",
+    ],
+    "es": [
+        "-D latex_engine=xelatex",
+        "-D latex_elements.inputenc=",
+        r"-D latex_elements.fontenc=\\usepackage{fontspec}",
     ],
     "zh-cn": [
         "-D latex_engine=xelatex",
