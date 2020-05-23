@@ -502,14 +502,6 @@ def parse_args():
         metavar="fr",
     )
     parser.add_argument(
-        "--jobs",
-        "-j",
-        type=int,
-        default=4,
-        help="Specifies the number of jobs (languages, versions) "
-        "to run simultaneously.",
-    )
-    parser.add_argument(
         "--version",
         action="store_true",
         help="Get build_docs and dependencies version info",
