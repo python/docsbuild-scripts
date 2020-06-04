@@ -38,6 +38,7 @@ import logging.handlers
 import os
 import pathlib
 import re
+from shlex import quote
 import shutil
 import subprocess
 import sys
@@ -254,6 +255,40 @@ def translation_branch(locale_repo, locale_clone_dir, needed_version):
     return locate_nearest_version(branches, needed_version)
 
 
+def setup_switchers(html_root):
+    """Setup cross-links between cpython versions:
+    - Cross-link various languages in a language switcher
+    - Cross-link various versions in a version switcher
+    """
+    shutil.copy("switchers.js", os.path.join(html_root, "_static"))
+    shell_out(
+        " ".join(
+            [
+                "sed",
+                "-i",
+                quote(
+                    r's#\(^ *\)</body>$#\1<script type="text/javascript" src="_static/switchers.js"></script>\n\0#'
+                ),
+                os.path.join(html_root, "*.html"),
+            ]
+        ),
+        shell=True,
+    )
+    shell_out(
+        " ".join(
+            [
+                "sed",
+                "-i",
+                quote(
+                    r's#\(^ *\)</body>$#\1<script type="text/javascript" src="../_static/switchers.js"></script>\n\0#'
+                ),
+                os.path.join(html_root, "*/*.html"),
+            ]
+        ),
+        shell=True,
+    )
+
+
 def build_one(
     version,
     git_branch,
@@ -303,6 +338,15 @@ def build_one(
     python = os.path.join(venv, "bin/python")
     sphinxbuild = os.path.join(venv, "bin/sphinx-build")
     blurb = os.path.join(venv, "bin/blurb")
+    # Disable cpython switchers, we handle them now:
+    shell_out(
+        [
+            "sed",
+            "-i",
+            "s/ *-A switchers=1//",
+            os.path.join(checkout, "Doc", "Makefile"),
+        ]
+    )
     shell_out(
         [
             "make",
@@ -319,6 +363,7 @@ def build_one(
         logfile=os.path.join(log_directory, logname),
     )
     shell_out(["chgrp", "-R", group, log_directory])
+    setup_switchers(os.path.join(checkout, "Doc", "build", "html"))
     logging.info("Build done for version: %s, language: %s", version, language)
 
 
