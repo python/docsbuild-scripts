@@ -154,7 +154,7 @@
     var version = release.substr(0, 3);
     var version_select = build_version_select(version, release);
 
-    create_placeholders_if_missing()
+    create_placeholders_if_missing();
     $('.version_switcher_placeholder').html(version_select);
     $('.version_switcher_placeholder select').bind('change', on_version_switch);
 
