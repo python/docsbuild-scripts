@@ -48,6 +48,7 @@ import subprocess
 import sys
 from datetime import datetime
 
+HERE = Path(__file__).resolve().parent
 
 try:
     import sentry_sdk
@@ -58,18 +59,38 @@ else:
 
 VERSION = "19.0"
 
-# status in {"EOL", "security", "stable", "pre-release", "in development"}
-Version = namedtuple("Version", ["name", "branch", "status"])
+
+class Version:
+    STATUSES = {"EOL", "security-fixes", "stable", "pre-release", "in development"}
+
+    def __init__(self, name, branch, status):
+        if status not in self.STATUSES:
+            raise ValueError(
+                "Version status expected to be in {}".format(", ".join(self.STATUSES))
+            )
+        self.name = name
+        self.branch = branch
+        self.status = status
+
+    @property
+    def url(self):
+        return "https://docs.python.org/{}/".format(self.name)
+
+    @property
+    def title(self):
+        return "Python {} ({})".format(self.name, self.status)
+
+
 Language = namedtuple(
     "Language", ["tag", "iso639_tag", "name", "in_prod", "sphinxopts"]
 )
 
-# EOL and security are not automatically built, no need to remove them
+# EOL and security-fixes are not automatically built, no need to remove them
 # from the list.
 VERSIONS = [
     Version("2.7", "2.7", "EOL"),
-    Version("3.5", "3.5", "security"),
-    Version("3.6", "3.6", "security"),
+    Version("3.5", "3.5", "security-fixes"),
+    Version("3.6", "3.6", "security-fixes"),
     Version("3.7", "3.7", "stable"),
     Version("3.8", "3.8", "stable"),
     Version("3.9", "3.9", "pre-release"),
@@ -277,12 +298,29 @@ def picker_label(version):
     return version.name
 
 
+def setup_indexsidebar(dest_path):
+    versions_li = []
+    for version in sorted(
+        VERSIONS, key=lambda v: version_to_tuple(v.name), reverse=True,
+    ):
+        versions_li.append(
+            '<li><a href="{}">{}</a></li>'.format(version.url, version.title)
+        )
+
+    with open(HERE / "templates" / "indexsidebar.html") as sidebar_template_file:
+        with open(dest_path, "w") as sidebar_file:
+            template = Template(sidebar_template_file.read())
+            sidebar_file.write(
+                template.safe_substitute({"VERSIONS": "\n".join(versions_li)})
+            )
+
+
 def setup_switchers(html_root):
     """Setup cross-links between cpython versions:
     - Cross-link various languages in a language switcher
     - Cross-link various versions in a version switcher
     """
-    with open("switchers.js") as switchers_template_file:
+    with open(HERE / "templates" / "switchers.js") as switchers_template_file:
         with open(
             os.path.join(html_root, "_static", "switchers.js"), "w"
         ) as switchers_file:
@@ -380,6 +418,9 @@ def build_one(
             "s/ *-A switchers=1//",
             os.path.join(checkout, "Doc", "Makefile"),
         ]
+    )
+    setup_indexsidebar(
+        os.path.join(checkout, "Doc", "tools", "templates", "indexsidebar.html")
     )
     shell_out(
         [
@@ -648,7 +689,7 @@ def main():
         versions_to_build = [
             version
             for version in VERSIONS
-            if version.status != "EOL" and version.status != "security"
+            if version.status != "EOL" and version.status != "security-fixes"
         ]
     if args.languages:
         languages = [languages_dict[tag] for tag in args.languages]
@@ -685,11 +726,10 @@ def main():
                     args.www_root,
                 )
             except Exception as err:
-                logging.error(
-                    "Exception while building %s version %s: %s",
+                logging.exception(
+                    "Exception while building %s version %s",
                     language.tag,
                     version.name,
-                    err,
                 )
                 if sentry_sdk:
                     sentry_sdk.capture_exception(err)
