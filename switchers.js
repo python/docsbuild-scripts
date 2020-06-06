@@ -1,6 +1,15 @@
 (function() {
   'use strict';
 
+  if (!String.prototype.startsWith) {
+    Object.defineProperty(String.prototype, 'startsWith', {
+      value: function(search, rawPos) {
+        var pos = rawPos > 0 ? rawPos|0 : 0;
+        return this.substring(pos, pos + search.length) === search;
+      }
+    });
+  }
+
   // Parses versions in URL segments like:
   // "3", "dev", "release/2.7" or "3.6rc2"
   var version_regexs = [
@@ -9,34 +18,22 @@
     '(?:dev)',
     '(?:release/\\d.\\d[\\x\\d\\.]*)'];
 
-  var all_versions = {
-    '3.10': 'dev (3.10)',
-    '3.9': 'pre (3.9)',
-    '3.8': '3.8',
-    '3.7': '3.7',
-    '3.6': '3.6',
-    '3.5': '3.5',
-    '2.7': '2.7',
-  };
+  var all_versions = $VERSIONS;
+  var all_languages = $LANGUAGES;
 
-  var all_languages = {
-      'en': 'English',
-      'fr': 'French',
-      'ja': 'Japanese',
-      'ko': 'Korean',
-      'pt-br': 'Brazilian Portuguese',
-      'zh-cn': 'Simplified Chinese',
-  };
+  function quote_attr(str) {
+      return '"' + str.replace('"', '\\"') + '"';
+  }
 
-  function build_version_select(current_version, current_release) {
+  function build_version_select(release) {
     var buf = ['<select>'];
+    var major_minor = release.split(".").slice(0, 2).join(".");
 
     $.each(all_versions, function(version, title) {
-      buf.push('<option value="' + version + '"');
-      if (version == current_version)
-        buf.push(' selected="selected">' + current_release + '</option>');
+      if (version == major_minor)
+        buf.push('<option value=' + quote_attr(version) + ' selected="selected">' + release + '</option>');
       else
-        buf.push('>' + title + '</option>');
+        buf.push('<option value=' + quote_attr(version) + '>' + title + '</option>');
     });
 
     buf.push('</select>');
@@ -66,7 +63,7 @@
   function navigate_to_first_existing(urls) {
     // Navigate to the first existing URL in urls.
     var url = urls.shift();
-    if (urls.length == 0) {
+    if (urls.length == 0 || url.startsWith("file:///")) {
       window.location.href = url;
       return;
     }
@@ -86,16 +83,16 @@
     var url = window.location.href;
     var current_language = language_segment_from_url(url);
     var current_version = version_segment_in_url(url);
-    var new_url = url.replace('.org/' + current_language + current_version,
-                              '.org/' + current_language + selected_version);
+    var new_url = url.replace('/' + current_language + current_version,
+                              '/' + current_language + selected_version);
     if (new_url != url) {
       navigate_to_first_existing([
         new_url,
-        url.replace('.org/' + current_language + current_version,
-                    '.org/' + selected_version),
-        'https://docs.python.org/' + current_language + selected_version,
-        'https://docs.python.org/' + selected_version,
-        'https://docs.python.org/'
+        url.replace('/' + current_language + current_version,
+                    '/' + selected_version),
+        '/' + current_language + selected_version,
+        '/' + selected_version,
+        '/'
       ]);
     }
   }
@@ -107,12 +104,12 @@
     var current_version = version_segment_in_url(url);
     if (selected_language == 'en/') // Special 'default' case for english.
       selected_language = '';
-    var new_url = url.replace('.org/' + current_language + current_version,
-                              '.org/' + selected_language + current_version);
+    var new_url = url.replace('/' + current_language + current_version,
+                              '/' + selected_language + current_version);
     if (new_url != url) {
       navigate_to_first_existing([
         new_url,
-        'https://docs.python.org/'
+        '/'
       ]);
     }
   }
@@ -120,7 +117,7 @@
   // Returns the path segment of the language as a string, like 'fr/'
   // or '' if not found.
   function language_segment_from_url(url) {
-    var language_regexp = '\.org/([a-z]{2}(?:-[a-z]{2})?/)';
+    var language_regexp = '/((?:' + Object.keys(all_languages).join("|") + ')/)'
     var match = url.match(language_regexp);
     if (match !== null)
         return match[1];
@@ -130,9 +127,9 @@
   // Returns the path segment of the version as a string, like '3.6/'
   // or '' if not found.
   function version_segment_in_url(url) {
-    var language_segment = '(?:[a-z]{2}(?:-[a-z]{2})?/)';
+    var language_segment = language_segment_from_url(url);
     var version_segment = '(?:(?:' + version_regexs.join('|') + ')/)';
-    var version_regexp = '\\.org/' + language_segment + '?(' + version_segment + ')';
+    var version_regexp = language_segment + '(' + version_segment + ')';
     var match = url.match(version_regexp);
     if (match !== null)
       return match[1];
@@ -148,11 +145,9 @@
   }
 
   $(document).ready(function() {
-    var release = DOCUMENTATION_OPTIONS.VERSION;
     var language_segment = language_segment_from_url(window.location.href);
     var current_language = language_segment.replace(/\/+$/g, '') || 'en';
-    var version = release.substr(0, 3);
-    var version_select = build_version_select(version, release);
+    var version_select = build_version_select(DOCUMENTATION_OPTIONS.VERSION);
 
     create_placeholders_if_missing();
     $('.version_switcher_placeholder').html(version_select);
