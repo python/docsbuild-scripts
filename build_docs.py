@@ -400,7 +400,7 @@ def build_one(
     git_clone("https://github.com/python/cpython.git", checkout, version.branch)
     maketarget = (
         "autobuild-"
-        + ("dev" if version.status == "in development" else "stable")
+        + ("dev" if version.status in ("in development", "pre-release") else "stable")
         + ("-html" if quick else "")
     )
     logging.info("Running make %s", maketarget)
