@@ -41,7 +41,7 @@ import logging.handlers
 import os
 from pathlib import Path
 import re
-from shlex import quote
+import shlex
 import shutil
 from string import Template
 import subprocess
@@ -144,7 +144,7 @@ DEFAULT_LANGUAGES_SET = {language.tag for language in LANGUAGES if language.in_p
 
 
 def shell_out(cmd, shell=False, logfile=None):
-    logging.debug("Running command %r", cmd)
+    logging.debug("Running command %s", shlex.join(cmd))
     now = str(datetime.now())
     try:
         output = subprocess.check_output(
