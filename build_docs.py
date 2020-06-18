@@ -60,6 +60,13 @@ else:
 VERSION = "19.0"
 
 
+if not hasattr(shlex, "join"):
+    # Add shlex.join if missing (pre 3.8)
+    shlex.join = lambda split_command: " ".join(
+        shlex.quote(arg) for arg in split_command
+    )
+
+
 class Version:
     STATUSES = {"EOL", "security-fixes", "stable", "pre-release", "in development"}
 
