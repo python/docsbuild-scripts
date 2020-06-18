@@ -10,9 +10,9 @@ Usage:
                 [--languages [fr [fr ...]]]
 
 
-Without any arguments builds docs for all branches configured in the
-global BRANCHES value and all languages configured in LANGUAGES,
-ignoring the -d flag as it's given in the BRANCHES configuration.
+Without any arguments builds docs for all active versions configured in the
+global VERSIONS list and all languages configured in the LANGUAGES list,
+ignoring the -d flag as it's given in the VERSIONS configuration.
 
 -q selects "quick build", which means to build only HTML.
 
@@ -32,17 +32,23 @@ Modified by Julien Palard to build translations.
 """
 
 from bisect import bisect_left as bisect
+from collections import namedtuple, OrderedDict
+from contextlib import contextmanager, suppress
 import filecmp
+import json
 import logging
 import logging.handlers
 import os
-import pathlib
+from pathlib import Path
 import re
+from shlex import quote
 import shutil
+from string import Template
 import subprocess
 import sys
 from datetime import datetime
 
+HERE = Path(__file__).resolve().parent
 
 try:
     import sentry_sdk
@@ -53,65 +59,88 @@ else:
 
 VERSION = "19.0"
 
-BRANCHES = [
-    # version, git branch, isdev
-    ("3.6", "3.6", False),
-    ("3.7", "3.7", False),
-    ("3.8", "3.8", False),
-    ("3.9", "3.9", True),
-    ("3.10", "master", True),
+
+class Version:
+    STATUSES = {"EOL", "security-fixes", "stable", "pre-release", "in development"}
+
+    def __init__(self, name, branch, status):
+        if status not in self.STATUSES:
+            raise ValueError(
+                "Version status expected to be in {}".format(", ".join(self.STATUSES))
+            )
+        self.name = name
+        self.branch = branch
+        self.status = status
+
+    @property
+    def url(self):
+        return "https://docs.python.org/{}/".format(self.name)
+
+    @property
+    def title(self):
+        return "Python {} ({})".format(self.name, self.status)
+
+
+Language = namedtuple(
+    "Language", ["tag", "iso639_tag", "name", "in_prod", "sphinxopts"]
+)
+
+# EOL and security-fixes are not automatically built, no need to remove them
+# from the list.
+VERSIONS = [
+    Version("2.7", "2.7", "EOL"),
+    Version("3.5", "3.5", "security-fixes"),
+    Version("3.6", "3.6", "security-fixes"),
+    Version("3.7", "3.7", "stable"),
+    Version("3.8", "3.8", "stable"),
+    Version("3.9", "3.9", "pre-release"),
+    Version("3.10", "master", "in development"),
 ]
 
-LANGUAGES = ["en", "es", "fr", "id", "ja", "ko", "pt-br", "zh-cn", "zh-tw"]
+XELATEX_DEFAULT = (
+    "-D latex_engine=xelatex",
+    "-D latex_elements.inputenc=",
+    "-D latex_elements.fontenc=",
+)
 
-SPHINXOPTS = {
-    "ja": [
-        "-D latex_engine=platex",
-        "-D latex_elements.inputenc=",
-        "-D latex_elements.fontenc=",
-    ],
-    "ko": [
-        "-D latex_engine=xelatex",
-        "-D latex_elements.inputenc=",
-        "-D latex_elements.fontenc=",
-        r"-D latex_elements.preamble=\\usepackage{kotex}\\setmainhangulfont{UnBatang}\\setsanshangulfont{UnDotum}\\setmonohangulfont{UnTaza}",
-    ],
-    "pt-br": [
-        "-D latex_engine=xelatex",
-        "-D latex_elements.inputenc=",
-        "-D latex_elements.fontenc=",
-    ],
-    "fr": [
-        "-D latex_engine=xelatex",
-        "-D latex_elements.inputenc=",
-        r"-D latex_elements.fontenc=\\usepackage{fontspec}",
-    ],
-    "en": [
-        "-D latex_engine=xelatex",
-        "-D latex_elements.inputenc=",
-        "-D latex_elements.fontenc=",
-    ],
-    "es": [
-        "-D latex_engine=xelatex",
-        "-D latex_elements.inputenc=",
-        r"-D latex_elements.fontenc=\\usepackage{fontspec}",
-    ],
-    "zh-cn": [
-        "-D latex_engine=xelatex",
-        "-D latex_elements.inputenc=",
-        r"-D latex_elements.fontenc=\\usepackage{xeCJK}",
-    ],
-    "zh-tw": [
-        "-D latex_engine=xelatex",
-        "-D latex_elements.inputenc=",
-        r"-D latex_elements.fontenc=\\usepackage{xeCJK}",
-    ],
-    "id": [
-        "-D latex_engine=xelatex",
-        "-D latex_elements.inputenc=",
-        "-D latex_elements.fontenc=",
-    ],
+PLATEX_DEFAULT = (
+    "-D latex_engine=platex",
+    "-D latex_elements.inputenc=",
+    "-D latex_elements.fontenc=",
+)
+
+XELATEX_WITH_FONTSPEC = (
+    "-D latex_engine=xelatex",
+    "-D latex_elements.inputenc=",
+    r"-D latex_elements.fontenc=\\usepackage{fontspec}",
+)
+
+XELATEX_FOR_KOREAN = (
+    "-D latex_engine=xelatex",
+    "-D latex_elements.inputenc=",
+    "-D latex_elements.fontenc=",
+    r"-D latex_elements.preamble=\\usepackage{kotex}\\setmainhangulfont{UnBatang}\\setsanshangulfont{UnDotum}\\setmonohangulfont{UnTaza}",
+)
+
+XELATEX_WITH_CJK = (
+    "-D latex_engine=xelatex",
+    "-D latex_elements.inputenc=",
+    r"-D latex_elements.fontenc=\\usepackage{xeCJK}",
+)
+
+LANGUAGES = {
+    Language("en", "en", "English", True, XELATEX_DEFAULT),
+    Language("es", "es", "Spanish", False, XELATEX_WITH_FONTSPEC),
+    Language("fr", "fr", "French", True, XELATEX_WITH_FONTSPEC),
+    Language("id", "id", "Indonesian", False, XELATEX_DEFAULT),
+    Language("ja", "ja", "Japanese", True, PLATEX_DEFAULT),
+    Language("ko", "ko", "Korean", True, XELATEX_FOR_KOREAN),
+    Language("pt-br", "pt_BR", "Brazilian Portuguese", True, XELATEX_DEFAULT),
+    Language("zh-cn", "zh_CN", "Simplified Chinese", True, XELATEX_WITH_CJK),
+    Language("zh-tw", "zh_TW", "Traditional Chinese", True, XELATEX_WITH_CJK),
 }
+
+DEFAULT_LANGUAGES_SET = {language.tag for language in LANGUAGES if language.in_prod}
 
 
 def shell_out(cmd, shell=False, logfile=None):
@@ -156,7 +185,7 @@ def changed_files(left, right):
     changed = []
 
     def traverse(dircmp_result):
-        base = pathlib.Path(dircmp_result.left).relative_to(left)
+        base = Path(dircmp_result.left).relative_to(left)
         changed.extend(str(base / file) for file in dircmp_result.diff_files)
         for dircomp in dircmp_result.subdirs.values():
             traverse(dircomp)
@@ -189,15 +218,12 @@ def git_clone(repository, directory, branch=None):
             shell_out(["git", "-C", directory, "checkout", branch])
 
 
-def pep_545_tag_to_gettext_tag(tag):
-    """Transforms PEP 545 language tags like "pt-br" to gettext language
-    tags like "pt_BR". (Note that none of those are IETF language tags
-    like "pt-BR").
-    """
-    if "-" not in tag:
-        return tag
-    language, region = tag.split("-")
-    return language + "_" + region.upper()
+def version_to_tuple(version):
+    return tuple(int(part) for part in version.split("."))
+
+
+def tuple_to_version(version_tuple):
+    return ".".join(str(part) for part in version_tuple)
 
 
 def locate_nearest_version(available_versions, target_version):
@@ -215,12 +241,6 @@ def locate_nearest_version(available_versions, target_version):
     >>> locate_nearest_version(["2.7", "3.6", "3.7", "3.8"], "3.7")
     '3.7'
     """
-
-    def version_to_tuple(version):
-        return tuple(int(part) for part in version.split("."))
-
-    def tuple_to_version(version_tuple):
-        return ".".join(str(part) for part in version_tuple)
 
     available_versions_tuples = sorted(
         [
@@ -254,55 +274,154 @@ def translation_branch(locale_repo, locale_clone_dir, needed_version):
     return locate_nearest_version(branches, needed_version)
 
 
-def build_one(
-    version,
-    git_branch,
-    isdev,
-    quick,
-    venv,
-    build_root,
-    group="docs",
-    log_directory="/var/log/docsbuild/",
-    language=None,
-):
-    if not language:
-        language = "en"
-    if sentry_sdk:
-        with sentry_sdk.configure_scope() as scope:
-            scope.set_tag("version", version)
-            scope.set_tag("language", language)
-    checkout = os.path.join(build_root, version, "cpython-{lang}".format(lang=language))
-    logging.info("Build start for version: %s, language: %s", version, language)
-    sphinxopts = SPHINXOPTS[language].copy()
-    sphinxopts.extend(["-q"])
-    if language != "en":
-        gettext_language_tag = pep_545_tag_to_gettext_tag(language)
-        locale_dirs = os.path.join(build_root, version, "locale")
-        locale_clone_dir = os.path.join(
-            locale_dirs, gettext_language_tag, "LC_MESSAGES"
+@contextmanager
+def edit(file):
+    """Context manager to edit a file "in place", use it as:
+    with edit("/etc/hosts") as i, o:
+        for line in i:
+            o.write(line.replace("localhoat", "localhost"))
+    """
+    temporary = file.with_name(file.name + ".tmp")
+    with suppress(OSError):
+        os.unlink(temporary)
+    with open(file) as input_file:
+        with open(temporary, "w") as output_file:
+            yield input_file, output_file
+    os.rename(temporary, file)
+
+
+def picker_label(version):
+    if version.status == "in development":
+        return "dev ({})".format(version.name)
+    if version.status == "pre-release":
+        return "pre ({})".format(version.name)
+    return version.name
+
+
+def setup_indexsidebar(dest_path):
+    versions_li = []
+    for version in sorted(
+        VERSIONS, key=lambda v: version_to_tuple(v.name), reverse=True,
+    ):
+        versions_li.append(
+            '<li><a href="{}">{}</a></li>'.format(version.url, version.title)
         )
-        locale_repo = "https://github.com/python/python-docs-{}.git".format(language)
+
+    with open(HERE / "templates" / "indexsidebar.html") as sidebar_template_file:
+        with open(dest_path, "w") as sidebar_file:
+            template = Template(sidebar_template_file.read())
+            sidebar_file.write(
+                template.safe_substitute({"VERSIONS": "\n".join(versions_li)})
+            )
+
+
+def setup_switchers(html_root):
+    """Setup cross-links between cpython versions:
+    - Cross-link various languages in a language switcher
+    - Cross-link various versions in a version switcher
+    """
+    with open(HERE / "templates" / "switchers.js") as switchers_template_file:
+        with open(
+            os.path.join(html_root, "_static", "switchers.js"), "w"
+        ) as switchers_file:
+            template = Template(switchers_template_file.read())
+            switchers_file.write(
+                template.safe_substitute(
+                    {
+                        "LANGUAGES": json.dumps(
+                            OrderedDict(
+                                sorted(
+                                    [
+                                        (language.tag, language.name)
+                                        for language in LANGUAGES
+                                        if language.in_prod
+                                    ]
+                                )
+                            )
+                        ),
+                        "VERSIONS": json.dumps(
+                            OrderedDict(
+                                [
+                                    (version.name, picker_label(version))
+                                    for version in sorted(
+                                        VERSIONS,
+                                        key=lambda v: version_to_tuple(v.name),
+                                        reverse=True,
+                                    )
+                                ]
+                            )
+                        ),
+                    }
+                )
+            )
+    for file in Path(html_root).glob("**/*.html"):
+        depth = len(file.relative_to(html_root).parts) - 1
+        script = """    <script type="text/javascript" src="{}_static/switchers.js"></script>\n""".format(
+            "../" * depth
+        )
+        with edit(file) as (i, o):
+            for line in i:
+                if line == script:
+                    continue
+                if line == "  </body>\n":
+                    o.write(script)
+                o.write(line)
+
+
+def build_one(
+    version, quick, venv, build_root, group, log_directory, language: Language,
+):
+    checkout = os.path.join(
+        build_root, version.name, "cpython-{lang}".format(lang=language.tag)
+    )
+    logging.info(
+        "Build start for version: %s, language: %s", version.name, language.tag
+    )
+    sphinxopts = list(language.sphinxopts)
+    sphinxopts.extend(["-q"])
+    if language.tag != "en":
+        locale_dirs = os.path.join(build_root, version.name, "locale")
+        locale_clone_dir = os.path.join(locale_dirs, language.iso639_tag, "LC_MESSAGES")
+        locale_repo = "https://github.com/python/python-docs-{}.git".format(
+            language.tag
+        )
         git_clone(
             locale_repo,
             locale_clone_dir,
-            translation_branch(locale_repo, locale_clone_dir, version),
+            translation_branch(locale_repo, locale_clone_dir, version.name),
         )
         sphinxopts.extend(
             (
                 "-D locale_dirs={}".format(locale_dirs),
-                "-D language={}".format(gettext_language_tag),
+                "-D language={}".format(language.iso639_tag),
                 "-D gettext_compact=0",
             )
         )
-    git_clone("https://github.com/python/cpython.git", checkout, git_branch)
+    git_clone("https://github.com/python/cpython.git", checkout, version.branch)
     maketarget = (
-        "autobuild-" + ("dev" if isdev else "stable") + ("-html" if quick else "")
+        "autobuild-"
+        + ("dev" if version.status in ("in development", "pre-release") else "stable")
+        + ("-html" if quick else "")
     )
     logging.info("Running make %s", maketarget)
-    logname = "cpython-{lang}-{version}.log".format(lang=language, version=version)
+    logname = "cpython-{lang}-{version}.log".format(
+        lang=language.tag, version=version.name
+    )
     python = os.path.join(venv, "bin/python")
     sphinxbuild = os.path.join(venv, "bin/sphinx-build")
     blurb = os.path.join(venv, "bin/blurb")
+    # Disable cpython switchers, we handle them now:
+    shell_out(
+        [
+            "sed",
+            "-i",
+            "s/ *-A switchers=1//",
+            os.path.join(checkout, "Doc", "Makefile"),
+        ]
+    )
+    setup_indexsidebar(
+        os.path.join(checkout, "Doc", "tools", "templates", "indexsidebar.html")
+    )
     shell_out(
         [
             "make",
@@ -319,27 +438,38 @@ def build_one(
         logfile=os.path.join(log_directory, logname),
     )
     shell_out(["chgrp", "-R", group, log_directory])
-    logging.info("Build done for version: %s, language: %s", version, language)
+    setup_switchers(os.path.join(checkout, "Doc", "build", "html"))
+    logging.info("Build done for version: %s, language: %s", version.name, language.tag)
 
 
 def copy_build_to_webroot(
-    build_root, version, language, group, quick, skip_cache_invalidation, www_root
+    build_root,
+    version,
+    language: Language,
+    group,
+    quick,
+    skip_cache_invalidation,
+    www_root,
 ):
     """Copy a given build to the appropriate webroot with appropriate rights.
     """
-    logging.info("Publishing start for version: %s, language: %s", version, language)
-    checkout = os.path.join(build_root, version, "cpython-{lang}".format(lang=language))
-    if language == "en":
-        target = os.path.join(www_root, version)
+    logging.info(
+        "Publishing start for version: %s, language: %s", version.name, language.tag
+    )
+    checkout = os.path.join(
+        build_root, version.name, "cpython-{lang}".format(lang=language.tag)
+    )
+    if language.tag == "en":
+        target = os.path.join(www_root, version.name)
     else:
-        language_dir = os.path.join(www_root, language)
+        language_dir = os.path.join(www_root, language.tag)
         os.makedirs(language_dir, exist_ok=True)
         try:
             shell_out(["chgrp", "-R", group, language_dir])
         except subprocess.CalledProcessError as err:
             logging.warning("Can't change group of %s: %s", language_dir, str(err))
         os.chmod(language_dir, 0o775)
-        target = os.path.join(language_dir, version)
+        target = os.path.join(language_dir, version.name)
 
     os.makedirs(target, exist_ok=True)
     try:
@@ -414,7 +544,9 @@ def copy_build_to_webroot(
         shell_out(
             ["curl", "-XPURGE", "https://docs.python.org/{%s}" % ",".join(to_purge)]
         )
-    logging.info("Publishing done for version: %s, language: %s", version, language)
+    logging.info(
+        "Publishing done for version: %s, language: %s", version.name, language.tag
+    )
 
 
 def head(lines, n=10):
@@ -430,7 +562,7 @@ def version_info():
         subprocess.check_output(["xelatex", "--version"], universal_newlines=True), n=2
     )
     print(
-        f"""build_docs: {VERSION}
+        """build_docs: {VERSION}
 
 # platex
 
@@ -440,7 +572,11 @@ def version_info():
 # xelatex
 
 {xelatex_version}
-    """
+    """.format(
+            VERSION=VERSION,
+            platex_version=platex_version,
+            xelatex_version=xelatex_version,
+        )
     )
 
 
@@ -505,7 +641,7 @@ def parse_args():
     parser.add_argument(
         "--languages",
         nargs="*",
-        default=LANGUAGES,
+        default=DEFAULT_LANGUAGES_SET,
         help="Language translation, as a PEP 545 language tag like" " 'fr' or 'pt-br'.",
         metavar="fr",
     )
@@ -531,6 +667,7 @@ def setup_logging(log_directory):
 
 def main():
     args = parse_args()
+    languages_dict = {language.tag: language for language in LANGUAGES}
     if args.version:
         version_info()
         exit(0)
@@ -543,29 +680,35 @@ def main():
     setup_logging(args.log_directory)
     venv = os.path.join(args.build_root, "venv")
     if args.branch:
-        branches_to_do = [
-            branch
-            for branch in BRANCHES
-            if str(branch[0]) == args.branch or branch[1] == args.branch
+        versions_to_build = [
+            version
+            for version in VERSIONS
+            if version.name == args.branch or version.branch == args.branch
         ]
     else:
-        branches_to_do = BRANCHES
-    if not args.languages:
+        versions_to_build = [
+            version
+            for version in VERSIONS
+            if version.status != "EOL" and version.status != "security-fixes"
+        ]
+    if args.languages:
+        languages = [languages_dict[tag] for tag in args.languages]
+    else:
         # Allow "--languages" to build all languages (as if not given)
         # instead of none.  "--languages en" builds *no* translation,
         # as "en" is the untranslated one.
-        args.languages = LANGUAGES
-    for version, git_branch, devel in branches_to_do:
-        for language in args.languages:
+        languages = [
+            language for language in LANGUAGES if language.tag in DEFAULT_LANGUAGES_SET
+        ]
+    for version in versions_to_build:
+        for language in languages:
             if sentry_sdk:
                 with sentry_sdk.configure_scope() as scope:
-                    scope.set_tag("version", version)
-                    scope.set_tag("language", language if language else "en")
+                    scope.set_tag("version", version.name)
+                    scope.set_tag("language", language.tag)
             try:
                 build_one(
                     version,
-                    git_branch,
-                    devel,
                     args.quick,
                     venv,
                     args.build_root,
@@ -583,11 +726,10 @@ def main():
                     args.www_root,
                 )
             except Exception as err:
-                logging.error(
-                    "Exception while building %s version %s: %s",
-                    language,
-                    version,
-                    err,
+                logging.exception(
+                    "Exception while building %s version %s",
+                    language.tag,
+                    version.name,
                 )
                 if sentry_sdk:
                     sentry_sdk.capture_exception(err)
