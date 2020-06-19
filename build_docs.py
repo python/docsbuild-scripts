@@ -151,7 +151,7 @@ DEFAULT_LANGUAGES_SET = {language.tag for language in LANGUAGES if language.in_p
 
 
 def shell_out(cmd, shell=False, logfile=None):
-    logging.debug("Running command %s", shlex.join(cmd))
+    logging.debug("Running command %s", cmd if shell else shlex.join(cmd))
     now = str(datetime.now())
     try:
         output = subprocess.check_output(
@@ -165,7 +165,11 @@ def shell_out(cmd, shell=False, logfile=None):
         if logfile:
             with open(logfile, "a+") as log:
                 log.write("# " + now + "\n")
-                log.write("# Command {} ran successfully:".format(shlex.join(cmd)))
+                log.write(
+                    "# Command {} ran successfully:".format(
+                        cmd if shell else shlex.join(cmd)
+                    )
+                )
                 log.write(output)
                 log.write("\n\n")
         return output
@@ -177,7 +181,9 @@ def shell_out(cmd, shell=False, logfile=None):
         if logfile:
             with open(logfile, "a+") as log:
                 log.write("# " + now + "\n")
-                log.write("# Command {} failed:".format(shlex.join(cmd)))
+                log.write(
+                    "# Command {} failed:".format(cmd if shell else shlex.join(cmd))
+                )
                 log.write(e.output)
                 log.write("\n\n")
             logging.error("Command failed (see %s at %s)", logfile, now)
