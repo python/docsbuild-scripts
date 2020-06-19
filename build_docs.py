@@ -70,7 +70,7 @@ if not hasattr(shlex, "join"):
 class Version:
     STATUSES = {"EOL", "security-fixes", "stable", "pre-release", "in development"}
 
-    def __init__(self, name, branch, status):
+    def __init__(self, name, branch, status, sphinx_version=None):
         if status not in self.STATUSES:
             raise ValueError(
                 "Version status expected to be in {}".format(", ".join(self.STATUSES))
@@ -78,6 +78,7 @@ class Version:
         self.name = name
         self.branch = branch
         self.status = status
+        self.sphinx_version = sphinx_version
 
     @property
     def url(self):
@@ -96,7 +97,7 @@ Language = namedtuple(
 # from the list.
 VERSIONS = [
     Version("2.7", "2.7", "EOL"),
-    Version("3.5", "3.5", "security-fixes"),
+    Version("3.5", "3.5", "security-fixes", sphinx_version="1.8.4"),
     Version("3.6", "3.6", "security-fixes"),
     Version("3.7", "3.7", "stable"),
     Version("3.8", "3.8", "stable"),
@@ -455,6 +456,29 @@ def build_one(
     logging.info("Build done for version: %s, language: %s", version.name, language.tag)
 
 
+def build_venv(build_root, version):
+    """Build a venv for the specific version.
+    This is used to pin old Sphinx versions to old cpython branches.
+    """
+    requirements = ["blurb", "jieba", "python-docs-theme"]
+    venv_path = os.path.join(build_root, "venv-" + version.sphinx_version)
+    shell_out(["python3", "-m", "venv", venv_path])
+    shell_out(
+        [os.path.join(venv_path, "bin", "python"), "-m", "pip", "install"]
+        + requirements
+    )
+    shell_out(
+        [
+            os.path.join(venv_path, "bin", "python"),
+            "-m",
+            "pip",
+            "install",
+            "sphinx=={}".format(version.sphinx_version),
+        ]
+    )
+    return venv_path
+
+
 def copy_build_to_webroot(
     build_root,
     version,
@@ -691,7 +715,7 @@ def main():
     if args.www_root:
         args.www_root = os.path.abspath(args.www_root)
     setup_logging(args.log_directory)
-    venv = os.path.join(args.build_root, "venv")
+    default_venv = os.path.join(args.build_root, "venv")
     if args.branch:
         versions_to_build = [
             version
@@ -720,6 +744,10 @@ def main():
                     scope.set_tag("version", version.name)
                     scope.set_tag("language", language.tag)
             try:
+                if version.sphinx_version:
+                    venv = build_venv(args.build_root, version)
+                else:
+                    venv = default_venv
                 build_one(
                     version,
                     args.quick,
