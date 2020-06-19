@@ -165,7 +165,7 @@ def shell_out(cmd, shell=False, logfile=None):
         if logfile:
             with open(logfile, "a+") as log:
                 log.write("# " + now + "\n")
-                log.write("# Command {cmd!r} ran successfully:".format(cmd=cmd))
+                log.write("# Command {} ran successfully:".format(shlex.join(cmd)))
                 log.write(output)
                 log.write("\n\n")
         return output
@@ -177,7 +177,7 @@ def shell_out(cmd, shell=False, logfile=None):
         if logfile:
             with open(logfile, "a+") as log:
                 log.write("# " + now + "\n")
-                log.write("# Command {cmd!r} failed:".format(cmd=cmd))
+                log.write("# Command {} failed:".format(shlex.join(cmd)))
                 log.write(e.output)
                 log.write("\n\n")
             logging.error("Command failed (see %s at %s)", logfile, now)
