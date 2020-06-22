@@ -462,21 +462,17 @@ def build_venv(build_root, version):
     """Build a venv for the specific version.
     This is used to pin old Sphinx versions to old cpython branches.
     """
-    requirements = ["blurb", "jieba", "python-docs-theme"]
+    requirements = [
+        "blurb",
+        "jieba",
+        "python-docs-theme",
+        "sphinx=={}".format(version.sphinx_version),
+    ]
     venv_path = os.path.join(build_root, "venv-with-sphinx-" + version.sphinx_version)
     shell_out(["python3", "-m", "venv", venv_path])
     shell_out(
         [os.path.join(venv_path, "bin", "python"), "-m", "pip", "install"]
         + requirements
-    )
-    shell_out(
-        [
-            os.path.join(venv_path, "bin", "python"),
-            "-m",
-            "pip",
-            "install",
-            "sphinx=={}".format(version.sphinx_version),
-        ]
     )
     return venv_path
 
