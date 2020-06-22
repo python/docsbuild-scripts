@@ -715,7 +715,6 @@ def main():
     if args.www_root:
         args.www_root = os.path.abspath(args.www_root)
     setup_logging(args.log_directory)
-    default_venv = os.path.join(args.build_root, "venv")
     if args.branch:
         versions_to_build = [
             version
