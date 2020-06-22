@@ -1,12 +1,16 @@
 This repository contains scripts for automatically building the Python
 documentation on [docs.python.org](https://docs.python.org).
 
+
 # How to test it?
 
-    $ mkdir -p www logs build_root
-    $ python3 -m venv build_root/venv/
-    $ build_root/venv/bin/python -m pip install -r requirements.txt
-    $ python3 ./build_docs.py --quick --build-root build_root --www-root www --log-directory logs --group $(id -g) --skip-cache-invalidation
+The following command should build all maintained versions and
+translations in ``./www``, beware it can take a few hours:
+
+    $ python3 ./build_docs.py --quick --build-root ./build_root --www-root ./www --log-directory ./logs --group $(id -g) --skip-cache-invalidation
+
+If you don't need to build all translations of all branches, add
+``--language en --branch master``.
 
 
 # Check current version

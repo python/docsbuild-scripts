@@ -58,7 +58,7 @@ else:
     sentry_sdk.init()
 
 VERSION = "19.0"
-
+DEFAULT_SPHINX_VERSION = "2.3.1"
 
 if not hasattr(shlex, "join"):
     # Add shlex.join if missing (pre 3.8)
@@ -70,7 +70,7 @@ if not hasattr(shlex, "join"):
 class Version:
     STATUSES = {"EOL", "security-fixes", "stable", "pre-release", "in development"}
 
-    def __init__(self, name, branch, status, sphinx_version=None):
+    def __init__(self, name, branch, status, sphinx_version=DEFAULT_SPHINX_VERSION):
         if status not in self.STATUSES:
             raise ValueError(
                 "Version status expected to be in {}".format(", ".join(self.STATUSES))
@@ -94,11 +94,13 @@ Language = namedtuple(
 )
 
 # EOL and security-fixes are not automatically built, no need to remove them
-# from the list.
+# from the list, this way we can still rebuild them manually as needed.
+# Please pin the sphinx_versions of EOL and security-fixes, as we're not maintaining
+# their doc, they don't follow Sphinx deprecations.
 VERSIONS = [
-    Version("2.7", "2.7", "EOL"),
+    Version("2.7", "2.7", "EOL", sphinx_version="2.3.1"),
     Version("3.5", "3.5", "security-fixes", sphinx_version="1.8.4"),
-    Version("3.6", "3.6", "security-fixes"),
+    Version("3.6", "3.6", "security-fixes", sphinx_version="2.3.1"),
     Version("3.7", "3.7", "stable"),
     Version("3.8", "3.8", "stable"),
     Version("3.9", "3.9", "pre-release"),
@@ -461,7 +463,7 @@ def build_venv(build_root, version):
     This is used to pin old Sphinx versions to old cpython branches.
     """
     requirements = ["blurb", "jieba", "python-docs-theme"]
-    venv_path = os.path.join(build_root, "venv-" + version.sphinx_version)
+    venv_path = os.path.join(build_root, "venv-with-sphinx-" + version.sphinx_version)
     shell_out(["python3", "-m", "venv", venv_path])
     shell_out(
         [os.path.join(venv_path, "bin", "python"), "-m", "pip", "install"]
@@ -493,6 +495,7 @@ def copy_build_to_webroot(
     logging.info(
         "Publishing start for version: %s, language: %s", version.name, language.tag
     )
+    Path(www_root).mkdir(parents=True, exist_ok=True)
     checkout = os.path.join(
         build_root, version.name, "cpython-{lang}".format(lang=language.tag)
     )
@@ -694,6 +697,7 @@ def setup_logging(log_directory):
     if sys.stderr.isatty():
         logging.basicConfig(format="%(levelname)s:%(message)s", stream=sys.stderr)
     else:
+        Path(log_directory).mkdir(parents=True, exist_ok=True)
         handler = logging.handlers.WatchedFileHandler(
             os.path.join(log_directory, "docsbuild.log")
         )
@@ -744,10 +748,7 @@ def main():
                     scope.set_tag("version", version.name)
                     scope.set_tag("language", language.tag)
             try:
-                if version.sphinx_version:
-                    venv = build_venv(args.build_root, version)
-                else:
-                    venv = default_venv
+                venv = build_venv(args.build_root, version)
                 build_one(
                     version,
                     args.quick,
