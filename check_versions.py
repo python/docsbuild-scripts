@@ -62,17 +62,17 @@ CONF_FILES = {
 def search_sphinx_versions_in_cpython(repo: git.Repo):
     repo.git.fetch("https://github.com/python/cpython")
     table = []
-    for _, branch, _ in sorted(build_docs.BRANCHES):
+    for version in build_docs.VERSIONS:
         table.append(
             [
-                branch,
+                version.branch,
                 *[
-                    find_sphinx_in_file(repo, branch, filename)
+                    find_sphinx_in_file(repo, version.branch, filename)
                     for filename in CONF_FILES.values()
                 ],
             ]
         )
-    print(tabulate(table, headers=["branch", *CONF_FILES.keys()], tablefmt='rst'))
+    print(tabulate(table, headers=["branch", *CONF_FILES.keys()], tablefmt="rst"))
 
 
 async def get_version_in_prod(language, version):
@@ -83,7 +83,7 @@ async def get_version_in_prod(language, version):
         return "TIMED OUT"
     text = response.text.encode("ASCII", errors="ignore").decode("ASCII")
     if created_using := re.search(
-        r"sphinx.pocoo.org.*?([0-9.]+[0-9])", text, flags=re.M
+        r"(?:sphinx.pocoo.org|www.sphinx-doc.org).*?([0-9.]+[0-9])", text, flags=re.M
     ):
         return created_using.group(1)
     return "ø"
@@ -91,19 +91,26 @@ async def get_version_in_prod(language, version):
 
 async def which_sphinx_is_used_in_production():
     table = []
-    for version, _, _ in sorted(build_docs.BRANCHES):
+    for version in build_docs.VERSIONS:
         table.append(
             [
-                version,
+                version.name,
                 *await asyncio.gather(
                     *[
-                        get_version_in_prod(language, version)
+                        get_version_in_prod(language.tag, version.name)
                         for language in build_docs.LANGUAGES
                     ]
                 ),
             ]
         )
-    print(tabulate(table, headers=["branch", *build_docs.LANGUAGES], tablefmt='rst'))
+    print(
+        tabulate(
+            table,
+            disable_numparse=True,
+            headers=["branch", *[language.tag for language in build_docs.LANGUAGES]],
+            tablefmt="rst",
+        )
+    )
 
 
 def main():
@@ -111,8 +118,8 @@ def main():
     args = parse_args()
     repo = git.Repo(args.cpython_clone)
     print(
-        "Docs build server is configured to use",
-        find_sphinx_in_file(git.Repo(), "master", "requirements.txt"),
+        "Docs build server is configured to use Sphinx",
+        build_docs.DEFAULT_SPHINX_VERSION,
     )
     print()
     print("Sphinx configuration in various branches:", end="\n\n")
