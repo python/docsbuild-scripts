@@ -150,8 +150,6 @@ LANGUAGES = {
     Language("zh-tw", "zh_TW", "Traditional Chinese", True, XELATEX_WITH_CJK),
 }
 
-DEFAULT_LANGUAGES_SET = {language.tag for language in LANGUAGES if language.in_prod}
-
 
 def shell_out(cmd, shell=False, logfile=None):
     logging.debug("Running command %s", cmd if shell else shlex.join(cmd))
@@ -677,7 +675,7 @@ def parse_args():
     parser.add_argument(
         "--languages",
         nargs="*",
-        default=DEFAULT_LANGUAGES_SET,
+        default={language.tag for language in LANGUAGES if language.in_prod},
         help="Language translation, as a PEP 545 language tag like" " 'fr' or 'pt-br'.",
         metavar="fr",
     )
@@ -733,9 +731,7 @@ def main():
         # Allow "--languages" to build all languages (as if not given)
         # instead of none.  "--languages en" builds *no* translation,
         # as "en" is the untranslated one.
-        languages = [
-            language for language in LANGUAGES if language.tag in DEFAULT_LANGUAGES_SET
-        ]
+        languages = LANGUAGES
     for version in versions_to_build:
         for language in languages:
             if sentry_sdk:
