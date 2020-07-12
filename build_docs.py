@@ -140,7 +140,7 @@ XELATEX_WITH_CJK = (
 
 LANGUAGES = {
     Language("en", "en", "English", True, XELATEX_DEFAULT),
-    Language("es", "es", "Spanish", False, XELATEX_WITH_FONTSPEC),
+    Language("es", "es", "Spanish", True, XELATEX_WITH_FONTSPEC),
     Language("fr", "fr", "French", True, XELATEX_WITH_FONTSPEC),
     Language("id", "id", "Indonesian", False, XELATEX_DEFAULT),
     Language("ja", "ja", "Japanese", True, PLATEX_DEFAULT),
