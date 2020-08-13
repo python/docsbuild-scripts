@@ -148,6 +148,7 @@ LANGUAGES = {
     Language("pt-br", "pt_BR", "Brazilian Portuguese", True, XELATEX_DEFAULT),
     Language("zh-cn", "zh_CN", "Simplified Chinese", True, XELATEX_WITH_CJK),
     Language("zh-tw", "zh_TW", "Traditional Chinese", True, XELATEX_WITH_CJK),
+    Language("pl", "pl", "Polish", False, XELATEX_DEFAULT),
 }
 
 
