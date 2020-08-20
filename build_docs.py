@@ -676,7 +676,7 @@ def parse_args():
     parser.add_argument(
         "--languages",
         nargs="*",
-        default={language.tag for language in LANGUAGES if language.in_prod},
+        default={language.tag for language in LANGUAGES},
         help="Language translation, as a PEP 545 language tag like" " 'fr' or 'pt-br'.",
         metavar="fr",
     )
@@ -726,19 +726,13 @@ def main():
             for version in VERSIONS
             if version.status != "EOL" and version.status != "security-fixes"
         ]
-    if args.languages:
-        languages = [languages_dict[tag] for tag in args.languages]
-    else:
-        # Allow "--languages" to build all languages (as if not given)
-        # instead of none.  "--languages en" builds *no* translation,
-        # as "en" is the untranslated one.
-        languages = LANGUAGES
     for version in versions_to_build:
-        for language in languages:
+        for language_tag in args.languages:
             if sentry_sdk:
                 with sentry_sdk.configure_scope() as scope:
                     scope.set_tag("version", version.name)
-                    scope.set_tag("language", language.tag)
+                    scope.set_tag("language", language_tag)
+            language = languages_dict[language_tag]
             try:
                 venv = build_venv(args.build_root, version)
                 build_one(
@@ -762,7 +756,7 @@ def main():
             except Exception as err:
                 logging.exception(
                     "Exception while building %s version %s",
-                    language.tag,
+                    language_tag,
                     version.name,
                 )
                 if sentry_sdk:
