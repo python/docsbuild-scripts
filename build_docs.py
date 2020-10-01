@@ -316,7 +316,9 @@ def picker_label(version):
 def setup_indexsidebar(dest_path):
     versions_li = []
     for version in sorted(
-        VERSIONS, key=lambda v: version_to_tuple(v.name), reverse=True,
+        VERSIONS,
+        key=lambda v: version_to_tuple(v.name),
+        reverse=True,
     ):
         versions_li.append(
             '<li><a href="{}">{}</a></li>'.format(version.url, version.title)
@@ -384,7 +386,13 @@ def setup_switchers(html_root):
 
 
 def build_one(
-    version, quick, venv, build_root, group, log_directory, language: Language,
+    version,
+    quick,
+    venv,
+    build_root,
+    group,
+    log_directory,
+    language: Language,
 ):
     checkout = os.path.join(
         build_root, version.name, "cpython-{lang}".format(lang=language.tag)
@@ -485,8 +493,7 @@ def copy_build_to_webroot(
     skip_cache_invalidation,
     www_root,
 ):
-    """Copy a given build to the appropriate webroot with appropriate rights.
-    """
+    """Copy a given build to the appropriate webroot with appropriate rights."""
     logging.info(
         "Publishing start for version: %s, language: %s", version.name, language.tag
     )
