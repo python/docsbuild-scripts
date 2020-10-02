@@ -102,9 +102,9 @@ VERSIONS = [
     Version("3.5", "3.5", "security-fixes", sphinx_version="1.8.4"),
     Version("3.6", "3.6", "security-fixes", sphinx_version="2.3.1"),
     Version("3.7", "3.7", "security-fixes", sphinx_version="2.3.1"),
-    Version("3.8", "3.8", "stable"),
-    Version("3.9", "3.9", "pre-release"),
-    Version("3.10", "master", "in development"),
+    Version("3.8", "3.8", "stable", sphinx_version="2.4.4"),
+    Version("3.9", "3.9", "pre-release", sphinx_version="2.4.4"),
+    Version("3.10", "master", "in development", sphinx_version="3.2.1"),
 ]
 
 XELATEX_DEFAULT = (
@@ -316,7 +316,9 @@ def picker_label(version):
 def setup_indexsidebar(dest_path):
     versions_li = []
     for version in sorted(
-        VERSIONS, key=lambda v: version_to_tuple(v.name), reverse=True,
+        VERSIONS,
+        key=lambda v: version_to_tuple(v.name),
+        reverse=True,
     ):
         versions_li.append(
             '<li><a href="{}">{}</a></li>'.format(version.url, version.title)
@@ -384,7 +386,13 @@ def setup_switchers(html_root):
 
 
 def build_one(
-    version, quick, venv, build_root, group, log_directory, language: Language,
+    version,
+    quick,
+    venv,
+    build_root,
+    group,
+    log_directory,
+    language: Language,
 ):
     checkout = os.path.join(
         build_root, version.name, "cpython-{lang}".format(lang=language.tag)
@@ -485,8 +493,7 @@ def copy_build_to_webroot(
     skip_cache_invalidation,
     www_root,
 ):
-    """Copy a given build to the appropriate webroot with appropriate rights.
-    """
+    """Copy a given build to the appropriate webroot with appropriate rights."""
     logging.info(
         "Publishing start for version: %s, language: %s", version.name, language.tag
     )
