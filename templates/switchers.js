@@ -137,12 +137,16 @@
   }
 
   function create_placeholders_if_missing() {
+    var version_segment = version_segment_in_url(window.location.href);
+    var language_segment = language_segment_from_url(window.location.href);
+    var index = "/" + language_segment + version_segment;
+
     if ($('.version_switcher_placeholder').length)
       return;
 
     var html = '<span class="language_switcher_placeholder"></span> \
 <span class="version_switcher_placeholder"></span> \
-<a href="../index.html">Documentation</a> &#187;';
+<a href="/" id="indexlink">Documentation</a> &#187;';
 
     var probable_places = [
       "body>div.related>ul>li:not(.right):contains('Documentation'):first",
@@ -153,6 +157,7 @@
       var probable_place = $(probable_places[i]);
       if (probable_place.length == 1) {
         probable_place.html(html);
+        document.getElementById('indexlink').href = index;
         return;
       }
     }
