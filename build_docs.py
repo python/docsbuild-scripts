@@ -495,7 +495,7 @@ def build_robots_txt(www_root):
         with open(os.path.join(www_root, "robots.txt"), "w") as robots_txt_file:
             template = jinja2.Template(robots_txt_template_file.read())
             robots_txt_file.write(
-                template.render(languages=LANGUAGES, versions=VERSIONS)
+                template.render(languages=LANGUAGES, versions=VERSIONS) + "\n"
             )
 
 
@@ -503,7 +503,9 @@ def build_sitemap(www_root):
     with open(HERE / "templates" / "sitemap.xml") as sitemap_template_file:
         with open(os.path.join(www_root, "sitemap.xml"), "w") as sitemap_file:
             template = jinja2.Template(sitemap_template_file.read())
-            sitemap_file.write(template.render(languages=LANGUAGES, versions=VERSIONS))
+            sitemap_file.write(
+                template.render(languages=LANGUAGES, versions=VERSIONS) + "\n"
+            )
 
 
 def copy_build_to_webroot(
