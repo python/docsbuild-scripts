@@ -48,6 +48,8 @@ import subprocess
 import sys
 from datetime import datetime
 
+import jinja2
+
 HERE = Path(__file__).resolve().parent
 
 try:
@@ -79,6 +81,10 @@ class Version:
         self.branch = branch
         self.status = status
         self.sphinx_version = sphinx_version
+
+    @property
+    def changefreq(self):
+        return {"EOL": "never", "security-fixes": "yearly"}.get(self.status, "daily")
 
     @property
     def url(self):
@@ -484,6 +490,24 @@ def build_venv(build_root, version):
     return venv_path
 
 
+def build_robots_txt(www_root):
+    with open(HERE / "templates" / "robots.txt") as robots_txt_template_file:
+        with open(os.path.join(www_root, "robots.txt"), "w") as robots_txt_file:
+            template = jinja2.Template(robots_txt_template_file.read())
+            robots_txt_file.write(
+                template.render(languages=LANGUAGES, versions=VERSIONS) + "\n"
+            )
+
+
+def build_sitemap(www_root):
+    with open(HERE / "templates" / "sitemap.xml") as sitemap_template_file:
+        with open(os.path.join(www_root, "sitemap.xml"), "w") as sitemap_file:
+            template = jinja2.Template(sitemap_template_file.read())
+            sitemap_file.write(
+                template.render(languages=LANGUAGES, versions=VERSIONS) + "\n"
+            )
+
+
 def copy_build_to_webroot(
     build_root,
     version,
@@ -768,6 +792,8 @@ def main():
                 )
                 if sentry_sdk:
                     sentry_sdk.capture_exception(err)
+    build_sitemap(args.www_root)
+    build_robots_txt(args.www_root)
 
 
 if __name__ == "__main__":
