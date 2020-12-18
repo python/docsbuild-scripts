@@ -105,7 +105,7 @@ Language = namedtuple(
 # their doc, they don't follow Sphinx deprecations.
 VERSIONS = [
     Version("2.7", "2.7", "EOL", sphinx_version="2.3.1"),
-    Version("3.5", "3.5", "security-fixes", sphinx_version="1.8.4"),
+    Version("3.5", "3.5", "EOL", sphinx_version="1.8.4"),
     Version("3.6", "3.6", "security-fixes", sphinx_version="2.3.1"),
     Version("3.7", "3.7", "security-fixes", sphinx_version="2.3.1"),
     Version("3.8", "3.8", "stable", sphinx_version="2.4.4"),
@@ -426,6 +426,8 @@ def build_one(
                 "-D gettext_compact=0",
             )
         )
+    if version.status == "EOL":
+        sphinxopts.append("-D html_context.outdated=1")
     git_clone("https://github.com/python/cpython.git", checkout, version.branch)
     maketarget = (
         "autobuild-"
