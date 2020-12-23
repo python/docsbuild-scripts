@@ -622,13 +622,21 @@ def head(lines, n=10):
 
 
 def version_info():
-    platex_version = head(
-        subprocess.check_output(["platex", "--version"], universal_newlines=True), n=3
-    )
+    try:
+        platex_version = head(
+            subprocess.check_output(["platex", "--version"], universal_newlines=True),
+            n=3,
+        )
+    except FileNotFoundError:
+        platex_version = "Not installed."
 
-    xelatex_version = head(
-        subprocess.check_output(["xelatex", "--version"], universal_newlines=True), n=2
-    )
+    try:
+        xelatex_version = head(
+            subprocess.check_output(["xelatex", "--version"], universal_newlines=True),
+            n=2,
+        )
+    except FileNotFoundError:
+        xelatex_version = "Not installed."
     print(
         """build_docs: {VERSION}
 
