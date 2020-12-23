@@ -81,8 +81,8 @@
   function on_version_switch() {
     var selected_version = $(this).children('option:selected').attr('value') + '/';
     var url = window.location.href;
-    var current_language = language_segment_from_url(url);
-    var current_version = version_segment_in_url(url);
+    var current_language = language_segment_from_url();
+    var current_version = version_segment_from_url();
     var new_url = url.replace('/' + current_language + current_version,
                               '/' + current_language + selected_version);
     if (new_url != url) {
@@ -100,8 +100,8 @@
   function on_language_switch() {
     var selected_language = $(this).children('option:selected').attr('value') + '/';
     var url = window.location.href;
-    var current_language = language_segment_from_url(url);
-    var current_version = version_segment_in_url(url);
+    var current_language = language_segment_from_url();
+    var current_version = version_segment_from_url();
     if (selected_language == 'en/') // Special 'default' case for english.
       selected_language = '';
     var new_url = url.replace('/' + current_language + current_version,
@@ -116,29 +116,31 @@
 
   // Returns the path segment of the language as a string, like 'fr/'
   // or '' if not found.
-  function language_segment_from_url(url) {
+  function language_segment_from_url() {
+    var path = window.location.pathname;
     var language_regexp = '/((?:' + Object.keys(all_languages).join("|") + ')/)'
-    var match = url.match(language_regexp);
+    var match = path.match(language_regexp);
     if (match !== null)
-        return match[1];
+      return match[1];
     return '';
   }
 
   // Returns the path segment of the version as a string, like '3.6/'
   // or '' if not found.
-  function version_segment_in_url(url) {
-    var language_segment = language_segment_from_url(url);
+  function version_segment_from_url() {
+    var path = window.location.pathname;
+    var language_segment = language_segment_from_url();
     var version_segment = '(?:(?:' + version_regexs.join('|') + ')/)';
     var version_regexp = language_segment + '(' + version_segment + ')';
-    var match = url.match(version_regexp);
+    var match = path.match(version_regexp);
     if (match !== null)
       return match[1];
     return ''
   }
 
   function create_placeholders_if_missing() {
-    var version_segment = version_segment_in_url(window.location.href);
-    var language_segment = language_segment_from_url(window.location.href);
+    var version_segment = version_segment_from_url();
+    var language_segment = language_segment_from_url();
     var index = "/" + language_segment + version_segment;
 
     if ($('.version_switcher_placeholder').length)
@@ -164,7 +166,7 @@
   }
 
   $(document).ready(function() {
-    var language_segment = language_segment_from_url(window.location.href);
+    var language_segment = language_segment_from_url();
     var current_language = language_segment.replace(/\/+$/g, '') || 'en';
     var version_select = build_version_select(DOCUMENTATION_OPTIONS.VERSION);
 
