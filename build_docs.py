@@ -492,13 +492,18 @@ def build_venv(build_root, version):
     return venv_path
 
 
-def build_robots_txt(www_root):
+def build_robots_txt(www_root, group, skip_cache_invalidation):
+    robots_file = os.path.join(www_root, "robots.txt")
     with open(HERE / "templates" / "robots.txt") as robots_txt_template_file:
-        with open(os.path.join(www_root, "robots.txt"), "w") as robots_txt_file:
+        with open(robots_file, "w") as robots_txt_file:
             template = jinja2.Template(robots_txt_template_file.read())
             robots_txt_file.write(
                 template.render(languages=LANGUAGES, versions=VERSIONS) + "\n"
             )
+    os.chmod(robots_file, 0o775)
+    shell_out(["chgrp", group, robots_file])
+    if not skip_cache_invalidation:
+        shell_out(["curl", "-XPURGE", "https://docs.python.org/robots.txt"])
 
 
 def build_sitemap(www_root):
@@ -803,7 +808,7 @@ def main():
                 if sentry_sdk:
                     sentry_sdk.capture_exception(err)
     build_sitemap(args.www_root)
-    build_robots_txt(args.www_root)
+    build_robots_txt(args.www_root, args.group, args.skip_cache_invalidation)
 
 
 if __name__ == "__main__":
