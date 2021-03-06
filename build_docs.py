@@ -2,14 +2,6 @@
 
 """Build the Python docs for various branches and various languages.
 
-Usage:
-
-  build_docs.py [-h] [-d] [-q] [-b 3.7] [-r BUILD_ROOT] [-w WWW_ROOT]
-                [--skip-cache-invalidation] [--group GROUP] [--git]
-                [--log-directory LOG_DIRECTORY]
-                [--languages [fr [fr ...]]]
-
-
 Without any arguments builds docs for all active versions configured in the
 global VERSIONS list and all languages configured in the LANGUAGES list,
 ignoring the -d flag as it's given in the VERSIONS configuration.
@@ -473,14 +465,14 @@ def build_one(
     logging.info("Build done for version: %s, language: %s", version.name, language.tag)
 
 
-def build_venv(build_root, version):
+def build_venv(build_root, version, theme):
     """Build a venv for the specific version.
     This is used to pin old Sphinx versions to old cpython branches.
     """
     requirements = [
         "blurb",
         "jieba",
-        "python-docs-theme",
+        theme,
         "sphinx=={}".format(version.sphinx_version),
     ]
     venv_path = os.path.join(build_root, "venv-with-sphinx-" + version.sphinx_version)
@@ -731,6 +723,12 @@ def parse_args():
         action="store_true",
         help="Get build_docs and dependencies version info",
     )
+    parser.add_argument(
+        "--theme",
+        default="python-docs-theme",
+        help="Python package to use for python-docs-theme: Usefull to test branches:"
+        " --theme git+https://github.com/obulat/python-docs-theme@master",
+    )
     return parser.parse_args()
 
 
@@ -780,7 +778,7 @@ def main():
                     scope.set_tag("language", language_tag)
             language = languages_dict[language_tag]
             try:
-                venv = build_venv(args.build_root, version)
+                venv = build_venv(args.build_root, version, args.theme)
                 build_one(
                     version,
                     args.quick,
