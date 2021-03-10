@@ -10,7 +10,7 @@ translations in ``./www``, beware it can take a few hours:
     $ python3 ./build_docs.py --quick --build-root ./build_root --www-root ./www --log-directory ./logs --group $(id -g) --skip-cache-invalidation
 
 If you don't need to build all translations of all branches, add
-``--language en --branch master``.
+``--language en --branch main``.
 
 
 # Check current version
@@ -32,7 +32,7 @@ of Sphinx we're using where::
     3.7       sphinx==1.8.2  sphinx==1.8.2  ø                   needs_sphinx="1.6.6"  Sphinx==2.3.1  Sphinx==2.3.1
     3.8       sphinx==1.8.2  sphinx==1.8.2  ø                   needs_sphinx='1.8'    Sphinx==2.3.1  Sphinx==2.3.1
     3.9       sphinx==2.2.0  sphinx==2.2.0  sphinx==2.2.0       needs_sphinx='1.8'    Sphinx==2.3.1  Sphinx==2.3.1
-    master    sphinx==2.2.0  sphinx==2.2.0  sphinx==2.2.0       needs_sphinx='1.8'    Sphinx==2.3.1  Sphinx==2.3.1
+    main      sphinx==2.2.0  sphinx==2.2.0  sphinx==2.2.0       needs_sphinx='1.8'    Sphinx==2.3.1  Sphinx==2.3.1
     ========  =============  =============  ==================  ====================  =============  ===============
 
     Sphinx build as seen on docs.python.org:
