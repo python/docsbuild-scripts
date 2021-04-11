@@ -199,7 +199,10 @@ def changed_files(left, right):
 
     def traverse(dircmp_result):
         base = Path(dircmp_result.left).relative_to(left)
-        changed.extend(str(base / file) for file in dircmp_result.diff_files)
+        for file in dircmp_result.diff_files:
+            changed.append(str(base / file))
+            if file == "index.html":
+                changed.append(str(base) + "/")
         for dircomp in dircmp_result.subdirs.values():
             traverse(dircomp)
 
