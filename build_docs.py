@@ -23,22 +23,22 @@ Modified by Julien Palard to build translations.
 
 """
 
-from bisect import bisect_left as bisect
-from collections import namedtuple, OrderedDict
-from contextlib import contextmanager, suppress
 import filecmp
 import json
 import logging
 import logging.handlers
 import os
-from pathlib import Path
 import re
 import shlex
 import shutil
-from string import Template
 import subprocess
 import sys
-from datetime import datetime
+from bisect import bisect_left as bisect
+from collections import OrderedDict, namedtuple
+from contextlib import contextmanager, suppress
+from pathlib import Path
+from string import Template
+from textwrap import indent
 
 import jinja2
 
@@ -150,9 +150,9 @@ LANGUAGES = {
 }
 
 
-def shell_out(cmd, shell=False, logfile=None):
-    logging.debug("Running command %s", cmd if shell else shlex.join(cmd))
-    now = str(datetime.now())
+def shell_out(cmd, shell=False):
+    cmdstring = cmd if shell else shlex.join(cmd)
+    logging.debug("Running command: %s", cmdstring)
     try:
         output = subprocess.check_output(
             cmd,
@@ -162,33 +162,22 @@ def shell_out(cmd, shell=False, logfile=None):
             encoding="utf-8",
             errors="backslashreplace",
         )
-        if logfile:
-            with open(logfile, "a+") as log:
-                log.write("# " + now + "\n")
-                log.write(
-                    "# Command {} ran successfully:".format(
-                        cmd if shell else shlex.join(cmd)
-                    )
-                )
-                log.write(output)
-                log.write("\n\n")
+        if output:
+            logging.debug(
+                "Command executed successfully: %s\n%s",
+                cmdstring,
+                indent(output, "    "),
+            )
         return output
     except subprocess.CalledProcessError as e:
         if sentry_sdk:
             with sentry_sdk.push_scope() as scope:
                 scope.fingerprint = ["{{ default }}", str(cmd)]
                 sentry_sdk.capture_exception(e)
-        if logfile:
-            with open(logfile, "a+") as log:
-                log.write("# " + now + "\n")
-                log.write(
-                    "# Command {} failed:".format(cmd if shell else shlex.join(cmd))
-                )
-                log.write(e.output)
-                log.write("\n\n")
-            logging.error("Command failed (see %s at %s)", logfile, now)
+        if e.output:
+            logging.error("Command %s failed:\n%s", cmdstring, indent(e.output, "    "))
         else:
-            logging.error("Command failed with output %r", e.output)
+            logging.error("Command %s failed.", cmdstring)
 
 
 def changed_files(left, right):
@@ -430,9 +419,6 @@ def build_one(
         + ("-html" if quick else "")
     )
     logging.info("Running make %s", maketarget)
-    logname = "cpython-{lang}-{version}.log".format(
-        lang=language.tag, version=version.name
-    )
     python = os.path.join(venv, "bin/python")
     sphinxbuild = os.path.join(venv, "bin/sphinx-build")
     blurb = os.path.join(venv, "bin/blurb")
@@ -460,8 +446,7 @@ def build_one(
             "SPHINXOPTS=" + " ".join(sphinxopts),
             "SPHINXERRORHANDLING=",
             maketarget,
-        ],
-        logfile=os.path.join(log_directory, logname),
+        ]
     )
     shell_out(["chgrp", "-R", group, log_directory])
     setup_switchers(os.path.join(checkout, "Doc", "build", "html"))
