@@ -102,7 +102,7 @@ VERSIONS = [
     Version("3.7", "3.7", "security-fixes", sphinx_version="2.3.1"),
     Version("3.8", "3.8", "security-fixes", sphinx_version="2.4.4"),
     Version("3.9", "3.9", "stable", sphinx_version="2.4.4"),
-    Version("3.10", "master", "in development", sphinx_version="3.2.1"),
+    Version("3.10", "main", "in development", sphinx_version="3.2.1"),
 ]
 
 XELATEX_DEFAULT = (
