@@ -64,7 +64,14 @@ if not hasattr(shlex, "join"):
 class Version:
     STATUSES = {"EOL", "security-fixes", "stable", "pre-release", "in development"}
 
-    def __init__(self, name, branch, status, sphinx_version=DEFAULT_SPHINX_VERSION):
+    def __init__(
+        self,
+        name,
+        branch,
+        status,
+        sphinx_version=DEFAULT_SPHINX_VERSION,
+        sphinxopts=[],
+    ):
         if status not in self.STATUSES:
             raise ValueError(
                 "Version status expected to be in {}".format(", ".join(self.STATUSES))
@@ -73,6 +80,7 @@ class Version:
         self.branch = branch
         self.status = status
         self.sphinx_version = sphinx_version
+        self.sphinxopts = list(sphinxopts)
 
     @property
     def changefreq(self):
@@ -102,7 +110,9 @@ VERSIONS = [
     Version("3.7", "3.7", "security-fixes", sphinx_version="2.3.1"),
     Version("3.8", "3.8", "security-fixes", sphinx_version="2.4.4"),
     Version("3.9", "3.9", "stable", sphinx_version="2.4.4"),
-    Version("3.10", "main", "in development", sphinx_version="3.2.1"),
+    Version(
+        "3.10", "main", "in development", sphinx_version="3.2.1", sphinxopts=["-j4"]
+    ),
 ]
 
 XELATEX_DEFAULT = (
@@ -383,7 +393,7 @@ def build_one(
     logging.info(
         "Build start for version: %s, language: %s", version.name, language.tag
     )
-    sphinxopts = list(language.sphinxopts)
+    sphinxopts = list(language.sphinxopts) + list(version.sphinxopts)
     sphinxopts.extend(["-q"])
     if language.tag != "en":
         locale_dirs = os.path.join(build_root, version.name, "locale")
