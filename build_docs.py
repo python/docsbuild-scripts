@@ -479,7 +479,14 @@ def build_robots_txt(www_root, group, skip_cache_invalidation):
     os.chmod(robots_file, 0o775)
     run(["chgrp", group, robots_file])
     if not skip_cache_invalidation:
-        run(["curl", "-XPURGE", "https://docs.python.org/robots.txt"])
+        run(
+            [
+                "curl",
+                "--silent",
+                "-XPURGE",
+                "https://docs.python.org/robots.txt",
+            ]
+        )
 
 
 def build_sitemap(www_root):
