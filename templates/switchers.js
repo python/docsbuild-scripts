@@ -26,7 +26,7 @@
   }
 
   function build_version_select(release) {
-    var buf = ['<select>'];
+    var buf = ['<select id="version_select">'];
     var major_minor = release.split(".").slice(0, 2).join(".");
 
     $.each(all_versions, function(version, title) {
@@ -41,7 +41,7 @@
   }
 
   function build_language_select(current_language) {
-    var buf = ['<select>'];
+    var buf = ['<select id="language_select">'];
 
     $.each(all_languages, function(language, title) {
       if (language == current_language)
