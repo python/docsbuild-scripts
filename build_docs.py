@@ -454,6 +454,7 @@ def build_one(
             maketarget,
         ]
     )
+    run(["mkdir", "-p", log_directory])
     run(["chgrp", "-R", group, log_directory])
     setup_switchers(os.path.join(checkout, "Doc", "build", "html"))
     logging.info("Build done for version: %s, language: %s", version.name, language.tag)
