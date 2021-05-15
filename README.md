@@ -15,7 +15,7 @@ If you don't need to build all translations of all branches, add
 
 # Check current version
 
-Install `tools-requirements.txt` then run ``python check_versions.py
+Install `tools_requirements.txt` then run ``python check_versions.py
 ../cpython/`` (pointing to a real cpython clone) to see which version
 of Sphinx we're using where::
 
