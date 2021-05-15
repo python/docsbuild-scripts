@@ -5,19 +5,21 @@ documentation on [docs.python.org](https://docs.python.org).
 # How to test it?
 
 The following command should build all maintained versions and
-translations in ``./www``, beware it can take a few hours:
+translations in `./www`, beware it can take a few hours:
 
-    $ python3 ./build_docs.py --quick --build-root ./build_root --www-root ./www --log-directory ./logs --group $(id -g) --skip-cache-invalidation
+```shell
+python3 ./build_docs.py --quick --build-root ./build_root --www-root ./www --log-directory ./logs --group $(id -g) --skip-cache-invalidation
+```
 
 If you don't need to build all translations of all branches, add
-``--language en --branch main``.
+`--language en --branch main`.
 
 
 # Check current version
 
-Install `tools_requirements.txt` then run ``python check_versions.py
-../cpython/`` (pointing to a real cpython clone) to see which version
-of Sphinx we're using where::
+Install `tools_requirements.txt` then run `python check_versions.py
+../cpython/` (pointing to a real CPython clone) to see which version
+of Sphinx we're using where:
 
     Docs build server is configured to use Sphinx 2.3.1
 
