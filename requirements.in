@@ -1,3 +1,6 @@
-sentry-sdk
+aiohttp
+gidgethub
 jinja2
+pyyaml
+sentry-sdk
 zc.lockfile
