@@ -16,7 +16,7 @@ cffi==1.14.4
     # via cryptography
 chardet==3.0.4
     # via aiohttp
-cryptography==3.3.1
+cryptography==3.3.2
     # via pyjwt
 gidgethub==4.2.0
     # via -r requirements.in
