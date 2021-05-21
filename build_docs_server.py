@@ -23,6 +23,9 @@ from aiohttp import web
 from gidgethub import sansio
 import yaml
 
+from build_docs import VERSIONS
+
+
 __version__ = "0.0.1"
 
 DEFAULT_LOGGING_CONFIG = """
@@ -99,9 +102,7 @@ async def hook(request):
         request.headers, body, secret=os.environ.get("GH_SECRET")
     )
     if event.event != "push":
-        logger.debug(
-            "Received a %s event, nothing to do.", event.event
-        )
+        logger.debug("Received a %s event, nothing to do.", event.event)
         return web.Response()
     touched_files = (
         set(event.data["head_commit"]["added"])
@@ -112,6 +113,10 @@ async def hook(request):
         logger.debug("No documentation file modified, ignoring.")
         return web.Response()  # Nothing to do
     branch = event.data["ref"].split("/")[-1]
+    known_branches = {version.branch for version in VERSION}
+    if branch not in known_branches:
+        logger.warning("Ignoring a change in branch %s (unknown branch)", branch)
+        return web.Response()  # Nothing to do
     logger.debug("Forking a build for branch %s", branch)
     pid = os.fork()
     if pid == 0:
