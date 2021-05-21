@@ -107,7 +107,10 @@ async def which_sphinx_is_used_in_production():
         tabulate(
             table,
             disable_numparse=True,
-            headers=["branch", *[language.tag for language in build_docs.LANGUAGES]],
+            headers=[
+                "branch",
+                *[language.tag for language in sorted(build_docs.LANGUAGES)],
+            ],
             tablefmt="rst",
         )
     )
