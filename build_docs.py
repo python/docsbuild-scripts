@@ -189,12 +189,12 @@ def run(cmd) -> subprocess.CompletedProcess:
     if result.returncode:
         # Log last 20 lines, those are likely the interesting ones.
         logging.error(
-            "Run KO: %r:\n%s",
+            "Run: %r KO:\n%s",
             cmdstring,
             indent("\n".join(result.stdout.split("\n")[-20:]), "    "),
         )
     else:
-        logging.debug("Run OK: %r", cmdstring)
+        logging.debug("Run: %r OK", cmdstring)
     result.check_returncode()
     return result
 
@@ -228,16 +228,15 @@ def git_clone(repository, directory, branch=None):
             raise AssertionError("Not a git repository.")
         run(["git", "-C", directory, "fetch"])
         if branch:
-            run(["git", "-C", directory, "checkout", branch])
             run(["git", "-C", directory, "reset", "--hard", "origin/" + branch])
     except (subprocess.CalledProcessError, AssertionError):
         if os.path.exists(directory):
             shutil.rmtree(directory)
         logging.info("Cloning %s into %s", repository, directory)
         os.makedirs(directory, mode=0o775)
-        run(["git", "clone", "--depth=1", "--no-single-branch", repository, directory])
+        run(["git", "clone", repository, directory])
         if branch:
-            run(["git", "-C", directory, "checkout", branch])
+            run(["git", "-C", directory, "reset", "--hard", "origin/" + branch])
 
 
 def version_to_tuple(version):
@@ -588,9 +587,7 @@ class DocBuilder(
 
     @property
     def checkout(self):
-        return os.path.join(
-            self.build_root, self.version.name, f"cpython-{self.language.tag}"
-        )
+        return os.path.join(self.build_root, "cpython")
 
     def build(self):
         logging.info(
