@@ -30,6 +30,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 from bisect import bisect_left as bisect
 from collections import OrderedDict, namedtuple
 from contextlib import contextmanager, suppress
@@ -582,10 +583,6 @@ class DocBuilder(
                 sentry_sdk.capture_exception(err)
 
     @property
-    def lockfile(self):
-        return os.path.join(HERE, f"{self.version.name}-{self.language.tag}.lock")
-
-    @property
     def checkout(self):
         return os.path.join(self.build_root, "cpython")
 
@@ -823,21 +820,21 @@ def main():
     languages = [languages_dict[tag] for tag in args.languages]
     del args.languages
     del args.branch
-    for version, language in product(versions, languages):
+    todo = list(product(versions, languages))
+    while todo:
+        version, language = todo.pop()
         if sentry_sdk:
             with sentry_sdk.configure_scope() as scope:
                 scope.set_tag("version", version.name)
                 scope.set_tag("language", language.tag)
-        builder = DocBuilder(version, language, **vars(args))
         try:
-            lock = zc.lockfile.LockFile(builder.lockfile)
+            lock = zc.lockfile.LockFile(os.path.join(HERE, "build_docs.lock"))
+            builder = DocBuilder(version, language, **vars(args))
             builder.run()
         except zc.lockfile.LockError:
-            logging.info(
-                "Skipping build of %s/%s (build already running)",
-                language.tag,
-                version.name,
-            )
+            logging.info("Another builder is running... waiting...")
+            time.sleep(10)
+            todo.append((version, language))
         else:
             lock.close()
 
