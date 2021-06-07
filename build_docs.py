@@ -280,19 +280,16 @@ def locate_nearest_version(available_versions, target_version):
     return tuple_to_version(found)
 
 
-def translation_branch(locale_repo, locale_clone_dir, needed_version):
+def translation_branch(locale_repo, locale_clone_dir, needed_version: str):
     """Some cpython versions may be untranslated, being either too old or
     too new.
 
     This function looks for remote branches on the given repo, and
     returns the name of the nearest existing branch.
     """
-    git_clone(locale_repo, locale_clone_dir)
+    # git_clone(locale_repo, locale_clone_dir)
     remote_branches = run(["git", "-C", locale_clone_dir, "branch", "-r"]).stdout
-    branches = []
-    for branch in remote_branches.split("\n"):
-        if re.match(r".*/[0-9]+\.[0-9]+$", branch):
-            branches.append(branch.split("/")[-1])
+    branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
     return locate_nearest_version(branches, needed_version)
 
 
