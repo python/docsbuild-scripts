@@ -81,9 +81,15 @@ class Version:
         self.sphinx_version = sphinx_version
         self.sphinxopts = list(sphinxopts)
 
+    def __repr__(self):
+        return f"Version({self.name})"
+
     @property
     def changefreq(self):
         return {"EOL": "never", "security-fixes": "yearly"}.get(self.status, "daily")
+
+    def as_tuple(self):
+        return tuple(int(part) for part in self.name.split("."))
 
     @property
     def url(self):
@@ -105,6 +111,14 @@ class Version:
         if branch:
             return [v for v in versions if branch in (v.name, v.branch)]
         return [v for v in versions if v.status not in ("EOL", "security-fixes")]
+
+    @staticmethod
+    def current_stable(versions):
+        return max([v for v in versions if v.status == "stable"], key=Version.as_tuple)
+
+    @staticmethod
+    def current_dev(versions):
+        return max([v for v in versions], key=Version.as_tuple)
 
 
 Language = namedtuple(
@@ -809,6 +823,49 @@ class DocBuilder(
         )
 
 
+def symlink(www_root: Path, language: Language, directory: str, name: str, group: str):
+    if language.tag == "en":  # english is rooted on /, no /en/
+        path = www_root
+    else:
+        path = www_root / language.tag
+    link = path / name
+    directory_path = path / directory
+    if not directory_path.exists():
+        return  # No touching link, dest doc not built yet.
+    if link.exists() and link.readlink().name == directory:
+        return  # Link is already pointing to right doc.
+    link.symlink_to(directory)
+    run(["chown", "-h", ":" + group, str(link)])
+
+
+def slash_3_symlink(languages, versions, www_root, group):
+    """Maintains the /3/ symlinks for each languages.
+
+    Like:
+    - /3/ → /3.9/
+    - /fr/3/ → /fr/3.9/
+    - /es/3/ → /es/3.9/
+    """
+    www_root = Path(www_root)
+    current_stable = Version.current_stable(versions).name
+    for language in languages:
+        symlink(www_root, language, current_stable, "3", group)
+
+
+def dev_symlink(languages, versions, www_root, group):
+    """Maintains the /dev/ symlinks for each languages.
+
+    Like:
+    - /dev/ → /3.11/
+    - /fr/dev/ → /fr/3.11/
+    - /es/dev/ → /es/3.11/
+    """
+    www_root = Path(www_root)
+    current_dev = Version.current_dev(versions).name
+    for language in languages:
+        symlink(www_root, language, current_dev, "dev", group)
+
+
 def main():
     args = parse_args()
     setup_logging(args.log_directory)
@@ -837,6 +894,8 @@ def main():
 
     build_sitemap(args.www_root)
     build_robots_txt(args.www_root, args.group, args.skip_cache_invalidation)
+    slash_3_symlink(LANGUAGES, VERSIONS, args.www_root, args.group)
+    dev_symlink(LANGUAGES, VERSIONS, args.www_root, args.group)
 
 
 if __name__ == "__main__":
