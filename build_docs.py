@@ -832,7 +832,7 @@ def symlink(www_root: Path, language: Language, directory: str, name: str, group
     directory_path = path / directory
     if not directory_path.exists():
         return  # No touching link, dest doc not built yet.
-    if link.exists() and link.readlink().name == directory:
+    if link.exists() and os.readlink(str(link)) == directory:
         return  # Link is already pointing to right doc.
     link.symlink_to(directory)
     run(["chown", "-h", ":" + group, str(link)])
