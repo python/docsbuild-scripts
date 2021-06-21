@@ -244,6 +244,7 @@ def git_clone(repository, directory, branch=None):
         run(["git", "-C", directory, "fetch"])
         if branch:
             run(["git", "-C", directory, "reset", "--hard", "origin/" + branch])
+            run(["git", "-C", directory, "clean", "-dfqx"])
     except (subprocess.CalledProcessError, AssertionError):
         if os.path.exists(directory):
             shutil.rmtree(directory)
