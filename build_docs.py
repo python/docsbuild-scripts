@@ -302,7 +302,7 @@ def translation_branch(locale_repo, locale_clone_dir, needed_version: str):
     This function looks for remote branches on the given repo, and
     returns the name of the nearest existing branch.
     """
-    # git_clone(locale_repo, locale_clone_dir)
+    git_clone(locale_repo, locale_clone_dir)
     remote_branches = run(["git", "-C", locale_clone_dir, "branch", "-r"]).stdout
     branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
     return locate_nearest_version(branches, needed_version)
