@@ -6,7 +6,7 @@
   <url>
     <loc>https://docs.python.org/{{ version.name }}/</loc>
     {% for language in languages -%}
-    <xhtml:link rel="alternate" hreflang="{{ language.iso639_tag.replace('_', '-') }}" href="https://docs.python.org/{{ language.tag }}/{{ version.name }}/"/>
+    <xhtml:link rel="alternate" hreflang="{{ language.iso639_tag.replace('_', '-') }}" href="https://docs.python.org/{% if language.tag != 'en' %}{{ language.tag }}/{% endif %}{{ version.name }}/"/>
     {% endfor -%}
     <changefreq>{{ version.changefreq }}</changefreq>
   </url>
@@ -15,7 +15,7 @@
   <url>
     <loc>https://docs.python.org/3/</loc>
     {% for language in languages -%}
-    <xhtml:link rel="alternate" hreflang="{{ language.iso639_tag.replace('_', '-') }}" href="https://docs.python.org/{{ language.tag }}/3/"/>
+    <xhtml:link rel="alternate" hreflang="{{ language.iso639_tag.replace('_', '-') }}" href="https://docs.python.org/{% if language.tag != 'en' %}{{ language.tag }}/{% endif %}3/"/>
     {% endfor -%}
     <changefreq>daily</changefreq>
   </url>
