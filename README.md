@@ -21,8 +21,6 @@ Install `tools_requirements.txt` then run `python check_versions.py
 ../cpython/` (pointing to a real CPython clone) to see which version
 of Sphinx we're using where:
 
-    Docs build server is configured to use Sphinx 2.3.1
-
     Sphinx configuration in various branches:
 
     ========  =============  =============  ==================  ====================  =============  ===============

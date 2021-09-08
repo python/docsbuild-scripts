@@ -26,8 +26,7 @@ def parse_args():
 
 
 def remote_by_url(repo: git.Repo, url_pattern: str):
-    """Find a remote of repo matching the regex url_pattern.
-    """
+    """Find a remote of repo matching the regex url_pattern."""
     for remote in repo.remotes:
         for url in remote.urls:
             if re.search(url_pattern, url):
@@ -120,11 +119,6 @@ def main():
     logging.basicConfig(level=logging.INFO)
     args = parse_args()
     repo = git.Repo(args.cpython_clone)
-    print(
-        "Docs build server is configured to use Sphinx",
-        build_docs.DEFAULT_SPHINX_VERSION,
-    )
-    print()
     print("Sphinx configuration in various branches:", end="\n\n")
     search_sphinx_versions_in_cpython(repo)
     print()
