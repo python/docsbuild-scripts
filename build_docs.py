@@ -138,7 +138,7 @@ VERSIONS = [
     Version("3.9", "3.9", "stable", sphinx_version="2.4.4"),
     Version("3.10", "3.10", "stable", sphinx_version="3.2.1", sphinxopts=["-j4"]),
     Version(
-        "3.11", "main", "in development", sphinx_version="3.2.1", sphinxopts=["-j4"]
+        "3.11", "main", "in development", sphinx_version="4.2.0", sphinxopts=["-j4"]
     ),
 ]
 
