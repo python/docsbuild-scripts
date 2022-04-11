@@ -1,11 +1,23 @@
+{#
+Beware, this file is rendered twice via Jinja2:
+- First by build_docs.py, given 'current_version' and 'versions'.
+- A 2nd time by Sphinx.
+#}
+
+{% raw %}
 <h3>{% trans %}Download{% endtrans %}</h3>
 <p><a href="{{ pathto('download') }}">{% trans %}Download these documents{% endtrans %}</a></p>
-<h3>{% trans %}Docs by version{% endtrans %}</h3>
+{% endraw %}
+{% if current_version.status != "EOL" %}
+{% raw %}<h3>{% trans %}Docs by version{% endtrans %}</h3>{% endraw %}
 <ul>
-  $VERSIONS
-  <li><a href="https://www.python.org/doc/versions/">{% trans %}All versions{% endtrans %}</a></li>
+  {% for version in versions %}
+  <li><a href="{{ version.url }}">{{ version.title }}</a></li>
+  {% endfor %}
+  {% raw %}<li><a href="https://www.python.org/doc/versions/">{% trans %}All versions{% endtrans %}</a></li>{% endraw %}
 </ul>
-
+{% endif %}
+{% raw %}
 <h3>{% trans %}Other resources{% endtrans %}</h3>
 <ul>
   {# XXX: many of these should probably be merged in the main docs #}
@@ -15,3 +27,4 @@
   <li><a href="https://www.python.org/doc/av/">{% trans %}Audio/Visual Talks{% endtrans %}</a></li>
   <li><a href="https://devguide.python.org/">{% trans %}Python Developer’s Guide{% endtrans %}</a></li>
 </ul>
+{% endraw %}
