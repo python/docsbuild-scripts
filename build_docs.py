@@ -27,6 +27,7 @@ import json
 import logging
 import logging.handlers
 from functools import total_ordering
+from os import readlink
 import re
 import shlex
 import shutil
@@ -906,7 +907,7 @@ def symlink(www_root: Path, language: Language, directory: str, name: str, group
     directory_path = path / directory
     if not directory_path.exists():
         return  # No touching link, dest doc not built yet.
-    if link.exists() and str(link.readlink()) == directory:
+    if link.exists() and readlink(str(link)) == directory:
         return  # Link is already pointing to right doc.
     if link.exists():
         link.unlink()
