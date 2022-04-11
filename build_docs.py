@@ -50,9 +50,6 @@ except ImportError:
 else:
     sentry_sdk.init()
 
-VERSION = "19.0"
-DEFAULT_SPHINX_VERSION = "2.3.1"
-
 if not hasattr(shlex, "join"):
     # Add shlex.join if missing (pre 3.8)
     shlex.join = lambda split_command: " ".join(
@@ -68,7 +65,7 @@ class Version:
         name,
         branch,
         status,
-        sphinx_version=DEFAULT_SPHINX_VERSION,
+        sphinx_version,
         sphinxopts=[],
     ):
         if status not in self.STATUSES:
@@ -83,6 +80,17 @@ class Version:
 
     def __repr__(self):
         return f"Version({self.name})"
+
+    @property
+    def requirements(self):
+        reqs = [
+            "blurb",
+            "jieba",
+            "sphinx=={}".format(self.sphinx_version),
+        ]
+        if tuple(int(part) for part in self.sphinx_version.split(".")) < (4, 5):
+            reqs += ["jinja2<3.1"]
+        return reqs
 
     @property
     def changefreq(self):
@@ -233,7 +241,7 @@ def changed_files(left, right):
     return changed
 
 
-def git_clone(repository, directory, branch=None):
+def git_clone(repository, directory, branch_or_tag=None):
     """Clone or update the given repository in the given directory.
     Optionally checking out a branch.
     """
@@ -242,8 +250,8 @@ def git_clone(repository, directory, branch=None):
         if not os.path.isdir(os.path.join(directory, ".git")):
             raise AssertionError("Not a git repository.")
         run(["git", "-C", directory, "fetch"])
-        if branch:
-            run(["git", "-C", directory, "reset", "--hard", "origin/" + branch])
+        if branch_or_tag:
+            run(["git", "-C", directory, "reset", "--hard", branch_or_tag])
             run(["git", "-C", directory, "clean", "-dfqx"])
     except (subprocess.CalledProcessError, AssertionError):
         if os.path.exists(directory):
@@ -251,8 +259,8 @@ def git_clone(repository, directory, branch=None):
         logging.info("Cloning %s into %s", repository, directory)
         os.makedirs(directory, mode=0o775)
         run(["git", "clone", repository, directory])
-        if branch:
-            run(["git", "-C", directory, "reset", "--hard", "origin/" + branch])
+        if branch_or_tag:
+            run(["git", "-C", directory, "reset", "--hard", branch_or_tag])
 
 
 def version_to_tuple(version):
@@ -685,19 +693,14 @@ class DocBuilder(
         """Build a venv for the specific version.
         This is used to pin old Sphinx versions to old cpython branches.
         """
-        requirements = [
-            "blurb",
-            "jieba",
-            self.theme,
-            "sphinx=={}".format(self.version.sphinx_version),
-        ]
         venv_path = os.path.join(
             self.build_root, "venv-with-sphinx-" + self.version.sphinx_version
         )
         run(["python3", "-m", "venv", venv_path])
         run(
             [os.path.join(venv_path, "bin", "python"), "-m", "pip", "install"]
-            + requirements
+            + [self.theme]
+            + self.version.requirements
         )
         self.venv = venv_path
 
