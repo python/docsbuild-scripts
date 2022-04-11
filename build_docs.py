@@ -63,17 +63,23 @@ class Version:
     def __init__(
         self,
         name,
-        branch,
+        *,
+        branch=None,
+        tag=None,
         status,
         sphinx_version,
-        sphinxopts=[],
+        sphinxopts=(),
     ):
         if status not in self.STATUSES:
             raise ValueError(
                 "Version status expected to be in {}".format(", ".join(self.STATUSES))
             )
         self.name = name
-        self.branch = branch
+        if branch is not None and tag is not None:
+            raise ValueError("Please build a version from either a branch or a tag.")
+        if branch is None and tag is None:
+            raise ValueError("Please build a version with at least a branch or a tag.")
+        self.branch_or_tag = branch or tag
         self.status = status
         self.sphinx_version = sphinx_version
         self.sphinxopts = list(sphinxopts)
@@ -117,7 +123,7 @@ class Version:
         security-fixes branches).
         """
         if branch:
-            return [v for v in versions if branch in (v.name, v.branch)]
+            return [v for v in versions if branch in (v.name, v.branch_or_tag)]
         return [v for v in versions if v.status not in ("EOL", "security-fixes")]
 
     @staticmethod
@@ -135,18 +141,58 @@ Language = namedtuple(
 
 # EOL and security-fixes are not automatically built, no need to remove them
 # from the list, this way we can still rebuild them manually as needed.
-# Please pin the sphinx_versions of EOL and security-fixes, as we're not maintaining
-# their doc, they don't follow Sphinx deprecations.
+#
+# Please keep the list in reverse-order for ease of editing.
 VERSIONS = [
-    Version("2.7", "2.7", "EOL", sphinx_version="2.3.1"),
-    Version("3.5", "3.5", "EOL", sphinx_version="1.8.4"),
-    Version("3.6", "3.6", "EOL", sphinx_version="2.3.1"),
-    Version("3.7", "3.7", "security-fixes", sphinx_version="2.3.1"),
-    Version("3.8", "3.8", "security-fixes", sphinx_version="2.4.4"),
-    Version("3.9", "3.9", "stable", sphinx_version="2.4.4"),
-    Version("3.10", "3.10", "stable", sphinx_version="3.2.1", sphinxopts=["-j4"]),
     Version(
-        "3.11", "main", "in development", sphinx_version="4.2.0", sphinxopts=["-j4"]
+        "3.11",
+        branch="origin/main",
+        status="in development",
+        sphinx_version="4.2.0",
+        sphinxopts=["-j4"],
+    ),
+    Version(
+        "3.10",
+        branch="origin/3.10",
+        status="stable",
+        sphinx_version="3.2.1",
+        sphinxopts=["-j4"],
+    ),
+    Version(
+        "3.9",
+        branch="origin/3.9",
+        status="stable",
+        sphinx_version="2.4.4",
+    ),
+    Version(
+        "3.8",
+        branch="origin/3.8",
+        status="security-fixes",
+        sphinx_version="2.4.4",
+    ),
+    Version(
+        "3.7",
+        branch="origin/3.7",
+        status="security-fixes",
+        sphinx_version="2.3.1",
+    ),
+    Version(
+        "3.6",
+        tag="3.6",
+        status="EOL",
+        sphinx_version="2.3.1",
+    ),
+    Version(
+        "3.5",
+        tag="3.5",
+        status="EOL",
+        sphinx_version="1.8.4",
+    ),
+    Version(
+        "2.7",
+        tag="2.7",
+        status="EOL",
+        sphinx_version="2.3.1",
     ),
 ]
 
@@ -251,7 +297,7 @@ def git_clone(repository, directory, branch_or_tag=None):
             raise AssertionError("Not a git repository.")
         run(["git", "-C", directory, "fetch"])
         if branch_or_tag:
-            run(["git", "-C", directory, "reset", "--hard", branch_or_tag])
+            run(["git", "-C", directory, "reset", "--hard", branch_or_tag, "--"])
             run(["git", "-C", directory, "clean", "-dfqx"])
     except (subprocess.CalledProcessError, AssertionError):
         if os.path.exists(directory):
@@ -260,7 +306,7 @@ def git_clone(repository, directory, branch_or_tag=None):
         os.makedirs(directory, mode=0o775)
         run(["git", "clone", repository, directory])
         if branch_or_tag:
-            run(["git", "-C", directory, "reset", "--hard", branch_or_tag])
+            run(["git", "-C", directory, "reset", "--hard", branch_or_tag, "--"])
 
 
 def version_to_tuple(version):
@@ -637,7 +683,9 @@ class DocBuilder(
         if self.version.status == "EOL":
             sphinxopts.append("-D html_context.outdated=1")
         git_clone(
-            "https://github.com/python/cpython.git", self.checkout, self.version.branch
+            "https://github.com/python/cpython.git",
+            self.checkout,
+            self.version.branch_or_tag,
         )
         maketarget = (
             "autobuild-"
