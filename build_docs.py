@@ -896,7 +896,9 @@ class DocBuilder(
             for prefix in prefixes:
                 to_purge.extend(prefix + p for p in changed)
             logging.info("Running CDN purge")
-            run(["curl", "-XPURGE", f"https://docs.python.org/{','.join(to_purge)}"])
+            run(
+                ["curl", "-XPURGE", f"https://docs.python.org/{{{','.join(to_purge)}}}"]
+            )
         logging.info(
             "Publishing done for version: %s, language: %s",
             self.version.name,
