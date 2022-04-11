@@ -386,23 +386,20 @@ def picker_label(version):
     return version.name
 
 
-def setup_indexsidebar(dest_path):
-    versions_li = []
-    for version in sorted(
-        VERSIONS,
-        key=lambda v: version_to_tuple(v.name),
-        reverse=True,
-    ):
-        versions_li.append(
-            '<li><a href="{}">{}</a></li>'.format(version.url, version.title)
-        )
-
-    with open(HERE / "templates" / "indexsidebar.html") as sidebar_template_file:
-        with open(dest_path, "w") as sidebar_file:
-            template = Template(sidebar_template_file.read())
-            sidebar_file.write(
-                template.safe_substitute({"VERSIONS": "\n".join(versions_li)})
+def setup_indexsidebar(dest_path, current_version):
+    with open(
+        HERE / "templates" / "indexsidebar.html", encoding="UTF-8"
+    ) as sidebar_template_file:
+        sidebar_template = jinja2.Template(sidebar_template_file.read())
+    with open(dest_path, "w", encoding="UTF-8") as sidebar_file:
+        sidebar_file.write(
+            sidebar_template.render(
+                current_version=current_version,
+                versions=sorted(
+                    VERSIONS, key=lambda v: version_to_tuple(v.name), reverse=True
+                ),
             )
+        )
 
 
 def setup_switchers(html_root):
@@ -712,7 +709,8 @@ class DocBuilder(
         setup_indexsidebar(
             os.path.join(
                 self.checkout, "Doc", "tools", "templates", "indexsidebar.html"
-            )
+            ),
+            self.version,
         )
         run(
             [
