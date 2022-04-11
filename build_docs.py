@@ -340,7 +340,7 @@ def git_clone(repository: str, directory: Path, branch_or_tag=None):
         if directory.exists():
             shutil.rmtree(directory)
         logging.info("Cloning %s into %s", repository, directory)
-        directory.mkdir(mode=0o775)
+        directory.mkdir(mode=0o775, parents=True, exist_ok=True)
         run(["git", "clone", repository, directory])
         if branch_or_tag:
             run(["git", "-C", directory, "reset", "--hard", branch_or_tag, "--"])
@@ -394,11 +394,14 @@ def translation_branch(locale_repo, locale_clone_dir, needed_version: str):
 
     This function looks for remote branches on the given repo, and
     returns the name of the nearest existing branch.
+
+    It could be enhanced to return tags, if needed, just return the
+    tag as a string (without the `origin/` branch prefix).
     """
     git_clone(locale_repo, locale_clone_dir)
     remote_branches = run(["git", "-C", locale_clone_dir, "branch", "-r"]).stdout
     branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
-    return locate_nearest_version(branches, needed_version)
+    return "origin/" + locate_nearest_version(branches, needed_version)
 
 
 @contextmanager
