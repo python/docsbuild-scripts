@@ -19,12 +19,12 @@ Modified by Julien Palard to build translations.
 
 """
 
+from argparse import ArgumentParser
 import filecmp
 from itertools import product
 import json
 import logging
 import logging.handlers
-import os
 import re
 import shlex
 import shutil
@@ -33,7 +33,7 @@ import sys
 import time
 from bisect import bisect_left as bisect
 from collections import OrderedDict, namedtuple
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 from pathlib import Path
 from string import Template
 from textwrap import indent
@@ -58,6 +58,8 @@ if not hasattr(shlex, "join"):
 
 
 class Version:
+    """Represents a cpython version and its documentation builds dependencies."""
+
     STATUSES = {"EOL", "security-fixes", "stable", "pre-release", "in development"}
 
     def __init__(
@@ -72,7 +74,7 @@ class Version:
     ):
         if status not in self.STATUSES:
             raise ValueError(
-                "Version status expected to be in {}".format(", ".join(self.STATUSES))
+                f"Version status expected to be in {', '.join(self.STATUSES)}"
             )
         self.name = name
         if branch is not None and tag is not None:
@@ -89,29 +91,36 @@ class Version:
 
     @property
     def requirements(self):
+        """Generate the right requirements for this version, pin
+        breaking sub-dependencies, like jinja2, as needed."""
         reqs = [
             "blurb",
             "jieba",
-            "sphinx=={}".format(self.sphinx_version),
+            f"sphinx=={self.sphinx_version}",
         ]
-        if tuple(int(part) for part in self.sphinx_version.split(".")) < (4, 5):
+
+        if version_to_tuple(self.sphinx_version) < (4, 5):
             reqs += ["jinja2<3.1"]
         return reqs
 
     @property
     def changefreq(self):
+        """Estimate this version change frequency, for the sitemap."""
         return {"EOL": "never", "security-fixes": "yearly"}.get(self.status, "daily")
 
     def as_tuple(self):
-        return tuple(int(part) for part in self.name.split("."))
+        """This version name as tuple, for easy comparisons."""
+        return version_to_tuple(self.name)
 
     @property
     def url(self):
-        return "https://docs.python.org/{}/".format(self.name)
+        """The doc URL of this version in production."""
+        return f"https://docs.python.org/{self.name}/"
 
     @property
     def title(self):
-        return "Python {} ({})".format(self.name, self.status)
+        """The title of this version's doc, for the sidebar."""
+        return f"Python {self.name} ({self.status})"
 
     @staticmethod
     def filter(versions, branch=None):
@@ -127,12 +136,23 @@ class Version:
         return [v for v in versions if v.status not in ("EOL", "security-fixes")]
 
     @staticmethod
-    def current_stable(versions):
-        return max([v for v in versions if v.status == "stable"], key=Version.as_tuple)
+    def current_stable():
+        """Find the current stable cPython version."""
+        return max([v for v in VERSIONS if v.status == "stable"], key=Version.as_tuple)
 
     @staticmethod
-    def current_dev(versions):
-        return max([v for v in versions], key=Version.as_tuple)
+    def current_dev():
+        """Find the current de cPython version."""
+        return max(VERSIONS, key=Version.as_tuple)
+
+    @property
+    def picker_label(self):
+        """Forge the label of a version picker."""
+        if self.status == "in development":
+            return f"dev ({self.name})"
+        if self.status == "pre-release":
+            return f"pre ({self.name})"
+        return self.name
 
 
 Language = namedtuple(
@@ -244,6 +264,7 @@ LANGUAGES = {
 
 def run(cmd) -> subprocess.CompletedProcess:
     """Like subprocess.run, with logging before and after the command execution."""
+    cmd = [str(arg) for arg in cmd]
     cmdstring = shlex.join(cmd)
     logging.debug("Run: %r", cmdstring)
     result = subprocess.run(
@@ -287,33 +308,35 @@ def changed_files(left, right):
     return changed
 
 
-def git_clone(repository, directory, branch_or_tag=None):
+def git_clone(repository: str, directory: Path, branch_or_tag=None):
     """Clone or update the given repository in the given directory.
     Optionally checking out a branch.
     """
     logging.info("Updating repository %s in %s", repository, directory)
     try:
-        if not os.path.isdir(os.path.join(directory, ".git")):
+        if not (directory / ".git").is_dir():
             raise AssertionError("Not a git repository.")
         run(["git", "-C", directory, "fetch"])
         if branch_or_tag:
             run(["git", "-C", directory, "reset", "--hard", branch_or_tag, "--"])
             run(["git", "-C", directory, "clean", "-dfqx"])
     except (subprocess.CalledProcessError, AssertionError):
-        if os.path.exists(directory):
+        if directory.exists():
             shutil.rmtree(directory)
         logging.info("Cloning %s into %s", repository, directory)
-        os.makedirs(directory, mode=0o775)
+        directory.mkdir(mode=0o775)
         run(["git", "clone", repository, directory])
         if branch_or_tag:
             run(["git", "-C", directory, "reset", "--hard", branch_or_tag, "--"])
 
 
 def version_to_tuple(version):
+    """Transform a version string to a tuple, for easy comparisons."""
     return tuple(int(part) for part in version.split("."))
 
 
 def tuple_to_version(version_tuple):
+    """Reverse version_to_tuple."""
     return ".".join(str(part) for part in version_tuple)
 
 
@@ -363,30 +386,23 @@ def translation_branch(locale_repo, locale_clone_dir, needed_version: str):
 
 
 @contextmanager
-def edit(file):
+def edit(file: Path):
     """Context manager to edit a file "in place", use it as:
+
     with edit("/etc/hosts") as i, o:
         for line in i:
             o.write(line.replace("localhoat", "localhost"))
     """
     temporary = file.with_name(file.name + ".tmp")
-    with suppress(OSError):
-        os.unlink(temporary)
-    with open(file) as input_file:
-        with open(temporary, "w") as output_file:
+    temporary.unlink(missing_ok=True)
+    with open(file, encoding="UTF-8") as input_file:
+        with open(temporary, "w", encoding="UTF-8") as output_file:
             yield input_file, output_file
-    os.rename(temporary, file)
-
-
-def picker_label(version):
-    if version.status == "in development":
-        return "dev ({})".format(version.name)
-    if version.status == "pre-release":
-        return "pre ({})".format(version.name)
-    return version.name
+    temporary.rename(file)
 
 
 def setup_indexsidebar(dest_path):
+    """Build indexsidebar.html for Sphinx."""
     versions_li = []
     for version in sorted(
         VERSIONS,
@@ -405,53 +421,50 @@ def setup_indexsidebar(dest_path):
             )
 
 
-def setup_switchers(html_root):
+def setup_switchers(html_root: Path):
     """Setup cross-links between cpython versions:
     - Cross-link various languages in a language switcher
     - Cross-link various versions in a version switcher
     """
-    with open(HERE / "templates" / "switchers.js") as switchers_template_file:
-        with open(
-            os.path.join(html_root, "_static", "switchers.js"), "w"
-        ) as switchers_file:
-            template = Template(switchers_template_file.read())
-            switchers_file.write(
-                template.safe_substitute(
-                    {
-                        "LANGUAGES": json.dumps(
-                            OrderedDict(
-                                sorted(
-                                    [
-                                        (language.tag, language.name)
-                                        for language in LANGUAGES
-                                        if language.in_prod
-                                    ]
-                                )
+    with open(
+        HERE / "templates" / "switchers.js", encoding="UTF-8"
+    ) as switchers_template_file:
+        template = Template(switchers_template_file.read())
+    switchers_path = html_root / "_static" / "switchers.js"
+    switchers_path.write_text(
+        template.safe_substitute(
+            {
+                "LANGUAGES": json.dumps(
+                    OrderedDict(
+                        sorted(
+                            [
+                                (language.tag, language.name)
+                                for language in LANGUAGES
+                                if language.in_prod
+                            ]
+                        )
+                    )
+                ),
+                "VERSIONS": json.dumps(
+                    OrderedDict(
+                        [
+                            (version.name, version.picker_label)
+                            for version in sorted(
+                                VERSIONS,
+                                key=lambda v: version_to_tuple(v.name),
+                                reverse=True,
                             )
-                        ),
-                        "VERSIONS": json.dumps(
-                            OrderedDict(
-                                [
-                                    (version.name, picker_label(version))
-                                    for version in sorted(
-                                        VERSIONS,
-                                        key=lambda v: version_to_tuple(v.name),
-                                        reverse=True,
-                                    )
-                                ]
-                            )
-                        ),
-                    }
-                )
-            )
+                        ]
+                    )
+                ),
+            }
+        ),
+        encoding="UTF-8",
+    )
     for file in Path(html_root).glob("**/*.html"):
         depth = len(file.relative_to(html_root).parts) - 1
-        script = (
-            '    <script type="text/javascript" src="{}_static/switchers.js">'.format(
-                "../" * depth
-            )
-            + "</script>\n"
-        )
+        src = f"{'../' * depth}_static/switchers.js"
+        script = f'    <script type="text/javascript" src="{src}"></script>\n"'
         with edit(file) as (ifile, ofile):
             for line in ifile:
                 if line == script:
@@ -461,18 +474,19 @@ def setup_switchers(html_root):
                 ofile.write(line)
 
 
-def build_robots_txt(www_root, group, skip_cache_invalidation):
-    if not Path(www_root).exists():
+def build_robots_txt(www_root: Path, group, skip_cache_invalidation):
+    """Disallow crawl of EOL versions in robots.txt."""
+    if not www_root.exists():
         logging.info("Skipping robots.txt generation (www root does not even exists).")
         return
-    robots_file = os.path.join(www_root, "robots.txt")
-    with open(HERE / "templates" / "robots.txt") as robots_txt_template_file:
-        with open(robots_file, "w") as robots_txt_file:
-            template = jinja2.Template(robots_txt_template_file.read())
-            robots_txt_file.write(
-                template.render(languages=LANGUAGES, versions=VERSIONS) + "\n"
-            )
-    os.chmod(robots_file, 0o775)
+    robots_file = www_root / "robots.txt"
+    with open(HERE / "templates" / "robots.txt", encoding="UTF-8") as template_file:
+        template = jinja2.Template(template_file.read())
+    with open(robots_file, "w", encoding="UTF-8") as robots_txt_file:
+        robots_txt_file.write(
+            template.render(languages=LANGUAGES, versions=VERSIONS) + "\n"
+        )
+    robots_file.chmod(0o775)
     run(["chgrp", group, robots_file])
     if not skip_cache_invalidation:
         run(
@@ -485,27 +499,30 @@ def build_robots_txt(www_root, group, skip_cache_invalidation):
         )
 
 
-def build_sitemap(www_root):
-    if not Path(www_root).exists():
+def build_sitemap(www_root: Path):
+    """Build a sitemap with all live versions and translations."""
+    if not www_root.exists():
         logging.info("Skipping sitemap generation (www root does not even exists).")
         return
-    with open(HERE / "templates" / "sitemap.xml") as sitemap_template_file:
-        with open(os.path.join(www_root, "sitemap.xml"), "w") as sitemap_file:
-            template = jinja2.Template(sitemap_template_file.read())
-            sitemap_file.write(
-                template.render(languages=LANGUAGES, versions=VERSIONS) + "\n"
-            )
+    with open(HERE / "templates" / "sitemap.xml", encoding="UTF-8") as template_file:
+        template = jinja2.Template(template_file.read())
+    with open(www_root / "sitemap.xml", "w", encoding="UTF-8") as sitemap_file:
+        sitemap_file.write(
+            template.render(languages=LANGUAGES, versions=VERSIONS) + "\n"
+        )
 
 
-def head(lines, n=10):
-    return "\n".join(lines.split("\n")[:n])
+def head(text, lines=10):
+    """Return the first *lines* lines from the given text."""
+    return "\n".join(text.split("\n")[:lines])
 
 
 def version_info():
+    """Handler for --version."""
     try:
         platex_version = head(
             subprocess.check_output(["platex", "--version"], universal_newlines=True),
-            n=3,
+            lines=3,
         )
     except FileNotFoundError:
         platex_version = "Not installed."
@@ -513,12 +530,12 @@ def version_info():
     try:
         xelatex_version = head(
             subprocess.check_output(["xelatex", "--version"], universal_newlines=True),
-            n=2,
+            lines=2,
         )
     except FileNotFoundError:
         xelatex_version = "Not installed."
     print(
-        """
+        f"""
 # platex
 
 {platex_version}
@@ -527,15 +544,12 @@ def version_info():
 # xelatex
 
 {xelatex_version}
-    """.format(
-            platex_version=platex_version,
-            xelatex_version=xelatex_version,
-        )
+    """
     )
 
 
 def parse_args():
-    from argparse import ArgumentParser
+    """Parse command-line arguments."""
 
     parser = ArgumentParser(
         description="Runs a build of the Python docs for various branches."
@@ -555,14 +569,16 @@ def parse_args():
     parser.add_argument(
         "-r",
         "--build-root",
+        type=Path,
         help="Path to a directory containing a checkout per branch.",
-        default="/srv/docsbuild",
+        default=Path("/srv/docsbuild"),
     )
     parser.add_argument(
         "-w",
         "--www-root",
+        type=Path,
         help="Path where generated files will be copied.",
-        default="/srv/docs.python.org",
+        default=Path("/srv/docs.python.org"),
     )
     parser.add_argument(
         "--skip-cache-invalidation",
@@ -576,8 +592,9 @@ def parse_args():
     )
     parser.add_argument(
         "--log-directory",
+        type=Path,
         help="Directory used to store logs.",
-        default="/var/log/docsbuild/",
+        default=Path("/var/log/docsbuild/"),
     )
     parser.add_argument(
         "--languages",
@@ -603,22 +620,21 @@ def parse_args():
         sys.exit(0)
     del args.version
     if args.log_directory:
-        args.log_directory = os.path.abspath(args.log_directory)
+        args.log_directory = args.log_directory.resolve()
     if args.build_root:
-        args.build_root = os.path.abspath(args.build_root)
+        args.build_root = args.build_root.resolve()
     if args.www_root:
-        args.www_root = os.path.abspath(args.www_root)
+        args.www_root = args.www_root.resolve()
     return args
 
 
-def setup_logging(log_directory):
+def setup_logging(log_directory: Path):
+    """Setup logging to stderr if ran by a human, or to a file if ran from a cron."""
     if sys.stderr.isatty():
         logging.basicConfig(format="%(levelname)s:%(message)s", stream=sys.stderr)
     else:
-        Path(log_directory).mkdir(parents=True, exist_ok=True)
-        handler = logging.handlers.WatchedFileHandler(
-            os.path.join(log_directory, "docsbuild.log")
-        )
+        log_directory.mkdir(parents=True, exist_ok=True)
+        handler = logging.handlers.WatchedFileHandler(log_directory / "docsbuild.log")
         handler.setFormatter(logging.Formatter("%(levelname)s:%(asctime)s:%(message)s"))
         logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.DEBUG)
@@ -631,6 +647,8 @@ class DocBuilder(
         "log_directory, skip_cache_invalidation, theme",
     )
 ):
+    """Builder for a cpython version and a language."""
+
     def run(self):
         """Build and publish a Python doc, for a language, and a version."""
         try:
@@ -647,10 +665,12 @@ class DocBuilder(
                 sentry_sdk.capture_exception(err)
 
     @property
-    def checkout(self):
-        return os.path.join(self.build_root, "cpython")
+    def checkout(self) -> Path:
+        """Path to cpython git clone."""
+        return self.build_root / "cpython"
 
     def build(self):
+        """Build this version/language doc."""
         logging.info(
             "Build start for version: %s, language: %s",
             self.version.name,
@@ -659,12 +679,10 @@ class DocBuilder(
         sphinxopts = list(self.language.sphinxopts) + list(self.version.sphinxopts)
         sphinxopts.extend(["-q"])
         if self.language.tag != "en":
-            locale_dirs = os.path.join(self.build_root, self.version.name, "locale")
-            locale_clone_dir = os.path.join(
-                locale_dirs, self.language.iso639_tag, "LC_MESSAGES"
-            )
-            locale_repo = "https://github.com/python/python-docs-{}.git".format(
-                self.language.tag
+            locale_dirs = self.build_root / self.version.name / "locale"
+            locale_clone_dir = locale_dirs / self.language.iso639_tag / "LC_MESSAGES"
+            locale_repo = (
+                f"https://github.com/python/python-docs-{self.language.tag}.git"
             )
             git_clone(
                 locale_repo,
@@ -673,8 +691,8 @@ class DocBuilder(
             )
             sphinxopts.extend(
                 (
-                    "-D locale_dirs={}".format(locale_dirs),
-                    "-D language={}".format(self.language.iso639_tag),
+                    f"-D locale_dirs={locale_dirs}",
+                    f"-D language={self.language.iso639_tag}",
                     "-D gettext_compact=0",
                 )
             )
@@ -695,32 +713,30 @@ class DocBuilder(
             + ("-html" if self.quick else "")
         )
         logging.info("Running make %s", maketarget)
-        python = os.path.join(self.venv, "bin/python")
-        sphinxbuild = os.path.join(self.venv, "bin/sphinx-build")
-        blurb = os.path.join(self.venv, "bin/blurb")
+        python = self.venv / "bin" / "python"
+        sphinxbuild = self.venv / "bin" / "sphinx-build"
+        blurb = self.venv / "bin" / "blurb"
         # Disable cpython switchers, we handle them now:
         run(
             [
                 "sed",
                 "-i",
                 "s/ *-A switchers=1//",
-                os.path.join(self.checkout, "Doc", "Makefile"),
+                self.checkout / "Doc" / "Makefile",
             ]
         )
         setup_indexsidebar(
-            os.path.join(
-                self.checkout, "Doc", "tools", "templates", "indexsidebar.html"
-            )
+            self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html"
         )
         run(
             [
                 "make",
                 "-C",
-                os.path.join(self.checkout, "Doc"),
-                "PYTHON=" + python,
-                "SPHINXBUILD=" + sphinxbuild,
-                "BLURB=" + blurb,
-                "VENVDIR=" + self.venv,
+                self.checkout / "Doc",
+                "PYTHON=" + str(python),
+                "SPHINXBUILD=" + str(sphinxbuild),
+                "BLURB=" + str(blurb),
+                "VENVDIR=" + str(self.venv),
                 "SPHINXOPTS=" + " ".join(sphinxopts),
                 "SPHINXERRORHANDLING=",
                 maketarget,
@@ -728,7 +744,7 @@ class DocBuilder(
         )
         run(["mkdir", "-p", self.log_directory])
         run(["chgrp", "-R", self.group, self.log_directory])
-        setup_switchers(os.path.join(self.checkout, "Doc", "build", "html"))
+        setup_switchers(self.checkout / "Doc" / "build" / "html")
         logging.info(
             "Build done for version: %s, language: %s",
             self.version.name,
@@ -739,12 +755,12 @@ class DocBuilder(
         """Build a venv for the specific version.
         This is used to pin old Sphinx versions to old cpython branches.
         """
-        venv_path = os.path.join(
-            self.build_root, "venv-with-sphinx-" + self.version.sphinx_version
+        venv_path = self.build_root / (
+            "venv-with-sphinx-" + self.version.sphinx_version
         )
         run(["python3", "-m", "venv", venv_path])
         run(
-            [os.path.join(venv_path, "bin", "python"), "-m", "pip", "install"]
+            [venv_path / "bin" / "python", "-m", "pip", "install"]
             + [self.theme]
             + self.version.requirements
         )
@@ -757,22 +773,22 @@ class DocBuilder(
             self.version.name,
             self.language.tag,
         )
-        Path(self.www_root).mkdir(parents=True, exist_ok=True)
+        self.www_root.mkdir(parents=True, exist_ok=True)
         if self.language.tag == "en":
-            target = os.path.join(self.www_root, self.version.name)
+            target = self.www_root / self.version.name
         else:
-            language_dir = os.path.join(self.www_root, self.language.tag)
-            os.makedirs(language_dir, exist_ok=True)
+            language_dir = self.www_root / self.language.tag
+            language_dir.mkdir(parents=True, exist_ok=True)
             try:
                 run(["chgrp", "-R", self.group, language_dir])
             except subprocess.CalledProcessError as err:
                 logging.warning("Can't change group of %s: %s", language_dir, str(err))
-            os.chmod(language_dir, 0o775)
-            target = os.path.join(language_dir, self.version.name)
+            language_dir.chmod(0o775)
+            target = language_dir / self.version.name
 
-        os.makedirs(target, exist_ok=True)
+        target.mkdir(parents=True, exist_ok=True)
         try:
-            os.chmod(target, 0o775)
+            target.chmod(0o775)
         except PermissionError as err:
             logging.warning("Can't change mod of %s: %s", target, str(err))
         try:
@@ -780,21 +796,21 @@ class DocBuilder(
         except subprocess.CalledProcessError as err:
             logging.warning("Can't change group of %s: %s", target, str(err))
 
-        changed = changed_files(os.path.join(self.checkout, "Doc/build/html"), target)
+        changed = changed_files(self.checkout / "Doc" / "build" / "html", target)
         logging.info("Copying HTML files to %s", target)
         run(
             [
                 "chown",
                 "-R",
                 ":" + self.group,
-                os.path.join(self.checkout, "Doc/build/html/"),
+                self.checkout / "Doc" / "build" / "html/",
             ]
         )
-        run(["chmod", "-R", "o+r", os.path.join(self.checkout, "Doc/build/html/")])
+        run(["chmod", "-R", "o+r", self.checkout / "Doc" / "build" / "html"])
         run(
             [
                 "find",
-                os.path.join(self.checkout, "Doc/build/html/"),
+                self.checkout / "Doc" / "build" / "html",
                 "-type",
                 "d",
                 "-exec",
@@ -805,7 +821,7 @@ class DocBuilder(
             ]
         )
         if self.quick:
-            run(["rsync", "-a", os.path.join(self.checkout, "Doc/build/html/"), target])
+            run(["rsync", "-a", self.checkout / "Doc" / "build" / "html", target])
         else:
             run(
                 [
@@ -814,7 +830,7 @@ class DocBuilder(
                     "--delete-delay",
                     "--filter",
                     "P archives/",
-                    os.path.join(self.checkout, "Doc/build/html/"),
+                    self.checkout / "Doc" / "build" / "html",
                     target,
                 ]
             )
@@ -825,7 +841,7 @@ class DocBuilder(
                     "chown",
                     "-R",
                     ":" + self.group,
-                    os.path.join(self.checkout, "Doc/dist/"),
+                    self.checkout / "Doc" / "dist",
                 ]
             )
             run(
@@ -833,11 +849,11 @@ class DocBuilder(
                     "chmod",
                     "-R",
                     "o+r",
-                    os.path.join(self.checkout, os.path.join("Doc/dist/")),
+                    self.checkout / "Doc" / "dist",
                 ]
             )
-            run(["mkdir", "-m", "o+rx", "-p", os.path.join(target, "archives")])
-            run(["chown", ":" + self.group, os.path.join(target, "archives")])
+            run(["mkdir", "-m", "o+rx", "-p", target / "archives"])
+            run(["chown", ":" + self.group, target / "archives"])
             run(
                 [
                     "cp",
@@ -846,16 +862,16 @@ class DocBuilder(
                         str(dist)
                         for dist in (Path(self.checkout) / "Doc" / "dist").glob("*")
                     ],
-                    os.path.join(target, "archives"),
+                    target / "archives",
                 ]
             )
             changed.append("archives/")
-            for fn in os.listdir(os.path.join(target, "archives")):
-                changed.append("archives/" + fn)
+            for file_name in target.iterdir("archives"):
+                changed.append("archives/" + file_name)
 
         logging.info("%s files changed", len(changed))
         if changed and not self.skip_cache_invalidation:
-            targets_dir = self.www_root
+            targets_dir = str(self.www_root)
             prefixes = run(["find", "-L", targets_dir, "-samefile", target]).stdout
             prefixes = prefixes.replace(targets_dir + "/", "")
             prefixes = [prefix + "/" for prefix in prefixes.split("\n") if prefix]
@@ -863,9 +879,7 @@ class DocBuilder(
             for prefix in prefixes:
                 to_purge.extend(prefix + p for p in changed)
             logging.info("Running CDN purge")
-            run(
-                ["curl", "-XPURGE", "https://docs.python.org/{%s}" % ",".join(to_purge)]
-            )
+            run(["curl", "-XPURGE", f"https://docs.python.org/{','.join(to_purge)}"])
         logging.info(
             "Publishing done for version: %s, language: %s",
             self.version.name,
@@ -874,6 +888,7 @@ class DocBuilder(
 
 
 def symlink(www_root: Path, language: Language, directory: str, name: str, group: str):
+    """Used by slash_3_symlink and dev_symlink to maintain symlinks."""
     if language.tag == "en":  # english is rooted on /, no /en/
         path = www_root
     else:
@@ -882,7 +897,7 @@ def symlink(www_root: Path, language: Language, directory: str, name: str, group
     directory_path = path / directory
     if not directory_path.exists():
         return  # No touching link, dest doc not built yet.
-    if link.exists() and os.readlink(str(link)) == directory:
+    if link.exists() and str(link.readlink()) == directory:
         return  # Link is already pointing to right doc.
     if link.exists():
         link.unlink()
@@ -890,7 +905,7 @@ def symlink(www_root: Path, language: Language, directory: str, name: str, group
     run(["chown", "-h", ":" + group, str(link)])
 
 
-def slash_3_symlink(languages, versions, www_root, group):
+def slash_3_symlink(www_root: Path, group):
     """Maintains the /3/ symlinks for each languages.
 
     Like:
@@ -898,13 +913,12 @@ def slash_3_symlink(languages, versions, www_root, group):
     - /fr/3/ → /fr/3.9/
     - /es/3/ → /es/3.9/
     """
-    www_root = Path(www_root)
-    current_stable = Version.current_stable(versions).name
-    for language in languages:
+    current_stable = Version.current_stable().name
+    for language in LANGUAGES:
         symlink(www_root, language, current_stable, "3", group)
 
 
-def dev_symlink(languages, versions, www_root, group):
+def dev_symlink(www_root: Path, group):
     """Maintains the /dev/ symlinks for each languages.
 
     Like:
@@ -912,13 +926,13 @@ def dev_symlink(languages, versions, www_root, group):
     - /fr/dev/ → /fr/3.11/
     - /es/dev/ → /es/3.11/
     """
-    www_root = Path(www_root)
-    current_dev = Version.current_dev(versions).name
-    for language in languages:
+    current_dev = Version.current_dev().name
+    for language in LANGUAGES:
         symlink(www_root, language, current_dev, "dev", group)
 
 
 def main():
+    """Script entry point."""
     args = parse_args()
     setup_logging(args.log_directory)
     languages_dict = {language.tag: language for language in LANGUAGES}
@@ -934,7 +948,7 @@ def main():
                 scope.set_tag("version", version.name)
                 scope.set_tag("language", language.tag)
         try:
-            lock = zc.lockfile.LockFile(os.path.join(HERE, "build_docs.lock"))
+            lock = zc.lockfile.LockFile(HERE / "build_docs.lock")
             builder = DocBuilder(version, language, **vars(args))
             builder.run()
         except zc.lockfile.LockError:
@@ -946,8 +960,8 @@ def main():
 
     build_sitemap(args.www_root)
     build_robots_txt(args.www_root, args.group, args.skip_cache_invalidation)
-    slash_3_symlink(LANGUAGES, VERSIONS, args.www_root, args.group)
-    dev_symlink(LANGUAGES, VERSIONS, args.www_root, args.group)
+    slash_3_symlink(args.www_root, args.group)
+    dev_symlink(args.www_root, args.group)
 
 
 if __name__ == "__main__":
