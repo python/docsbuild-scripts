@@ -154,6 +154,22 @@ class Version:
             return f"pre ({self.name})"
         return self.name
 
+    def setup_indexsidebar(self, dest_path):
+        """Build indexsidebar.html for Sphinx."""
+        with open(
+            HERE / "templates" / "indexsidebar.html", encoding="UTF-8"
+        ) as sidebar_template_file:
+            sidebar_template = jinja2.Template(sidebar_template_file.read())
+        with open(dest_path, "w", encoding="UTF-8") as sidebar_file:
+            sidebar_file.write(
+                sidebar_template.render(
+                    current_version=self,
+                    versions=sorted(
+                        VERSIONS, key=lambda v: version_to_tuple(v.name), reverse=True
+                    ),
+                )
+            )
+
 
 Language = namedtuple(
     "Language", ["tag", "iso639_tag", "name", "in_prod", "sphinxopts"]
@@ -399,23 +415,6 @@ def edit(file: Path):
         with open(temporary, "w", encoding="UTF-8") as output_file:
             yield input_file, output_file
     temporary.rename(file)
-
-
-def setup_indexsidebar(dest_path, current_version):
-    """Build indexsidebar.html for Sphinx."""
-    with open(
-        HERE / "templates" / "indexsidebar.html", encoding="UTF-8"
-    ) as sidebar_template_file:
-        sidebar_template = jinja2.Template(sidebar_template_file.read())
-    with open(dest_path, "w", encoding="UTF-8") as sidebar_file:
-        sidebar_file.write(
-            sidebar_template.render(
-                current_version=current_version,
-                versions=sorted(
-                    VERSIONS, key=lambda v: version_to_tuple(v.name), reverse=True
-                ),
-            )
-        )
 
 
 def setup_switchers(html_root: Path):
@@ -722,9 +721,8 @@ class DocBuilder(
                 self.checkout / "Doc" / "Makefile",
             ]
         )
-        setup_indexsidebar(
-            self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html",
-            self.version,
+        self.version.setup_indexsidebar(
+            self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html"
         )
         run(
             [
