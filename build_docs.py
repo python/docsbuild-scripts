@@ -831,7 +831,14 @@ class DocBuilder(
             ]
         )
         if self.quick:
-            run(["rsync", "-a", self.checkout / "Doc" / "build" / "html", target])
+            run(
+                [
+                    "rsync",
+                    "-a",
+                    str(self.checkout / "Doc" / "build" / "html") + "/",
+                    target,
+                ]
+            )
         else:
             run(
                 [
@@ -840,7 +847,7 @@ class DocBuilder(
                     "--delete-delay",
                     "--filter",
                     "P archives/",
-                    self.checkout / "Doc" / "build" / "html",
+                    str(self.checkout / "Doc" / "build" / "html") + "/",
                     target,
                 ]
             )
