@@ -518,8 +518,7 @@ def version_info():
     except FileNotFoundError:
         xelatex_version = "Not installed."
     print(
-        """build_docs: {VERSION}
-
+        """
 # platex
 
 {platex_version}
@@ -529,7 +528,6 @@ def version_info():
 
 {xelatex_version}
     """.format(
-            VERSION=VERSION,
             platex_version=platex_version,
             xelatex_version=xelatex_version,
         )
