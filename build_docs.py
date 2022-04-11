@@ -25,6 +25,7 @@ from itertools import product
 import json
 import logging
 import logging.handlers
+from functools import total_ordering
 import re
 import shlex
 import shutil
@@ -57,6 +58,7 @@ if not hasattr(shlex, "join"):
     )
 
 
+@total_ordering
 class Version:
     """Represents a cpython version and its documentation builds dependencies."""
 
@@ -170,6 +172,12 @@ class Version:
                 )
             )
 
+    def __eq__(self, other):
+        return self.name == other.name
+
+    def __gt__(self, other):
+        return self.as_tuple() > other.as_tuple()
+
 
 Language = namedtuple(
     "Language", ["tag", "iso639_tag", "name", "in_prod", "sphinxopts"]
@@ -184,7 +192,7 @@ VERSIONS = [
         "3.11",
         branch="origin/main",
         status="in development",
-        sphinx_version="4.2.0",
+        sphinx_version="4.5.0",
         sphinxopts=["-j4"],
     ),
     Version(

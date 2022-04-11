@@ -5,7 +5,6 @@ import argparse
 import asyncio
 import logging
 import re
-import subprocess
 
 import httpx
 from tabulate import tabulate
@@ -38,12 +37,15 @@ def find_sphinx_spec(text: str):
         """sphinx[=<>~]{1,2}[0-9.]{3,}|needs_sphinx = [0-9.'"]*""", text, flags=re.I
     ):
         return found.group(0).replace(" ", "")
+    return "ø"
 
 
 def find_sphinx_in_file(repo: git.Repo, branch, filename):
     upstream = remote_by_url(repo, "github.com.python").name
+    # Just in case you don't use origin/:
+    branch = branch.replace("origin/", upstream + "/")
     try:
-        return find_sphinx_spec(repo.git.show(f"{upstream}/{branch}:{filename}"))
+        return find_sphinx_spec(repo.git.show(f"{branch}:{filename}"))
     except git.exc.GitCommandError:
         return "ø"
 
@@ -61,25 +63,26 @@ CONF_FILES = {
 def search_sphinx_versions_in_cpython(repo: git.Repo):
     repo.git.fetch("https://github.com/python/cpython")
     table = []
-    for version in build_docs.VERSIONS:
+    for version in sorted(build_docs.VERSIONS):
         table.append(
             [
-                version.branch,
+                version.name,
                 *[
-                    find_sphinx_in_file(repo, version.branch, filename)
+                    find_sphinx_in_file(repo, version.branch_or_tag, filename)
                     for filename in CONF_FILES.values()
                 ],
             ]
         )
-    print(tabulate(table, headers=["branch", *CONF_FILES.keys()], tablefmt="rst"))
+    print(tabulate(table, headers=["version", *CONF_FILES.keys()], tablefmt="rst"))
 
 
 async def get_version_in_prod(language, version):
-    url = f"https://docs.python.org/{language}/{version}".replace("/en/", "/")
-    try:
-        response = await httpx.get(url, timeout=5)
-    except httpx.exceptions.TimeoutException:
-        return "TIMED OUT"
+    url = f"https://docs.python.org/{language}/{version}/".replace("/en/", "/")
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, timeout=10)
+        except httpx.ConnectTimeout:
+            return "(timeout)"
     text = response.text.encode("ASCII", errors="ignore").decode("ASCII")
     if created_using := re.search(
         r"(?:sphinx.pocoo.org|www.sphinx-doc.org).*?([0-9.]+[0-9])", text, flags=re.M
@@ -90,7 +93,7 @@ async def get_version_in_prod(language, version):
 
 async def which_sphinx_is_used_in_production():
     table = []
-    for version in build_docs.VERSIONS:
+    for version in sorted(build_docs.VERSIONS):
         table.append(
             [
                 version.name,
@@ -107,7 +110,7 @@ async def which_sphinx_is_used_in_production():
             table,
             disable_numparse=True,
             headers=[
-                "branch",
+                "version",
                 *[language.tag for language in sorted(build_docs.LANGUAGES)],
             ],
             tablefmt="rst",
@@ -117,6 +120,8 @@ async def which_sphinx_is_used_in_production():
 
 def main():
     logging.basicConfig(level=logging.INFO)
+    logging.getLogger("charset_normalizer").setLevel(logging.WARNING)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
     args = parse_args()
     repo = git.Repo(args.cpython_clone)
     print("Sphinx configuration in various branches:", end="\n\n")
