@@ -20,6 +20,7 @@ Modified by Julien Palard to build translations.
 """
 
 from argparse import ArgumentParser
+from contextlib import suppress
 import filecmp
 from itertools import product
 import json
@@ -421,7 +422,8 @@ def edit(file: Path):
             o.write(line.replace("localhoat", "localhost"))
     """
     temporary = file.with_name(file.name + ".tmp")
-    temporary.unlink(missing_ok=True)
+    with suppress(FileNotFoundError):
+        temporary.unlink()
     with open(file, encoding="UTF-8") as input_file:
         with open(temporary, "w", encoding="UTF-8") as output_file:
             yield input_file, output_file
