@@ -883,8 +883,8 @@ class DocBuilder(
                 ]
             )
             changed.append("archives/")
-            for file_name in target.iterdir("archives"):
-                changed.append("archives/" + file_name)
+            for file in (target / "archives").iterdir():
+                changed.append("archives/" + file.name)
 
         logging.info("%s files changed", len(changed))
         if changed and not self.skip_cache_invalidation:
