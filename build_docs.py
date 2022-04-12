@@ -768,7 +768,7 @@ class DocBuilder(
         venv_path = self.build_root / (
             "venv-with-sphinx-" + self.version.sphinx_version
         )
-        run(["python3", "-m", "venv", venv_path])
+        run([sys.executable, "-m", "venv", venv_path])
         run(
             [venv_path / "bin" / "python", "-m", "pip", "install"]
             + [self.theme]
