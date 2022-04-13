@@ -95,8 +95,9 @@ class Version:
 
     @property
     def requirements(self):
-        """Generate the right requirements for this version, pin
-        breaking sub-dependencies, like jinja2, as needed."""
+        """Generate the right requirements for this version, pinning breaking
+        sub-dependencies as needed.
+        """
         reqs = [
             "blurb",
             "jieba",
@@ -104,7 +105,11 @@ class Version:
         ]
 
         if version_to_tuple(self.sphinx_version) < (4, 5):
+            # see https://github.com/python/cpython/issues/91294
             reqs += ["jinja2<3.1"]
+        if version_to_tuple(self.sphinx_version) <= (3, 2, 1):
+            # see https://github.com/python/cpython/issues/91483
+            reqs += ["docutils<=0.17.1"]
         return reqs
 
     @property
