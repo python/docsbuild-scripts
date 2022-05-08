@@ -196,9 +196,16 @@ Language = namedtuple(
 # Please keep the list in reverse-order for ease of editing.
 VERSIONS = [
     Version(
-        "3.11",
+        "3.12",
         branch="origin/main",
         status="in development",
+        sphinx_version="4.5.0",
+        sphinxopts=["-j4"],
+    ),
+    Version(
+        "3.11",
+        branch="origin/3.11",
+        status="pre-release",
         sphinx_version="4.5.0",
         sphinxopts=["-j4"],
     ),
