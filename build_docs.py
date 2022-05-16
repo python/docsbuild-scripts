@@ -200,21 +200,18 @@ VERSIONS = [
         branch="origin/main",
         status="in development",
         sphinx_version="4.5.0",
-        sphinxopts=["-j4"],
     ),
     Version(
         "3.11",
         branch="origin/3.11",
         status="pre-release",
         sphinx_version="4.5.0",
-        sphinxopts=["-j4"],
     ),
     Version(
         "3.10",
         branch="origin/3.10",
         status="stable",
         sphinx_version="3.2.1",
-        sphinxopts=["-j4"],
     ),
     Version(
         "3.9",
