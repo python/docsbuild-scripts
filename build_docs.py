@@ -916,7 +916,7 @@ class DocBuilder(
 
 
 def symlink(www_root: Path, language: Language, directory: str, name: str, group: str):
-    """Used by slash_3_symlink and dev_symlink to maintain symlinks."""
+    """Used by major_symlinks and dev_symlink to maintain symlinks."""
     if language.tag == "en":  # english is rooted on /, no /en/
         path = www_root
     else:
@@ -933,8 +933,8 @@ def symlink(www_root: Path, language: Language, directory: str, name: str, group
     run(["chown", "-h", ":" + group, str(link)])
 
 
-def slash_3_symlink(www_root: Path, group):
-    """Maintains the /3/ symlinks for each languages.
+def major_symlinks(www_root: Path, group):
+    """Maintains the /2/ and /3/ symlinks for each languages.
 
     Like:
     - /3/ → /3.9/
@@ -944,6 +944,7 @@ def slash_3_symlink(www_root: Path, group):
     current_stable = Version.current_stable().name
     for language in LANGUAGES:
         symlink(www_root, language, current_stable, "3", group)
+        symlink(www_root, language, "2.7", "2", group)
 
 
 def dev_symlink(www_root: Path, group):
@@ -988,7 +989,7 @@ def main():
 
     build_sitemap(args.www_root)
     build_robots_txt(args.www_root, args.group, args.skip_cache_invalidation)
-    slash_3_symlink(args.www_root, args.group)
+    major_symlinks(args.www_root, args.group)
     dev_symlink(args.www_root, args.group)
 
 
