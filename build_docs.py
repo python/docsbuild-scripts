@@ -959,6 +959,28 @@ def dev_symlink(www_root: Path, group):
     for language in LANGUAGES:
         symlink(www_root, language, current_dev, "dev", group)
 
+def proofread_canonicals(www_root: Path) -> None:
+    """In www_root we check that all canonical links point to existing contents.
+
+    It can happen that a canonical is "broken":
+
+    - /3.11/whatsnew/3.11.html typically would link to
+    /3/whatsnew/3.11.html, which may not exist yet.
+    """
+    canonical_re = re.compile(
+        """<link rel="canonical" href="https://docs.python.org/([^"]*)" />"""
+    )
+    for file in www_root.glob("**/*.html"):
+        html = file.read_text(encoding="UTF-8")
+        canonical = canonical_re.search(html)
+        if not canonical:
+            continue
+        target = canonical.group(1)
+        if not (www_root / target).exists():
+            logging.info("Removing broken canonical from %s to %s", file, target)
+            html = html.replace(canonical.group(0), "")
+            file.write_text(html, encoding="UTF-8")
+
 
 def main():
     """Script entry point."""
@@ -991,6 +1013,7 @@ def main():
     build_robots_txt(args.www_root, args.group, args.skip_cache_invalidation)
     major_symlinks(args.www_root, args.group)
     dev_symlink(args.www_root, args.group)
+    proofread_canonicals(args.www_root)
 
 
 if __name__ == "__main__":
