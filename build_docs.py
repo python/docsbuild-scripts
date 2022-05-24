@@ -531,6 +531,14 @@ def build_sitemap(www_root: Path):
         )
 
 
+def build_404(www_root: Path):
+    """Build a nice 404 error page to display in case PDFs are not built yet."""
+    if not www_root.exists():
+        logging.info("Skipping 404 page generation (www root does not even exists).")
+        return
+    shutil.copyfile(HERE / "templates" / "404.html", www_root / "404.html")
+
+
 def head(text, lines=10):
     """Return the first *lines* lines from the given text."""
     return "\n".join(text.split("\n")[:lines])
@@ -1011,6 +1019,7 @@ def main():
             lock.close()
 
     build_sitemap(args.www_root)
+    build_404(args.www_root)
     build_robots_txt(args.www_root, args.group, args.skip_cache_invalidation)
     major_symlinks(args.www_root, args.group)
     dev_symlink(args.www_root, args.group)
