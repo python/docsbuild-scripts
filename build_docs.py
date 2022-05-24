@@ -483,7 +483,7 @@ def setup_switchers(html_root: Path):
     for file in Path(html_root).glob("**/*.html"):
         depth = len(file.relative_to(html_root).parts) - 1
         src = f"{'../' * depth}_static/switchers.js"
-        script = f'    <script type="text/javascript" src="{src}"></script>\n"'
+        script = f'    <script type="text/javascript" src="{src}"></script>\n'
         with edit(file) as (ifile, ofile):
             for line in ifile:
                 if line == script:
