@@ -211,7 +211,7 @@ VERSIONS = [
         "3.10",
         branch="origin/3.10",
         status="stable",
-        sphinx_version="3.2.1",
+        sphinx_version="3.4.3",
     ),
     Version(
         "3.9",
@@ -958,6 +958,7 @@ def dev_symlink(www_root: Path, group):
     current_dev = Version.current_dev().name
     for language in LANGUAGES:
         symlink(www_root, language, current_dev, "dev", group)
+
 
 def proofread_canonicals(www_root: Path) -> None:
     """In www_root we check that all canonical links point to existing contents.
