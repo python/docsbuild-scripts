@@ -980,7 +980,7 @@ def proofread_canonicals(www_root: Path) -> None:
         """<link rel="canonical" href="https://docs.python.org/([^"]*)" />"""
     )
     for file in www_root.glob("**/*.html"):
-        html = file.read_text(encoding="UTF-8")
+        html = file.read_text(encoding="UTF-8", errors="surrogateescape")
         canonical = canonical_re.search(html)
         if not canonical:
             continue
@@ -988,7 +988,7 @@ def proofread_canonicals(www_root: Path) -> None:
         if not (www_root / target).exists():
             logging.info("Removing broken canonical from %s to %s", file, target)
             html = html.replace(canonical.group(0), "")
-            file.write_text(html, encoding="UTF-8")
+            file.write_text(html, encoding="UTF-8", errors="surrogateescape")
 
 
 def main():
