@@ -43,6 +43,7 @@ from textwrap import indent
 
 import zc.lockfile
 import jinja2
+import requests
 
 HERE = Path(__file__).resolve().parent
 
@@ -508,14 +509,7 @@ def build_robots_txt(www_root: Path, group, skip_cache_invalidation):
     robots_file.chmod(0o775)
     run(["chgrp", group, robots_file])
     if not skip_cache_invalidation:
-        run(
-            [
-                "curl",
-                "--silent",
-                "-XPURGE",
-                "https://docs.python.org/robots.txt",
-            ]
-        )
+        requests.request("PURGE", "https://docs.python.org/robots.txt")
 
 
 def build_sitemap(www_root: Path):
@@ -968,7 +962,7 @@ def dev_symlink(www_root: Path, group):
         symlink(www_root, language, current_dev, "dev", group)
 
 
-def proofread_canonicals(www_root: Path) -> None:
+def proofread_canonicals(www_root: Path, skip_cache_invalidation: bool) -> None:
     """In www_root we check that all canonical links point to existing contents.
 
     It can happen that a canonical is "broken":
@@ -989,6 +983,10 @@ def proofread_canonicals(www_root: Path) -> None:
             logging.info("Removing broken canonical from %s to %s", file, target)
             html = html.replace(canonical.group(0), "")
             file.write_text(html, encoding="UTF-8", errors="surrogateescape")
+            if not skip_cache_invalidation:
+                url = str(file).replace("/srv/", "https://")
+                logging.info("Purging %s from CDN", url)
+                requests.request("PURGE", url)
 
 
 def main():
@@ -1023,7 +1021,7 @@ def main():
     build_robots_txt(args.www_root, args.group, args.skip_cache_invalidation)
     major_symlinks(args.www_root, args.group)
     dev_symlink(args.www_root, args.group)
-    proofread_canonicals(args.www_root)
+    proofread_canonicals(args.www_root, args.skip_cache_invalidation)
 
 
 if __name__ == "__main__":

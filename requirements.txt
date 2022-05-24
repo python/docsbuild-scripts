@@ -1,3 +1,4 @@
 jinja2
+requests
 sentry-sdk
 zc.lockfile
