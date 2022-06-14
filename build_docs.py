@@ -513,7 +513,7 @@ def build_robots_txt(www_root: Path, group, skip_cache_invalidation):
         requests.request("PURGE", "https://docs.python.org/robots.txt")
 
 
-def build_sitemap(www_root: Path):
+def build_sitemap(www_root: Path, group):
     """Build a sitemap with all live versions and translations."""
     if not www_root.exists():
         logging.info("Skipping sitemap generation (www root does not even exists).")
@@ -524,14 +524,19 @@ def build_sitemap(www_root: Path):
         sitemap_file.write(
             template.render(languages=LANGUAGES, versions=VERSIONS) + "\n"
         )
+    sitemap_file.chmod(0o775)
+    run(["chgrp", group, sitemap_file])
 
 
-def build_404(www_root: Path):
+def build_404(www_root: Path, group):
     """Build a nice 404 error page to display in case PDFs are not built yet."""
     if not www_root.exists():
         logging.info("Skipping 404 page generation (www root does not even exists).")
         return
-    shutil.copyfile(HERE / "templates" / "404.html", www_root / "404.html")
+    not_found_file = www_root / "404.html"
+    shutil.copyfile(HERE / "templates" / "404.html", not_found_file)
+    not_found_file.chmod(0o775)
+    run(["chgrp", group, not_found_file])
 
 
 def head(text, lines=10):
