@@ -786,6 +786,7 @@ class DocBuilder(
             + [self.theme]
             + self.version.requirements
         )
+        run([venv_path / "bin" / "python", "-m", "pip", "freeze", "--all"])
         self.venv = venv_path
 
     def copy_build_to_webroot(self):
