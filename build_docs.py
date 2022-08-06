@@ -108,7 +108,7 @@ class Version:
         if version_to_tuple(self.sphinx_version) < (4, 5):
             # see https://github.com/python/cpython/issues/91294
             reqs += ["jinja2<3.1"]
-        if version_to_tuple(self.sphinx_version) <= (3, 5, 4):
+        if version_to_tuple(self.sphinx_version) < (3, 5, 4):
             # see https://github.com/python/cpython/issues/91483
             reqs += ["docutils<=0.17.1"]
         return reqs
