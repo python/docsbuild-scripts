@@ -217,7 +217,7 @@ VERSIONS = [
     Version(
         "3.9",
         branch="origin/3.9",
-        status="stable",
+        status="security-fixes",
         sphinx_version="2.4.4",
     ),
     Version(
