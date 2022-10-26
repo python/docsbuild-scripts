@@ -205,7 +205,7 @@ VERSIONS = [
     Version(
         "3.11",
         branch="origin/3.11",
-        status="pre-release",
+        status="stable",
         sphinx_version="4.5.0",
     ),
     Version(
