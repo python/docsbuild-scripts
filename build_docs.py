@@ -520,10 +520,11 @@ def build_sitemap(www_root: Path, group):
         return
     with open(HERE / "templates" / "sitemap.xml", encoding="UTF-8") as template_file:
         template = jinja2.Template(template_file.read())
-    with open(www_root / "sitemap.xml", "w", encoding="UTF-8") as sitemap_file:
-        sitemap_file.write(
-            template.render(languages=LANGUAGES, versions=VERSIONS) + "\n"
-        )
+    sitemap_file = www_root / "sitemap.xml"
+    sitemap_file.write_text(
+        template.render(languages=LANGUAGES, versions=VERSIONS) + "\n",
+        encoding="UTF-8"
+    )
     sitemap_file.chmod(0o664)
     run(["chgrp", group, sitemap_file])
 
