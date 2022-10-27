@@ -941,6 +941,7 @@ def symlink(www_root: Path, language: Language, directory: str, name: str, group
         link.unlink()
     link.symlink_to(directory)
     run(["chown", "-h", ":" + group, str(link)])
+    purge_path(www_root, link)
 
 
 def major_symlinks(www_root: Path, group):
@@ -995,6 +996,13 @@ def proofread_canonicals(www_root: Path, skip_cache_invalidation: bool) -> None:
                 url = str(file).replace("/srv/", "https://")
                 logging.info("Purging %s from CDN", url)
                 requests.request("PURGE", url)
+
+
+def purge_path(www_root: Path, path: Path):
+    to_purge = [str(file.relative_to(www_root)) for file in path.glob("**/*")]
+    to_purge.append(str(path.relative_to(www_root)))
+    to_purge.append(str(path.relative_to(www_root)) + "/")
+    run(["curl", "-XPURGE", f"https://docs.python.org/{{{','.join(to_purge)}}}"])
 
 
 def main():
