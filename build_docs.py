@@ -524,7 +524,7 @@ def build_sitemap(www_root: Path, group):
         sitemap_file.write(
             template.render(languages=LANGUAGES, versions=VERSIONS) + "\n"
         )
-    sitemap_file.chmod(0o775)
+    sitemap_file.chmod(0o664)
     run(["chgrp", group, sitemap_file])
 
 
@@ -535,7 +535,7 @@ def build_404(www_root: Path, group):
         return
     not_found_file = www_root / "404.html"
     shutil.copyfile(HERE / "templates" / "404.html", not_found_file)
-    not_found_file.chmod(0o775)
+    not_found_file.chmod(0o664)
     run(["chgrp", group, not_found_file])
 
 
@@ -1023,8 +1023,8 @@ def main():
         else:
             lock.close()
 
-    build_sitemap(args.www_root)
-    build_404(args.www_root)
+    build_sitemap(args.www_root, args.group)
+    build_404(args.www_root, args.group)
     build_robots_txt(args.www_root, args.group, args.skip_cache_invalidation)
     major_symlinks(args.www_root, args.group)
     dev_symlink(args.www_root, args.group)
