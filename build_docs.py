@@ -296,6 +296,7 @@ LANGUAGES = {
     Language("zh-tw", "zh_TW", "Traditional Chinese", True, XELATEX_WITH_CJK),
     Language("pl", "pl", "Polish", False, XELATEX_DEFAULT),
     Language("uk", "uk", "Ukrainian", False, XELATEX_DEFAULT),
+    Language("it", "it", "Italian", False, XELATEX_DEFAULT),
 }
 
 
