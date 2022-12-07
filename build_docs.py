@@ -71,10 +71,9 @@ class Version:
         self,
         name,
         *,
+        status,
         branch=None,
         tag=None,
-        status,
-        sphinx_version,
         sphinxopts=(),
     ):
         if status not in self.STATUSES:
@@ -88,7 +87,6 @@ class Version:
             raise ValueError("Please build a version with at least a branch or a tag.")
         self.branch_or_tag = branch or tag
         self.status = status
-        self.sphinx_version = sphinx_version
         self.sphinxopts = list(sphinxopts)
 
     def __repr__(self):
@@ -96,22 +94,28 @@ class Version:
 
     @property
     def requirements(self):
-        """Generate the right requirements for this version, pinning breaking
-        sub-dependencies as needed.
-        """
-        reqs = [
-            "blurb",
-            "jieba",
-            f"sphinx=={self.sphinx_version}",
-        ]
+        """Generate the right requirements for this version.
 
-        if version_to_tuple(self.sphinx_version) < (4, 5):
-            # see https://github.com/python/cpython/issues/91294
-            reqs += ["jinja2<3.1"]
-        if version_to_tuple(self.sphinx_version) < (3, 5, 4):
-            # see https://github.com/python/cpython/issues/91483
-            reqs += ["docutils<=0.17.1"]
-        return reqs
+        Since CPython 3.8 a Doc/requirements.txt file can be used.
+
+        In case the Doc/requirements.txt is absent or wrong (a
+        sub-dependency broke), use this function to override it.
+
+        See https://github.com/python/cpython/issues/91294
+        See https://github.com/python/cpython/issues/91483
+
+        """
+        if self.name == "3.5":
+            return ["jieba", "blurb", "sphinx==1.8.4", "jinja2<3.1", "docutils<=0.17.1"]
+        if self.name in ("3.7", "3.6", "2.7"):
+            return ["jieba", "blurb", "sphinx==2.3.1", "jinja2<3.1", "docutils<=0.17.1"]
+        if self.name == ("3.8", "3.9"):
+            return ["jieba", "blurb", "sphinx==2.4.4", "jinja2<3.1", "docutils<=0.17.1"]
+
+        return [
+            "jieba",  # To improve zh search.
+            "-rrequirements.txt",
+        ]
 
     @property
     def changefreq(self):
@@ -196,60 +200,15 @@ Language = namedtuple(
 #
 # Please keep the list in reverse-order for ease of editing.
 VERSIONS = [
-    Version(
-        "3.12",
-        branch="origin/main",
-        status="in development",
-        sphinx_version="4.5.0",
-    ),
-    Version(
-        "3.11",
-        branch="origin/3.11",
-        status="stable",
-        sphinx_version="4.5.0",
-    ),
-    Version(
-        "3.10",
-        branch="origin/3.10",
-        status="stable",
-        sphinx_version="3.4.3",
-    ),
-    Version(
-        "3.9",
-        branch="origin/3.9",
-        status="security-fixes",
-        sphinx_version="2.4.4",
-    ),
-    Version(
-        "3.8",
-        branch="origin/3.8",
-        status="security-fixes",
-        sphinx_version="2.4.4",
-    ),
-    Version(
-        "3.7",
-        branch="origin/3.7",
-        status="security-fixes",
-        sphinx_version="2.3.1",
-    ),
-    Version(
-        "3.6",
-        tag="3.6",
-        status="EOL",
-        sphinx_version="2.3.1",
-    ),
-    Version(
-        "3.5",
-        tag="3.5",
-        status="EOL",
-        sphinx_version="1.8.4",
-    ),
-    Version(
-        "2.7",
-        tag="2.7",
-        status="EOL",
-        sphinx_version="2.3.1",
-    ),
+    Version("3.12", branch="origin/main", status="in development"),
+    Version("3.11", branch="origin/3.11", status="stable"),
+    Version("3.10", branch="origin/3.10", status="stable"),
+    Version("3.9", branch="origin/3.9", status="security-fixes"),
+    Version("3.8", branch="origin/3.8", status="security-fixes"),
+    Version("3.7", branch="origin/3.7", status="security-fixes"),
+    Version("3.6", tag="3.6", status="EOL"),
+    Version("3.5", tag="3.5", status="EOL"),
+    Version("2.7", tag="2.7", status="EOL"),
 ]
 
 XELATEX_DEFAULT = (
@@ -299,13 +258,14 @@ LANGUAGES = {
 }
 
 
-def run(cmd) -> subprocess.CompletedProcess:
+def run(cmd, cwd=None) -> subprocess.CompletedProcess:
     """Like subprocess.run, with logging before and after the command execution."""
     cmd = [str(arg) for arg in cmd]
     cmdstring = shlex.join(cmd)
     logging.debug("Run: %r", cmdstring)
     result = subprocess.run(
         cmd,
+        cwd=cwd,
         stdin=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         stdout=subprocess.PIPE,
@@ -522,8 +482,7 @@ def build_sitemap(www_root: Path, group):
         template = jinja2.Template(template_file.read())
     sitemap_file = www_root / "sitemap.xml"
     sitemap_file.write_text(
-        template.render(languages=LANGUAGES, versions=VERSIONS) + "\n",
-        encoding="UTF-8"
+        template.render(languages=LANGUAGES, versions=VERSIONS) + "\n", encoding="UTF-8"
     )
     sitemap_file.chmod(0o664)
     run(["chgrp", group, sitemap_file])
@@ -680,6 +639,9 @@ class DocBuilder(
     def run(self):
         """Build and publish a Python doc, for a language, and a version."""
         try:
+            self.clone_cpython()
+            if self.language.tag != "en":
+                self.clone_translation()
             self.build_venv()
             self.build()
             self.copy_build_to_webroot()
@@ -697,6 +659,28 @@ class DocBuilder(
         """Path to cpython git clone."""
         return self.build_root / "cpython"
 
+    def clone_translation(self):
+        locale_repo = f"https://github.com/python/python-docs-{self.language.tag}.git"
+        locale_clone_dir = (
+            self.build_root
+            / self.version.name
+            / "locale"
+            / self.language.iso639_tag
+            / "LC_MESSAGES"
+        )
+        git_clone(
+            locale_repo,
+            locale_clone_dir,
+            translation_branch(locale_repo, locale_clone_dir, self.version.name),
+        )
+
+    def clone_cpython(self):
+        git_clone(
+            "https://github.com/python/cpython.git",
+            self.checkout,
+            self.version.branch_or_tag,
+        )
+
     def build(self):
         """Build this version/language doc."""
         logging.info(
@@ -708,15 +692,6 @@ class DocBuilder(
         sphinxopts.extend(["-q"])
         if self.language.tag != "en":
             locale_dirs = self.build_root / self.version.name / "locale"
-            locale_clone_dir = locale_dirs / self.language.iso639_tag / "LC_MESSAGES"
-            locale_repo = (
-                f"https://github.com/python/python-docs-{self.language.tag}.git"
-            )
-            git_clone(
-                locale_repo,
-                locale_clone_dir,
-                translation_branch(locale_repo, locale_clone_dir, self.version.name),
-            )
             sphinxopts.extend(
                 (
                     f"-D locale_dirs={locale_dirs}",
@@ -726,11 +701,6 @@ class DocBuilder(
             )
         if self.version.status == "EOL":
             sphinxopts.append("-D html_context.outdated=1")
-        git_clone(
-            "https://github.com/python/cpython.git",
-            self.checkout,
-            self.version.branch_or_tag,
-        )
         maketarget = (
             "autobuild-"
             + (
@@ -780,17 +750,18 @@ class DocBuilder(
         )
 
     def build_venv(self):
-        """Build a venv for the specific version.
-        This is used to pin old Sphinx versions to old cpython branches.
+        """Build a venv for the specific Python version.
+
+        So we can reuse them from builds to builds, while they contain
+        different Sphinx versions.
         """
-        venv_path = self.build_root / (
-            "venv-with-sphinx-" + self.version.sphinx_version
-        )
+        venv_path = self.build_root / ("venv-" + self.version.name)
         run([sys.executable, "-m", "venv", venv_path])
         run(
             [venv_path / "bin" / "python", "-m", "pip", "install"]
             + [self.theme]
-            + self.version.requirements
+            + self.version.requirements,
+            cwd=self.checkout / "Doc",
         )
         run([venv_path / "bin" / "python", "-m", "pip", "freeze", "--all"])
         self.venv = venv_path
