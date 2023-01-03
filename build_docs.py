@@ -193,7 +193,7 @@ class Version:
 
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class Language:
     tag: str
     iso639_tag: str
