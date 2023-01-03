@@ -21,6 +21,7 @@ Modified by Julien Palard to build translations.
 
 from argparse import ArgumentParser
 from contextlib import suppress
+from dataclasses import dataclass
 import filecmp
 from itertools import product
 import json
@@ -191,9 +192,16 @@ class Version:
         return self.as_tuple() > other.as_tuple()
 
 
-Language = namedtuple(
-    "Language", ["tag", "iso639_tag", "name", "in_prod", "sphinxopts"]
-)
+
+@dataclass(frozen=True)
+class Language:
+    tag: str
+    iso639_tag: str
+    name: str
+    in_prod: bool
+    sphinxopts: tuple
+    html_only: bool = False
+
 
 # EOL and security-fixes are not automatically built, no need to remove them
 # from the list, this way we can still rebuild them manually as needed.
@@ -249,7 +257,7 @@ LANGUAGES = {
     Language("fr", "fr", "French", True, XELATEX_WITH_FONTSPEC),
     Language("id", "id", "Indonesian", False, XELATEX_DEFAULT),
     Language("it", "it", "Italian", False, XELATEX_DEFAULT),
-    Language("ja", "ja", "Japanese", True, PLATEX_DEFAULT),
+    Language("ja", "ja", "Japanese", True, PLATEX_DEFAULT, html_only=True),  # See https://github.com/python/python-docs-ja/issues/35
     Language("ko", "ko", "Korean", True, XELATEX_FOR_KOREAN),
     Language("pl", "pl", "Polish", False, XELATEX_DEFAULT),
     Language("pt-br", "pt_BR", "Brazilian Portuguese", True, XELATEX_DEFAULT),
@@ -710,7 +718,7 @@ class DocBuilder(
                 if self.version.status in ("in development", "pre-release")
                 else "stable"
             )
-            + ("-html" if self.quick else "")
+            + ("-html" if self.quick or self.language.html_only else "")
         )
         logging.info("Running make %s", maketarget)
         python = self.venv / "bin" / "python"
