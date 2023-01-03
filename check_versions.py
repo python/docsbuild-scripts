@@ -56,7 +56,6 @@ CONF_FILES = {
     "requirements.txt": "Doc/requirements.txt",
     "conf.py": "Doc/conf.py",
     "Makefile": "Doc/Makefile",
-    "Mac installer": "Mac/BuildScript/build-installer.py",
 }
 
 
