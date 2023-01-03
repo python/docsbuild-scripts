@@ -1,4 +1,0 @@
-aiohttp
-gidgethub
-pyyaml
-sentry-sdk
