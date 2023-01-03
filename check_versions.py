@@ -55,7 +55,6 @@ CONF_FILES = {
     "azure": ".azure-pipelines/docs-steps.yml",
     "requirements.txt": "Doc/requirements.txt",
     "conf.py": "Doc/conf.py",
-    "Makefile": "Doc/Makefile",
 }
 
 
