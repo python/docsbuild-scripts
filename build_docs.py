@@ -36,7 +36,7 @@ import subprocess
 import sys
 import time
 from bisect import bisect_left as bisect
-from collections import OrderedDict, namedtuple
+from collections import OrderedDict
 from contextlib import contextmanager
 from pathlib import Path
 from string import Template
@@ -637,14 +637,31 @@ def setup_logging(log_directory: Path):
     logging.getLogger().setLevel(logging.DEBUG)
 
 
-class DocBuilder(
-    namedtuple(
-        "DocBuilder",
-        "version, language, build_root, www_root, quick, group, "
-        "log_directory, skip_cache_invalidation, theme",
-    )
-):
+@dataclass
+class DocBuilder:
     """Builder for a cpython version and a language."""
+
+    version: Version
+    language: Language
+    build_root: Path
+    www_root: Path
+    quick: bool
+    group: str
+    log_directory: Path
+    skip_cache_invalidation: bool
+    theme: Path
+
+    @property
+    def full_build(self):
+        """Tell if a full build is needed.
+
+        A full build is slow, it builds pdf, txt, epub, texinfo, and
+        archives everything.
+
+        A partial build only builds HTML and does not archive, it's
+        fast.
+        """
+        return not self.quick and not self.language.html_only
 
     def run(self):
         """Build and publish a Python doc, for a language, and a version."""
@@ -718,7 +735,7 @@ class DocBuilder(
                 if self.version.status in ("in development", "pre-release")
                 else "stable"
             )
-            + ("-html" if self.quick or self.language.html_only else "")
+            + ("" if self.full_build  else "-html")
         )
         logging.info("Running make %s", maketarget)
         python = self.venv / "bin" / "python"
@@ -830,16 +847,7 @@ class DocBuilder(
                 ";",
             ]
         )
-        if self.quick:
-            run(
-                [
-                    "rsync",
-                    "-a",
-                    str(self.checkout / "Doc" / "build" / "html") + "/",
-                    target,
-                ]
-            )
-        else:
+        if self.full_build:
             run(
                 [
                     "rsync",
@@ -851,7 +859,16 @@ class DocBuilder(
                     target,
                 ]
             )
-        if not self.quick:
+        else:
+            run(
+                [
+                    "rsync",
+                    "-a",
+                    str(self.checkout / "Doc" / "build" / "html") + "/",
+                    target,
+                ]
+            )
+        if self.full_build:
             logging.debug("Copying dist files")
             run(
                 [
@@ -986,7 +1003,7 @@ def purge_path(www_root: Path, path: Path):
     run(["curl", "-XPURGE", f"https://docs.python.org/{{{','.join(to_purge)}}}"])
 
 
-def main():
+def main() -> None:
     """Script entry point."""
     args = parse_args()
     setup_logging(args.log_directory)
