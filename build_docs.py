@@ -80,7 +80,6 @@ class Version:
         status,
         branch=None,
         tag=None,
-        sphinxopts=(),
     ):
         if status not in self.STATUSES:
             raise ValueError(
@@ -93,7 +92,6 @@ class Version:
             raise ValueError("Please build a version with at least a branch or a tag.")
         self.branch_or_tag = branch or tag
         self.status = status
-        self.sphinxopts = list(sphinxopts)
 
     def __repr__(self):
         return f"Version({self.name})"
@@ -754,7 +752,7 @@ class DocBuilder:
             self.version.name,
             self.language.tag,
         )
-        sphinxopts = list(self.language.sphinxopts) + list(self.version.sphinxopts)
+        sphinxopts = list(self.language.sphinxopts)
         sphinxopts.extend(["-q"])
         if self.language.tag != "en":
             locale_dirs = self.build_root / self.version.name / "locale"
