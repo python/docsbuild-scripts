@@ -2,8 +2,8 @@
 
 """Build the Python docs for various branches and various languages.
 
-Without any arguments builds docs for all active versions configured in the
-global VERSIONS list and all languages configured in the LANGUAGES list.
+Without any arguments builds docs for all active versions and
+languages configured in the config.ini file.
 
 -q selects "quick build", which means to build only HTML.
 
@@ -20,6 +20,7 @@ Modified by Julien Palard to build translations.
 """
 
 from argparse import ArgumentParser
+import configparser
 from contextlib import suppress
 from dataclasses import dataclass
 import filecmp
@@ -41,6 +42,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from string import Template
 from textwrap import indent
+from typing import Iterable
 
 import zc.lockfile
 import jinja2
@@ -154,14 +156,14 @@ class Version:
         return [v for v in versions if v.status not in ("EOL", "security-fixes")]
 
     @staticmethod
-    def current_stable():
+    def current_stable(versions):
         """Find the current stable cPython version."""
-        return max([v for v in VERSIONS if v.status == "stable"], key=Version.as_tuple)
+        return max([v for v in versions if v.status == "stable"], key=Version.as_tuple)
 
     @staticmethod
-    def current_dev():
+    def current_dev(versions):
         """Find the current de cPython version."""
-        return max(VERSIONS, key=Version.as_tuple)
+        return max(versions, key=Version.as_tuple)
 
     @property
     def picker_label(self):
@@ -172,7 +174,7 @@ class Version:
             return f"pre ({self.name})"
         return self.name
 
-    def setup_indexsidebar(self, dest_path):
+    def setup_indexsidebar(self, versions, dest_path):
         """Build indexsidebar.html for Sphinx."""
         with open(
             HERE / "templates" / "indexsidebar.html", encoding="UTF-8"
@@ -183,7 +185,7 @@ class Version:
                 sidebar_template.render(
                     current_version=self,
                     versions=sorted(
-                        VERSIONS, key=lambda v: version_to_tuple(v.name), reverse=True
+                        versions, key=lambda v: version_to_tuple(v.name), reverse=True
                     ),
                 )
             )
@@ -195,7 +197,6 @@ class Version:
         return self.as_tuple() > other.as_tuple()
 
 
-
 @dataclass(frozen=True, order=True)
 class Language:
     tag: str
@@ -205,23 +206,6 @@ class Language:
     sphinxopts: tuple
     html_only: bool = False
 
-
-# EOL and security-fixes are not automatically built, no need to remove them
-# from the list, this way we can still rebuild them manually as needed.
-#
-# Please keep the list in reverse-order for ease of editing.
-VERSIONS = [
-    Version("3.13", branch="origin/main", status="in development"),
-    Version("3.12", branch="origin/3.12", status="stable"),
-    Version("3.11", branch="origin/3.11", status="stable"),
-    Version("3.10", branch="origin/3.10", status="security-fixes"),
-    Version("3.9", branch="origin/3.9", status="security-fixes"),
-    Version("3.8", branch="origin/3.8", status="security-fixes"),
-    Version("3.7", tag="3.7", status="EOL"),
-    Version("3.6", tag="3.6", status="EOL"),
-    Version("3.5", tag="3.5", status="EOL"),
-    Version("2.7", tag="2.7", status="EOL"),
-]
 
 XELATEX_DEFAULT = (
     "-D latex_engine=xelatex",
@@ -284,22 +268,6 @@ XELATEX_WITH_CJK = (
     "-D latex_elements.inputenc=",
     r"-D latex_elements.fontenc=\\usepackage{xeCJK}",
 )
-
-LANGUAGES = {
-    Language("en", "en", "English", True, XELATEX_DEFAULT),
-    Language("es", "es", "Spanish", True, XELATEX_WITH_FONTSPEC),
-    Language("fr", "fr", "French", True, XELATEX_WITH_FONTSPEC),
-    Language("id", "id", "Indonesian", False, XELATEX_DEFAULT),
-    Language("it", "it", "Italian", False, XELATEX_DEFAULT),
-    Language("ja", "ja", "Japanese", True, LUALATEX_FOR_JP),
-    Language("ko", "ko", "Korean", True, XELATEX_FOR_KOREAN),
-    Language("pl", "pl", "Polish", False, XELATEX_DEFAULT),
-    Language("pt-br", "pt_BR", "Brazilian Portuguese", True, XELATEX_DEFAULT),
-    Language("tr", "tr", "Turkish", True, XELATEX_DEFAULT),
-    Language("uk", "uk", "Ukrainian", False, XELATEX_DEFAULT, html_only=True),
-    Language("zh-cn", "zh_CN", "Simplified Chinese", True, XELATEX_WITH_CJK),
-    Language("zh-tw", "zh_TW", "Traditional Chinese", True, XELATEX_WITH_CJK),
-}
 
 
 def run(cmd, cwd=None) -> subprocess.CompletedProcess:
@@ -446,7 +414,9 @@ def edit(file: Path):
     temporary.rename(file)
 
 
-def setup_switchers(html_root: Path):
+def setup_switchers(
+    versions: Iterable[Version], languages: Iterable[Language], html_root: Path
+):
     """Setup cross-links between cpython versions:
     - Cross-link various languages in a language switcher
     - Cross-link various versions in a version switcher
@@ -464,7 +434,7 @@ def setup_switchers(html_root: Path):
                         sorted(
                             [
                                 (language.tag, language.name)
-                                for language in LANGUAGES
+                                for language in languages
                                 if language.in_prod
                             ]
                         )
@@ -475,7 +445,7 @@ def setup_switchers(html_root: Path):
                         [
                             (version.name, version.picker_label)
                             for version in sorted(
-                                VERSIONS,
+                                versions,
                                 key=lambda v: version_to_tuple(v.name),
                                 reverse=True,
                             )
@@ -499,7 +469,13 @@ def setup_switchers(html_root: Path):
                 ofile.write(line)
 
 
-def build_robots_txt(www_root: Path, group, skip_cache_invalidation):
+def build_robots_txt(
+    versions: Iterable[Version],
+    languages: Iterable[Language],
+    www_root: Path,
+    group,
+    skip_cache_invalidation,
+):
     """Disallow crawl of EOL versions in robots.txt."""
     if not www_root.exists():
         logging.info("Skipping robots.txt generation (www root does not even exists).")
@@ -509,7 +485,7 @@ def build_robots_txt(www_root: Path, group, skip_cache_invalidation):
         template = jinja2.Template(template_file.read())
     with open(robots_file, "w", encoding="UTF-8") as robots_txt_file:
         robots_txt_file.write(
-            template.render(languages=LANGUAGES, versions=VERSIONS) + "\n"
+            template.render(languages=languages, versions=versions) + "\n"
         )
     robots_file.chmod(0o775)
     run(["chgrp", group, robots_file])
@@ -517,7 +493,9 @@ def build_robots_txt(www_root: Path, group, skip_cache_invalidation):
         requests.request("PURGE", "https://docs.python.org/robots.txt")
 
 
-def build_sitemap(www_root: Path, group):
+def build_sitemap(
+    versions: Iterable[Version], languages: Iterable[Language], www_root: Path, group
+):
     """Build a sitemap with all live versions and translations."""
     if not www_root.exists():
         logging.info("Skipping sitemap generation (www root does not even exists).")
@@ -526,7 +504,7 @@ def build_sitemap(www_root: Path, group):
         template = jinja2.Template(template_file.read())
     sitemap_file = www_root / "sitemap.xml"
     sitemap_file.write_text(
-        template.render(languages=LANGUAGES, versions=VERSIONS) + "\n", encoding="UTF-8"
+        template.render(languages=languages, versions=versions) + "\n", encoding="UTF-8"
     )
     sitemap_file.chmod(0o664)
     run(["chgrp", group, sitemap_file])
@@ -631,8 +609,9 @@ def parse_args():
     parser.add_argument(
         "--languages",
         nargs="*",
-        default={language.tag for language in LANGUAGES},
-        help="Language translation, as a PEP 545 language tag like" " 'fr' or 'pt-br'.",
+        default="all",
+        help="Language translation, as a PEP 545 language tag like" " 'fr' or 'pt-br'. "
+        "Use 'all' to build all of them (it's the default behavior).",
         metavar="fr",
     )
     parser.add_argument(
@@ -677,7 +656,9 @@ class DocBuilder:
     """Builder for a cpython version and a language."""
 
     version: Version
+    versions: Iterable[Version]
     language: Language
+    languages: Iterable[Language]
     build_root: Path
     www_root: Path
     quick: bool
@@ -783,7 +764,7 @@ class DocBuilder:
                 if self.version.status in ("in development", "pre-release")
                 else "stable"
             )
-            + ("" if self.full_build  else "-html")
+            + ("" if self.full_build else "-html")
         )
         logging.info("Running make %s", maketarget)
         python = self.venv / "bin" / "python"
@@ -799,7 +780,8 @@ class DocBuilder:
             ]
         )
         self.version.setup_indexsidebar(
-            self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html"
+            self.versions,
+            self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html",
         )
         run(
             [
@@ -817,7 +799,9 @@ class DocBuilder:
         )
         run(["mkdir", "-p", self.log_directory])
         run(["chgrp", "-R", self.group, self.log_directory])
-        setup_switchers(self.checkout / "Doc" / "build" / "html")
+        setup_switchers(
+            self.versions, self.languages, self.checkout / "Doc" / "build" / "html"
+        )
         logging.info(
             "Build done for version: %s, language: %s",
             self.version.name,
@@ -990,7 +974,9 @@ def symlink(www_root: Path, language: Language, directory: str, name: str, group
     purge_path(www_root, link)
 
 
-def major_symlinks(www_root: Path, group):
+def major_symlinks(
+    www_root: Path, group, versions: Iterable[Version], languages: Iterable[Language]
+):
     """Maintains the /2/ and /3/ symlinks for each languages.
 
     Like:
@@ -998,13 +984,13 @@ def major_symlinks(www_root: Path, group):
     - /fr/3/ → /fr/3.9/
     - /es/3/ → /es/3.9/
     """
-    current_stable = Version.current_stable().name
-    for language in LANGUAGES:
+    current_stable = Version.current_stable(versions).name
+    for language in languages:
         symlink(www_root, language, current_stable, "3", group)
         symlink(www_root, language, "2.7", "2", group)
 
 
-def dev_symlink(www_root: Path, group):
+def dev_symlink(www_root: Path, group, versions, languages):
     """Maintains the /dev/ symlinks for each languages.
 
     Like:
@@ -1012,8 +998,8 @@ def dev_symlink(www_root: Path, group):
     - /fr/dev/ → /fr/3.11/
     - /es/dev/ → /es/3.11/
     """
-    current_dev = Version.current_dev().name
-    for language in LANGUAGES:
+    current_dev = Version.current_dev(versions).name
+    for language in languages:
         symlink(www_root, language, current_dev, "dev", group)
 
 
@@ -1051,14 +1037,46 @@ def purge_path(www_root: Path, path: Path):
     run(["curl", "-XPURGE", f"https://docs.python.org/{{{','.join(to_purge)}}}"])
 
 
+def parse_config():
+    config = configparser.ConfigParser()
+    config.read(HERE / "config.ini")
+    versions, languages = [], []
+    for name, section in config.items():
+        if section.get("status"):  # It's a version
+            versions.append(
+                Version(
+                    name,
+                    status=section["status"],
+                    branch=section.get("branch"),
+                    tag=section.get("tag"),
+                )
+            )
+        if section.get("name"):  # It's a language
+            languages.append(
+                Language(
+                    name,
+                    section.get("iso639_tag", name),
+                    section["name"],
+                    section.getboolean("in_prod", True),
+                    sphinxopts=globals()[section.get("sphinxopts", "XELATEX_DEFAULT")],
+                    html_only=section.get("html_only", False),
+                )
+            )
+    return versions, languages
+
+
 def build_docs(args) -> bool:
     """Build all docs (each languages and each versions)."""
-    languages_dict = {language.tag: language for language in LANGUAGES}
-    versions = Version.filter(VERSIONS, args.branch)
-    languages = [languages_dict[tag] for tag in args.languages]
-    del args.languages
+    versions, languages = parse_config()
+    languages_dict = {language.tag: language for language in languages}
+    todo = list(
+        product(
+            Version.filter(versions, args.branch),
+            [languages_dict[tag] for tag in args.languages],
+        )
+    )
     del args.branch
-    todo = list(product(versions, languages))
+    del args.languages
     all_built_successfully = True
     while todo:
         version, language = todo.pop()
@@ -1066,13 +1084,15 @@ def build_docs(args) -> bool:
             with sentry_sdk.configure_scope() as scope:
                 scope.set_tag("version", version.name)
                 scope.set_tag("language", language.tag)
-        builder = DocBuilder(version, language, **vars(args))
+        builder = DocBuilder(version, versions, language, languages, **vars(args))
         all_built_successfully &= builder.run()
-    build_sitemap(args.www_root, args.group)
+    build_sitemap(versions, languages, args.www_root, args.group)
     build_404(args.www_root, args.group)
-    build_robots_txt(args.www_root, args.group, args.skip_cache_invalidation)
-    major_symlinks(args.www_root, args.group)
-    dev_symlink(args.www_root, args.group)
+    build_robots_txt(
+        versions, languages, args.www_root, args.group, args.skip_cache_invalidation
+    )
+    major_symlinks(args.www_root, args.group, versions, languages)
+    dev_symlink(args.www_root, args.group, versions, languages)
     proofread_canonicals(args.www_root, args.skip_cache_invalidation)
 
     return all_built_successfully
