@@ -259,7 +259,7 @@ LANGUAGES = {
     Language("fr", "fr", "French", True, XELATEX_WITH_FONTSPEC),
     Language("id", "id", "Indonesian", False, XELATEX_DEFAULT),
     Language("it", "it", "Italian", False, XELATEX_DEFAULT),
-    Language("ja", "ja", "Japanese", True, PLATEX_DEFAULT, html_only=True),  # See https://github.com/python/python-docs-ja/issues/35
+    Language("ja", "ja", "Japanese", True, PLATEX_DEFAULT),
     Language("ko", "ko", "Korean", True, XELATEX_FOR_KOREAN),
     Language("pl", "pl", "Polish", False, XELATEX_DEFAULT),
     Language("pt-br", "pt_BR", "Brazilian Portuguese", True, XELATEX_DEFAULT),
