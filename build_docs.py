@@ -229,6 +229,8 @@ PLATEX_DEFAULT = (
     "-D latex_engine=platex",
     "-D latex_elements.inputenc=",
     "-D latex_elements.fontenc=",
+    # See https://github.com/python/python-docs-ja/issues/35
+    r"-D latex_elements.preamble=\\usepackage{kotex}",
 )
 
 XELATEX_WITH_FONTSPEC = (
