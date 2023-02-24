@@ -226,9 +226,28 @@ XELATEX_DEFAULT = (
 )
 
 PLATEX_DEFAULT = (
-    "-D latex_engine=platex",
+    "-D latex_engine=lualatex",
     "-D latex_elements.inputenc=",
     "-D latex_elements.fontenc=",
+    "-D latex_docclass.manual=ltjsbook",
+    "-D latex_docclass.howto=ltjsarticle",
+    "-D latex_elements.polyglossia=",
+    "-D latex_elements.fontpkg=",
+    "-D 'latex_elements.preamble="
+    r"\setlength{\footskip}{16.4pt}" # warning: (fancyhdr)Make it at least 16.4pt
+    r"\usepackage[noto-otf]{luatexja-preset}"
+    r"\usepackage{newunicodechar,luacode}"
+    r"\newunicodechar{^^^^212a}{K}"
+    r"\newfontface{\fRepC}{DejaVu Sans Mono}"
+    r'\newunicodechar{^^^^f8fd}{{\fRepC\ltjalchar"FFFD}}'
+    r"\makeatletter"
+    r"\titleformat{\subsubsection}{\normalsize\py@HeaderFamily}"
+    r"{\py@TitleColor\thesubsubsection}{0.5em}{\py@TitleColor}"
+    r"\titleformat{\paragraph}{\normalsize\py@HeaderFamily}"
+    r"{\py@TitleColor\theparagraph}{0.5em}{\py@TitleColor}"
+    r"\titleformat{\subparagraph}{\normalsize\py@HeaderFamily}"
+    r"{\py@TitleColor\thesubparagraph}{0.5em}{\py@TitleColor}"
+    r"\makeatother'"
 )
 
 XELATEX_WITH_FONTSPEC = (
@@ -257,7 +276,7 @@ LANGUAGES = {
     Language("fr", "fr", "French", True, XELATEX_WITH_FONTSPEC),
     Language("id", "id", "Indonesian", False, XELATEX_DEFAULT),
     Language("it", "it", "Italian", False, XELATEX_DEFAULT),
-    Language("ja", "ja", "Japanese", True, PLATEX_DEFAULT, html_only=True),  # See https://github.com/python/python-docs-ja/issues/35
+    Language("ja", "ja", "Japanese", True, PLATEX_DEFAULT, html_only=False),  # See https://github.com/python/python-docs-ja/issues/35
     Language("ko", "ko", "Korean", True, XELATEX_FOR_KOREAN),
     Language("pl", "pl", "Polish", False, XELATEX_DEFAULT),
     Language("pt-br", "pt_BR", "Brazilian Portuguese", True, XELATEX_DEFAULT),
@@ -726,6 +745,13 @@ class DocBuilder:
                     "-D gettext_compact=0",
                 )
             )
+        if self.language.tag == "ja":
+            subprocess.check_output("sed -i s/\N{REPLACEMENT CHARACTER}/\uf8fd/g "
+                                    f"{locale_dirs}/ja/LC_MESSAGES/**/*.po",
+                                    shell=True)
+            subprocess.check_output("sed -i s/\N{REPLACEMENT CHARACTER}/\uf8fd/g "
+                                    f"{self.checkout}/Doc/**/*.rst", shell=True)
+
         if self.version.status == "EOL":
             sphinxopts.append("-D html_context.outdated=1")
         maketarget = (
