@@ -225,21 +225,33 @@ XELATEX_DEFAULT = (
     "-D latex_elements.fontenc=",
 )
 
-PLATEX_DEFAULT = (
+LUALATEX_FOR_JP = (
     "-D latex_engine=lualatex",
     "-D latex_elements.inputenc=",
     "-D latex_elements.fontenc=",
     "-D latex_docclass.manual=ltjsbook",
     "-D latex_docclass.howto=ltjsarticle",
+
+    # supress polyglossia warnings
     "-D latex_elements.polyglossia=",
     "-D latex_elements.fontpkg=",
+
+    # preamble
     "-D 'latex_elements.preamble="
-    r"\setlength{\footskip}{16.4pt}" # warning: (fancyhdr)Make it at least 16.4pt
     r"\usepackage[noto-otf]{luatexja-preset}"
     r"\usepackage{newunicodechar,luacode}"
     r"\newunicodechar{^^^^212a}{K}"
+
+    # Since luatex doesn't support \ufffd, replace \ufffd with \uf8fd and retore later.
+    # https://gist.github.com/zr-tex8r/e0931df922f38fbb67634f05dfdaf66b
+    # Luatex already fixed this issue, so we can remove this once Texlive is updated.
+    # (https://github.com/TeX-Live/luatex/commit/eaa95ce0a141eaf7a02)
     r"\newfontface{\fRepC}{DejaVu Sans Mono}"
     r'\newunicodechar{^^^^f8fd}{{\fRepC\ltjalchar"FFFD}}'
+
+    # Workaround for the luatex-ja issue (Thanks to @jfbu)
+    # https://github.com/sphinx-doc/sphinx/issues/11179#issuecomment-1420715092
+    # https://osdn.net/projects/luatex-ja/ticket/47321
     r"\makeatletter"
     r"\titleformat{\subsubsection}{\normalsize\py@HeaderFamily}"
     r"{\py@TitleColor\thesubsubsection}{0.5em}{\py@TitleColor}"
@@ -247,7 +259,11 @@ PLATEX_DEFAULT = (
     r"{\py@TitleColor\theparagraph}{0.5em}{\py@TitleColor}"
     r"\titleformat{\subparagraph}{\normalsize\py@HeaderFamily}"
     r"{\py@TitleColor\thesubparagraph}{0.5em}{\py@TitleColor}"
-    r"\makeatother'"
+    r"\makeatother"
+
+    # subpress warning: (fancyhdr)Make it at least 16.4pt
+    r"\setlength{\footskip}{16.4pt}"
+    "'"
 )
 
 XELATEX_WITH_FONTSPEC = (
@@ -276,7 +292,7 @@ LANGUAGES = {
     Language("fr", "fr", "French", True, XELATEX_WITH_FONTSPEC),
     Language("id", "id", "Indonesian", False, XELATEX_DEFAULT),
     Language("it", "it", "Italian", False, XELATEX_DEFAULT),
-    Language("ja", "ja", "Japanese", True, PLATEX_DEFAULT, html_only=False),  # See https://github.com/python/python-docs-ja/issues/35
+    Language("ja", "ja", "Japanese", True, LUALATEX_FOR_JP),
     Language("ko", "ko", "Korean", True, XELATEX_FOR_KOREAN),
     Language("pl", "pl", "Polish", False, XELATEX_DEFAULT),
     Language("pt-br", "pt_BR", "Brazilian Portuguese", True, XELATEX_DEFAULT),
@@ -746,6 +762,10 @@ class DocBuilder:
                 )
             )
         if self.language.tag == "ja":
+            # Since luatex doesn't support \ufffd, replace \ufffd with \uf8fd and retore later.
+            # https://gist.github.com/zr-tex8r/e0931df922f38fbb67634f05dfdaf66b
+            # Luatex already fixed this issue, so we can remove this once Texlive is updated.
+            # (https://github.com/TeX-Live/luatex/commit/eaa95ce0a141eaf7a02)
             subprocess.check_output("sed -i s/\N{REPLACEMENT CHARACTER}/\uf8fd/g "
                                     f"{locale_dirs}/ja/LC_MESSAGES/**/*.po",
                                     shell=True)
