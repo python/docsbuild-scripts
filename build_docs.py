@@ -237,33 +237,28 @@ LUALATEX_FOR_JP = (
     "-D latex_elements.fontpkg=",
 
     # preamble
-    "-D 'latex_elements.preamble="
-    r"\usepackage[noto-otf]{luatexja-preset}"
-    r"\usepackage{newunicodechar,luacode}"
-    r"\newunicodechar{^^^^212a}{K}"
+    "-D latex_elements.preamble="
 
-    # Since luatex doesn't support \ufffd, replace \ufffd with \uf8fd and retore later.
+    # Render non-Japanese letters with luatex
     # https://gist.github.com/zr-tex8r/e0931df922f38fbb67634f05dfdaf66b
-    # Luatex already fixed this issue, so we can remove this once Texlive is updated.
-    # (https://github.com/TeX-Live/luatex/commit/eaa95ce0a141eaf7a02)
-    r"\newfontface{\fRepC}{DejaVu Sans Mono}"
-    r'\newunicodechar{^^^^f8fd}{{\fRepC\ltjalchar"FFFD}}'
+    r"\\usepackage[noto-otf]{luatexja-preset}"
+    r"\\usepackage{newunicodechar}"
+    r"\\newunicodechar{^^^^212a}{K}"
 
     # Workaround for the luatex-ja issue (Thanks to @jfbu)
     # https://github.com/sphinx-doc/sphinx/issues/11179#issuecomment-1420715092
     # https://osdn.net/projects/luatex-ja/ticket/47321
-    r"\makeatletter"
-    r"\titleformat{\subsubsection}{\normalsize\py@HeaderFamily}"
-    r"{\py@TitleColor\thesubsubsection}{0.5em}{\py@TitleColor}"
-    r"\titleformat{\paragraph}{\normalsize\py@HeaderFamily}"
-    r"{\py@TitleColor\theparagraph}{0.5em}{\py@TitleColor}"
-    r"\titleformat{\subparagraph}{\normalsize\py@HeaderFamily}"
-    r"{\py@TitleColor\thesubparagraph}{0.5em}{\py@TitleColor}"
-    r"\makeatother"
+    r"\\makeatletter"
+    r"\\titleformat{\\subsubsection}{\\normalsize\\py@HeaderFamily}"
+    r"{\\py@TitleColor\\thesubsubsection}{0.5em}{\\py@TitleColor}"
+    r"\\titleformat{\\paragraph}{\\normalsize\\py@HeaderFamily}"
+    r"{\\py@TitleColor\\theparagraph}{0.5em}{\\py@TitleColor}"
+    r"\\titleformat{\\subparagraph}{\\normalsize\\py@HeaderFamily}"
+    r"{\\py@TitleColor\\thesubparagraph}{0.5em}{\\py@TitleColor}"
+    r"\\makeatother"
 
     # subpress warning: (fancyhdr)Make it at least 16.4pt
-    r"\setlength{\footskip}{16.4pt}"
-    "'"
+    r"\\setlength{\\footskip}{16.4pt}"
 )
 
 XELATEX_WITH_FONTSPEC = (
@@ -762,14 +757,14 @@ class DocBuilder:
                 )
             )
         if self.language.tag == "ja":
-            # Since luatex doesn't support \ufffd, replace \ufffd with \uf8fd and retore later.
+            # Since luatex doesn't support \ufffd, replace \ufffd with '?'.
             # https://gist.github.com/zr-tex8r/e0931df922f38fbb67634f05dfdaf66b
             # Luatex already fixed this issue, so we can remove this once Texlive is updated.
             # (https://github.com/TeX-Live/luatex/commit/eaa95ce0a141eaf7a02)
-            subprocess.check_output("sed -i s/\N{REPLACEMENT CHARACTER}/\uf8fd/g "
+            subprocess.check_output("sed -i s/\N{REPLACEMENT CHARACTER}/?/g "
                                     f"{locale_dirs}/ja/LC_MESSAGES/**/*.po",
                                     shell=True)
-            subprocess.check_output("sed -i s/\N{REPLACEMENT CHARACTER}/\uf8fd/g "
+            subprocess.check_output("sed -i s/\N{REPLACEMENT CHARACTER}/?/g "
                                     f"{self.checkout}/Doc/**/*.rst", shell=True)
 
         if self.version.status == "EOL":
