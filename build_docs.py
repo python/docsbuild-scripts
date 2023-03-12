@@ -49,6 +49,11 @@ import requests
 HERE = Path(__file__).resolve().parent
 
 try:
+    from os import EX_OK, EX_SOFTWARE as EX_FAILURE
+except ImportError:
+    EX_OK, EX_FAILURE = 0, 1
+
+try:
     import sentry_sdk
 except ImportError:
     sentry_sdk = None
@@ -693,7 +698,7 @@ class DocBuilder:
         """
         return not self.quick and not self.language.html_only
 
-    def run(self):
+    def run(self) -> bool:
         """Build and publish a Python doc, for a language, and a version."""
         try:
             self.clone_cpython()
@@ -710,6 +715,8 @@ class DocBuilder:
             )
             if sentry_sdk:
                 sentry_sdk.capture_exception(err)
+            return False
+        return True
 
     @property
     def checkout(self) -> Path:
@@ -1044,7 +1051,7 @@ def purge_path(www_root: Path, path: Path):
     run(["curl", "-XPURGE", f"https://docs.python.org/{{{','.join(to_purge)}}}"])
 
 
-def main() -> None:
+def main() -> bool:
     """Script entry point."""
     args = parse_args()
     setup_logging(args.log_directory)
@@ -1054,6 +1061,7 @@ def main() -> None:
     del args.languages
     del args.branch
     todo = list(product(versions, languages))
+    all_built_successfully = True
     while todo:
         version, language = todo.pop()
         if sentry_sdk:
@@ -1063,7 +1071,7 @@ def main() -> None:
         try:
             lock = zc.lockfile.LockFile(HERE / "build_docs.lock")
             builder = DocBuilder(version, language, **vars(args))
-            builder.run()
+            all_built_successfully &= builder.run()
         except zc.lockfile.LockError:
             logging.info("Another builder is running... waiting...")
             time.sleep(10)
@@ -1078,6 +1086,9 @@ def main() -> None:
     dev_symlink(args.www_root, args.group)
     proofread_canonicals(args.www_root, args.skip_cache_invalidation)
 
+    return all_built_successfully
+
 
 if __name__ == "__main__":
-    main()
+    all_built_successfully = main()
+    sys.exit(EX_OK if all_built_successfully else EX_FAILURE)
