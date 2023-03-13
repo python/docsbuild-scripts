@@ -23,7 +23,7 @@ from argparse import ArgumentParser
 from contextlib import suppress
 from dataclasses import dataclass
 import filecmp
-from itertools import product
+from itertools import product, chain
 import json
 import logging
 import logging.handlers
@@ -45,6 +45,7 @@ from textwrap import indent
 import zc.lockfile
 import jinja2
 import requests
+from natsort import natsorted
 
 HERE = Path(__file__).resolve().parent
 
@@ -590,7 +591,11 @@ def parse_args():
     parser.add_argument(
         "-b",
         "--branch",
-        metavar="3.6",
+        choices=natsorted(
+            set(chain.from_iterable((v.name, v.branch_or_tag) for v in VERSIONS)),
+            reverse=True,
+        ),
+        metavar=VERSIONS[0].name,
         help="Version to build (defaults to all maintained branches).",
     )
     parser.add_argument(
