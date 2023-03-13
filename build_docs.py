@@ -23,7 +23,7 @@ from argparse import ArgumentParser
 from contextlib import suppress
 from dataclasses import dataclass
 import filecmp
-from itertools import product
+from itertools import chain, product
 import json
 import logging
 import logging.handlers
@@ -595,7 +595,8 @@ def parse_args():
     parser.add_argument(
         "-b",
         "--branch",
-        metavar="3.6",
+        choices=dict.fromkeys(chain(*((v.branch_or_tag, v.name) for v in VERSIONS))),
+        metavar=Version.current_dev().name,
         help="Version to build (defaults to all maintained branches).",
     )
     parser.add_argument(
