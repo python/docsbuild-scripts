@@ -197,7 +197,6 @@ class Version:
         return self.as_tuple() > other.as_tuple()
 
 
-
 @dataclass(frozen=True, order=True)
 class Language:
     tag: str
@@ -206,6 +205,11 @@ class Language:
     in_prod: bool
     sphinxopts: tuple
     html_only: bool = False
+    repository: str = None
+
+    def __post_init__(self):
+        if not self.repository:
+            self.repository = f"https://github.com/python/python-docs-{self.tag}.git"
 
 
 # EOL and security-fixes are not automatically built, no need to remove them
@@ -289,7 +293,10 @@ XELATEX_WITH_CJK = (
 LANGUAGES = {
     Language("en", "en", "English", True, XELATEX_DEFAULT),
     Language("es", "es", "Spanish", True, XELATEX_WITH_FONTSPEC),
-    Language("fr", "fr", "French", True, XELATEX_WITH_FONTSPEC),
+    Language(
+        "fr", "fr", "French", True, XELATEX_WITH_FONTSPEC,
+        repository="https://git.afpy.org/AFPy/python-docs-fr.git",
+    ),
     Language("id", "id", "Indonesian", False, XELATEX_DEFAULT),
     Language("it", "it", "Italian", False, XELATEX_DEFAULT),
     Language("ja", "ja", "Japanese", True, LUALATEX_FOR_JP),
@@ -414,7 +421,7 @@ def locate_nearest_version(available_versions, target_version):
     return tuple_to_version(found)
 
 
-def translation_branch(locale_repo, locale_clone_dir, needed_version: str):
+def translation_branch(language: Language, locale_clone_dir, needed_version: str):
     """Some cpython versions may be untranslated, being either too old or
     too new.
 
@@ -424,7 +431,7 @@ def translation_branch(locale_repo, locale_clone_dir, needed_version: str):
     It could be enhanced to return tags, if needed, just return the
     tag as a string (without the `origin/` branch prefix).
     """
-    git_clone(locale_repo, locale_clone_dir)
+    git_clone(language.repository, locale_clone_dir)
     remote_branches = run(["git", "-C", locale_clone_dir, "branch", "-r"]).stdout
     branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
     return "origin/" + locate_nearest_version(branches, needed_version)
@@ -725,7 +732,6 @@ class DocBuilder:
         return self.build_root / "cpython"
 
     def clone_translation(self):
-        locale_repo = f"https://github.com/python/python-docs-{self.language.tag}.git"
         locale_clone_dir = (
             self.build_root
             / self.version.name
@@ -734,9 +740,9 @@ class DocBuilder:
             / "LC_MESSAGES"
         )
         git_clone(
-            locale_repo,
+            self.language.repository,
             locale_clone_dir,
-            translation_branch(locale_repo, locale_clone_dir, self.version.name),
+            translation_branch(self.language, locale_clone_dir, self.version.name),
         )
 
     def clone_cpython(self):
