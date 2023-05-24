@@ -216,7 +216,7 @@ VERSIONS = [
     Version("3.13", branch="origin/main", status="in development"),
     Version("3.12", branch="origin/3.12", status="pre-release"),
     Version("3.11", branch="origin/3.11", status="stable"),
-    Version("3.10", branch="origin/3.10", status="stable"),
+    Version("3.10", branch="origin/3.10", status="security-fixes"),
     Version("3.9", branch="origin/3.9", status="security-fixes"),
     Version("3.8", branch="origin/3.8", status="security-fixes"),
     Version("3.7", branch="origin/3.7", status="security-fixes"),
