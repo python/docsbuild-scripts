@@ -18,8 +18,8 @@
     '(?:dev)',
     '(?:release/\\d.\\d[\\x\\d\\.]*)'];
 
-  var all_versions = $VERSIONS;
-  var all_languages = $LANGUAGES;
+  var all_versions = {"3.13": "dev (3.13)", "3.12": "pre (3.12)", "3.11": "3.11", "3.10": "3.10", "3.9": "3.9", "3.8": "3.8", "3.7": "3.7", "3.6": "3.6", "3.5": "3.5", "2.7": "2.7"};
+  var all_languages = {"en": "English", "es": "Spanish", "fr": "French", "ja": "Japanese", "ko": "Korean", "pt-br": "Brazilian Portuguese", "tr": "Turkish", "zh-cn": "Simplified Chinese", "zh-tw": "Traditional Chinese"};
 
   function quote_attr(str) {
       return '"' + str.replace('"', '\\"') + '"';
@@ -29,11 +29,12 @@
     var buf = ['<select id="version_select">'];
     var major_minor = release.split(".").slice(0, 2).join(".");
 
-    $.each(all_versions, function(version, title) {
-      if (version == major_minor)
-        buf.push('<option value=' + quote_attr(version) + ' selected="selected">' + release + '</option>');
-      else
-        buf.push('<option value=' + quote_attr(version) + '>' + title + '</option>');
+    Object.entries(all_versions).forEach(function([version, title]) {
+      if (version === major_minor) {
+        buf.push('<option value="' + quote_attr(version) + '" selected="selected">' + release + '</option>');
+      } else {
+        buf.push('<option value="' + quote_attr(version) + '">' + title + '</option>');
+      }
     });
 
     buf.push('</select>');
@@ -43,12 +44,12 @@
   function build_language_select(current_language) {
     var buf = ['<select id="language_select">'];
 
-    $.each(all_languages, function(language, title) {
-      if (language == current_language)
-        buf.push('<option value="' + language + '" selected="selected">' +
-                 all_languages[current_language] + '</option>');
-      else
+    Object.entries(all_languages).forEach(function([language, title]) {
+      if (language === current_language) {
+        buf.push('<option value="' + language + '" selected="selected">' + title + '</option>');
+      } else {
         buf.push('<option value="' + language + '">' + title + '</option>');
+      }
     });
     if (!(current_language in all_languages)) {
         // In case we're browsing a language that is not yet in all_languages.
@@ -67,19 +68,21 @@
       window.location.href = url;
       return;
     }
-    $.ajax({
-      url: url,
-      success: function() {
-        window.location.href = url;
-      },
-      error: function() {
+    fetch(url)
+      .then(function(response) {
+        if (response.ok) {
+          window.location.href = url;
+        } else {
+          navigate_to_first_existing(urls);
+        }
+      })
+      .catch(function(error) {
         navigate_to_first_existing(urls);
-      }
-    });
+      });
   }
 
   function on_version_switch() {
-    var selected_version = $(this).children('option:selected').attr('value') + '/';
+    var selected_version = this.options[this.selectedIndex].value + '/';
     var url = window.location.href;
     var current_language = language_segment_from_url();
     var current_version = version_segment_from_url();
@@ -98,7 +101,7 @@
   }
 
   function on_language_switch() {
-    var selected_language = $(this).children('option:selected').attr('value') + '/';
+    var selected_language = this.options[this.selectedIndex].value + '/';
     var url = window.location.href;
     var current_language = language_segment_from_url();
     var current_version = version_segment_from_url();
@@ -143,8 +146,9 @@
     var language_segment = language_segment_from_url();
     var index = "/" + language_segment + version_segment;
 
-    if ($('.version_switcher_placeholder').length)
+    if (document.querySelectorAll('.version_switcher_placeholder').length > 0) {
       return;
+    }
 
     var html = '<span class="language_switcher_placeholder"></span> \
 <span class="version_switcher_placeholder"></span> \
@@ -165,18 +169,18 @@
     }
   }
 
-  $(document).ready(function() {
-    var language_segment = language_segment_from_url();
-    var current_language = language_segment.replace(/\/+$/g, '') || 'en';
-    var version_select = build_version_select(DOCUMENTATION_OPTIONS.VERSION);
+document.addEventListener('DOMContentLoaded', function() {
+  var language_segment = language_segment_from_url();
+  var current_language = language_segment.replace(/\/+$/g, '') || 'en';
+  var version_select = build_version_select(DOCUMENTATION_OPTIONS.VERSION);
 
-    create_placeholders_if_missing();
-    $('.version_switcher_placeholder').html(version_select);
-    $('.version_switcher_placeholder select').bind('change', on_version_switch);
+  create_placeholders_if_missing();
+  document.querySelector('.version_switcher_placeholder').innerHTML = version_select;
+  document.querySelector('.version_switcher_placeholder select').addEventListener('change', on_version_switch);
 
-    var language_select = build_language_select(current_language);
+  var language_select = build_language_select(current_language);
 
-    $('.language_switcher_placeholder').html(language_select);
-    $('.language_switcher_placeholder select').bind('change', on_language_switch);
-  });
+  document.querySelector('.language_switcher_placeholder').innerHTML = language_select;
+  document.querySelector('.language_switcher_placeholder select').addEventListener('change', on_language_switch);
+});
 })();
