@@ -219,7 +219,7 @@ VERSIONS = [
     Version("3.10", branch="origin/3.10", status="security-fixes"),
     Version("3.9", branch="origin/3.9", status="security-fixes"),
     Version("3.8", branch="origin/3.8", status="security-fixes"),
-    Version("3.7", branch="origin/3.7", status="security-fixes"),
+    Version("3.7", tag="3.7", status="EOL"),
     Version("3.6", tag="3.6", status="EOL"),
     Version("3.5", tag="3.5", status="EOL"),
     Version("2.7", tag="2.7", status="EOL"),
