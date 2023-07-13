@@ -18,8 +18,8 @@
     '(?:dev)',
     '(?:release/\\d.\\d[\\x\\d\\.]*)'];
 
-  var all_versions = {"3.13": "dev (3.13)", "3.12": "pre (3.12)", "3.11": "3.11", "3.10": "3.10", "3.9": "3.9", "3.8": "3.8", "3.7": "3.7", "3.6": "3.6", "3.5": "3.5", "2.7": "2.7"};
-  var all_languages = {"en": "English", "es": "Spanish", "fr": "French", "ja": "Japanese", "ko": "Korean", "pt-br": "Brazilian Portuguese", "tr": "Turkish", "zh-cn": "Simplified Chinese", "zh-tw": "Traditional Chinese"};
+  var all_versions = $VERSIONS;
+  var all_languages = $LANGUAGES;
 
   function quote_attr(str) {
       return '"' + str.replace('"', '\\"') + '"';
