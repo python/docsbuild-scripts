@@ -31,9 +31,9 @@
 
     Object.entries(all_versions).forEach(function([version, title]) {
       if (version === major_minor) {
-        buf.push('<option value="' + quote_attr(version) + '" selected="selected">' + release + '</option>');
+        buf.push('<option value=' + quote_attr(version) + ' selected="selected">' + release + '</option>');
       } else {
-        buf.push('<option value="' + quote_attr(version) + '">' + title + '</option>');
+        buf.push('<option value=' + quote_attr(version) + '>' + title + '</option>');
       }
     });
 
