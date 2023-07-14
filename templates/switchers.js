@@ -169,18 +169,18 @@
     }
   }
 
-document.addEventListener('DOMContentLoaded', function() {
-  var language_segment = language_segment_from_url();
-  var current_language = language_segment.replace(/\/+$/g, '') || 'en';
-  var version_select = build_version_select(DOCUMENTATION_OPTIONS.VERSION);
+  document.addEventListener('DOMContentLoaded', function() {
+    var language_segment = language_segment_from_url();
+    var current_language = language_segment.replace(/\/+$/g, '') || 'en';
+    var version_select = build_version_select(DOCUMENTATION_OPTIONS.VERSION);
 
-  create_placeholders_if_missing();
-  document.querySelector('.version_switcher_placeholder').innerHTML = version_select;
-  document.querySelector('.version_switcher_placeholder select').addEventListener('change', on_version_switch);
+    create_placeholders_if_missing();
+    document.querySelector('.version_switcher_placeholder').innerHTML = version_select;
+    document.querySelector('.version_switcher_placeholder select').addEventListener('change', on_version_switch);
 
-  var language_select = build_language_select(current_language);
+    var language_select = build_language_select(current_language);
 
-  document.querySelector('.language_switcher_placeholder').innerHTML = language_select;
-  document.querySelector('.language_switcher_placeholder select').addEventListener('change', on_language_switch);
-});
+    document.querySelector('.language_switcher_placeholder').innerHTML = language_select;
+    document.querySelector('.language_switcher_placeholder select').addEventListener('change', on_language_switch);
+  });
 })();
