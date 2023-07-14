@@ -175,12 +175,23 @@
     var version_select = build_version_select(DOCUMENTATION_OPTIONS.VERSION);
 
     create_placeholders_if_missing();
-    document.querySelector('.version_switcher_placeholder').innerHTML = version_select;
-    document.querySelector('.version_switcher_placeholder select').addEventListener('change', on_version_switch);
+
+    var placeholders = document.querySelectorAll('.version_switcher_placeholder');
+    placeholders.forEach(function(placeholder) {
+      placeholder.innerHTML = version_select;
+
+      var selectElement = placeholder.querySelector('select');
+      selectElement.addEventListener('change', on_version_switch);
+    });
 
     var language_select = build_language_select(current_language);
 
-    document.querySelector('.language_switcher_placeholder').innerHTML = language_select;
-    document.querySelector('.language_switcher_placeholder select').addEventListener('change', on_language_switch);
+    var placeholders = document.querySelectorAll('.language_switcher_placeholder');
+    placeholders.forEach(function(placeholder) {
+      placeholder.innerHTML = language_select;
+
+      var selectElement = placeholder.querySelector('select');
+      selectElement.addEventListener('change', on_language_switch);
+    });
   });
 })();
