@@ -835,7 +835,7 @@ class DocBuilder:
         venv_path = self.build_root / ("venv-" + self.version.name)
         run([sys.executable, "-m", "venv", venv_path])
         run(
-            [venv_path / "bin" / "python", "-m", "pip", "install"]
+            [venv_path / "bin" / "python", "-m", "pip", "install", "--upgrade"]
             + [self.theme]
             + self.version.requirements,
             cwd=self.checkout / "Doc",
