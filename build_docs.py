@@ -214,7 +214,7 @@ class Language:
 # Please keep the list in reverse-order for ease of editing.
 VERSIONS = [
     Version("3.13", branch="origin/main", status="in development"),
-    Version("3.12", branch="origin/3.12", status="pre-release"),
+    Version("3.12", branch="origin/3.12", status="stable"),
     Version("3.11", branch="origin/3.11", status="stable"),
     Version("3.10", branch="origin/3.10", status="security-fixes"),
     Version("3.9", branch="origin/3.9", status="security-fixes"),
@@ -835,7 +835,7 @@ class DocBuilder:
         venv_path = self.build_root / ("venv-" + self.version.name)
         run([sys.executable, "-m", "venv", venv_path])
         run(
-            [venv_path / "bin" / "python", "-m", "pip", "install"]
+            [venv_path / "bin" / "python", "-m", "pip", "install", "--upgrade"]
             + [self.theme]
             + self.version.requirements,
             cwd=self.checkout / "Doc",
