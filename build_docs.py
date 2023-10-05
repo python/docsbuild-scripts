@@ -1053,10 +1053,8 @@ def purge_path(www_root: Path, path: Path):
     run(["curl", "-XPURGE", f"https://docs.python.org/{{{','.join(to_purge)}}}"])
 
 
-def main() -> bool:
-    """Script entry point."""
-    args = parse_args()
-    setup_logging(args.log_directory)
+def build_docs(args) -> bool:
+    """Build all docs (each languages and each versions)."""
     languages_dict = {language.tag: language for language in LANGUAGES}
     versions = Version.filter(VERSIONS, args.branch)
     languages = [languages_dict[tag] for tag in args.languages]
@@ -1070,17 +1068,8 @@ def main() -> bool:
             with sentry_sdk.configure_scope() as scope:
                 scope.set_tag("version", version.name)
                 scope.set_tag("language", language.tag)
-        try:
-            lock = zc.lockfile.LockFile(HERE / "build_docs.lock")
-            builder = DocBuilder(version, language, **vars(args))
-            all_built_successfully &= builder.run()
-        except zc.lockfile.LockError:
-            logging.info("Another builder is running... waiting...")
-            time.sleep(10)
-            todo.append((version, language))
-        else:
-            lock.close()
-
+        builder = DocBuilder(version, language, **vars(args))
+        all_built_successfully &= builder.run()
     build_sitemap(args.www_root, args.group)
     build_404(args.www_root, args.group)
     build_robots_txt(args.www_root, args.group, args.skip_cache_invalidation)
@@ -1089,6 +1078,25 @@ def main() -> bool:
     proofread_canonicals(args.www_root, args.skip_cache_invalidation)
 
     return all_built_successfully
+
+
+def main():
+    """Script entry point."""
+    args = parse_args()
+    setup_logging(args.log_directory)
+
+    try:
+        lock = zc.lockfile.LockFile(HERE / "build_docs.lock")
+    except zc.lockfile.LockError:
+        logging.info("Another builder is running... dying...")
+        return False
+
+    try:
+        build_docs(args)
+    finally:
+        lock.close()
+
+
 
 
 if __name__ == "__main__":
