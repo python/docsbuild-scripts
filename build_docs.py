@@ -268,26 +268,34 @@ def changed_files(left, right):
     return changed
 
 
-def git_clone(repository: str, directory: Path, branch_or_tag=None):
-    """Clone or update the given repository in the given directory.
-    Optionally checking out a branch.
-    """
-    logging.info("Updating repository %s in %s", repository, directory)
-    try:
-        if not (directory / ".git").is_dir():
-            raise AssertionError("Not a git repository.")
-        run(["git", "-C", directory, "fetch"])
-        if branch_or_tag:
-            run(["git", "-C", directory, "reset", "--hard", branch_or_tag, "--"])
-            run(["git", "-C", directory, "clean", "-dfqx"])
-    except (subprocess.CalledProcessError, AssertionError):
-        if directory.exists():
-            shutil.rmtree(directory)
-        logging.info("Cloning %s into %s", repository, directory)
-        directory.mkdir(mode=0o775, parents=True, exist_ok=True)
-        run(["git", "clone", repository, directory])
-        if branch_or_tag:
-            run(["git", "-C", directory, "reset", "--hard", branch_or_tag, "--"])
+@dataclass
+class Git:
+    """Git command abstraction for our specific needs."""
+
+    repository: str
+    directory: Path
+
+    def run(self, *args):
+        """Run git command in the clone repository."""
+        return run(("git", "-C", self.directory) + args)
+
+    def get_ref(self, pattern):
+        """Return the reference of a given tag or branch."""
+        return self.run("show-ref", "-s", pattern).stdout.strip()
+
+    def switch(self, branch_or_tag):
+        """Reset and cleans the repository to the given branch or tag."""
+        self.run("fetch")
+        self.run("reset", "--hard", self.get_ref(branch_or_tag), "--")
+        self.run("clean", "-dfqx")
+
+    def clone(self):
+        """Maybe clone the repository, if not already cloned."""
+        if (self.directory / ".git").is_dir():
+            return  # Already cloned
+        logging.info("Cloning %s into %s", self.repository, self.directory)
+        self.directory.mkdir(mode=0o775, parents=True, exist_ok=True)
+        self.run("clone", self.repository, self.directory)
 
 
 def version_to_tuple(version):
@@ -342,7 +350,7 @@ def translation_branch(locale_repo, locale_clone_dir, needed_version: str):
     It could be enhanced to return tags, if needed, just return the
     tag as a string (without the `origin/` branch prefix).
     """
-    git_clone(locale_repo, locale_clone_dir)
+    Git(locale_repo, locale_clone_dir).clone()
     remote_branches = run(["git", "-C", locale_clone_dir, "branch", "-r"]).stdout
     branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
     return "origin/" + locate_nearest_version(branches, needed_version)
@@ -655,6 +663,10 @@ class DocBuilder:
         return self.build_root / "cpython"
 
     def clone_translation(self):
+        """Clone the translation repository from github.
+
+        See PEP 545 for repository naming convention.
+        """
         locale_repo = f"https://github.com/python/python-docs-{self.language.tag}.git"
         locale_clone_dir = (
             self.build_root
@@ -663,18 +675,16 @@ class DocBuilder:
             / self.language.iso639_tag
             / "LC_MESSAGES"
         )
-        git_clone(
-            locale_repo,
-            locale_clone_dir,
-            translation_branch(locale_repo, locale_clone_dir, self.version.name),
+        repo = Git(locale_repo, locale_clone_dir)
+        repo.clone()
+        repo.switch(
+            translation_branch(locale_repo, locale_clone_dir, self.version.name)
         )
 
     def clone_cpython(self):
-        git_clone(
-            "https://github.com/python/cpython.git",
-            self.checkout,
-            self.version.branch_or_tag,
-        )
+        repo = Git("https://github.com/python/cpython.git", self.checkout)
+        repo.clone()
+        repo.switch(self.version.branch_or_tag)
 
     def build(self):
         """Build this version/language doc."""
