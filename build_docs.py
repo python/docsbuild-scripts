@@ -3,7 +3,10 @@
 """Build the Python docs for various branches and various languages.
 
 Without any arguments builds docs for all active versions and
-languages configured in the config.ini file.
+languages.
+
+Languages are stored in `config.toml` while versions are discovered
+from the devguide.
 
 -q selects "quick build", which means to build only HTML.
 
@@ -20,7 +23,6 @@ Modified by Julien Palard to build translations.
 """
 
 from argparse import ArgumentParser
-import configparser
 from contextlib import suppress
 from dataclasses import dataclass
 import filecmp
@@ -47,6 +49,8 @@ from typing import Iterable
 import zc.lockfile
 import jinja2
 import requests
+from tomlkit import parse
+
 
 HERE = Path(__file__).resolve().parent
 
@@ -221,71 +225,6 @@ class Language:
             languages_dict = {language.tag: language for language in languages}
             return [languages_dict[tag] for tag in language_tags]
         return languages
-
-
-
-
-XELATEX_DEFAULT = (
-    "-D latex_engine=xelatex",
-    "-D latex_elements.inputenc=",
-    "-D latex_elements.fontenc=",
-)
-
-LUALATEX_FOR_JP = (
-    "-D latex_engine=lualatex",
-    "-D latex_elements.inputenc=",
-    "-D latex_elements.fontenc=",
-    "-D latex_docclass.manual=ltjsbook",
-    "-D latex_docclass.howto=ltjsarticle",
-
-    # supress polyglossia warnings
-    "-D latex_elements.polyglossia=",
-    "-D latex_elements.fontpkg=",
-
-    # preamble
-    "-D latex_elements.preamble="
-
-    # Render non-Japanese letters with luatex
-    # https://gist.github.com/zr-tex8r/e0931df922f38fbb67634f05dfdaf66b
-    r"\\usepackage[noto-otf]{luatexja-preset}"
-    r"\\usepackage{newunicodechar}"
-    r"\\newunicodechar{^^^^212a}{K}"
-
-    # Workaround for the luatex-ja issue (Thanks to @jfbu)
-    # https://github.com/sphinx-doc/sphinx/issues/11179#issuecomment-1420715092
-    # https://osdn.net/projects/luatex-ja/ticket/47321
-    r"\\makeatletter"
-    r"\\titleformat{\\subsubsection}{\\normalsize\\py@HeaderFamily}"
-    r"{\\py@TitleColor\\thesubsubsection}{0.5em}{\\py@TitleColor}"
-    r"\\titleformat{\\paragraph}{\\normalsize\\py@HeaderFamily}"
-    r"{\\py@TitleColor\\theparagraph}{0.5em}{\\py@TitleColor}"
-    r"\\titleformat{\\subparagraph}{\\normalsize\\py@HeaderFamily}"
-    r"{\\py@TitleColor\\thesubparagraph}{0.5em}{\\py@TitleColor}"
-    r"\\makeatother"
-
-    # subpress warning: (fancyhdr)Make it at least 16.4pt
-    r"\\setlength{\\footskip}{16.4pt}"
-)
-
-XELATEX_WITH_FONTSPEC = (
-    "-D latex_engine=xelatex",
-    "-D latex_elements.inputenc=",
-    r"-D latex_elements.fontenc=\\usepackage{fontspec}",
-)
-
-XELATEX_FOR_KOREAN = (
-    "-D latex_engine=xelatex",
-    "-D latex_elements.inputenc=",
-    "-D latex_elements.fontenc=",
-    r"-D latex_elements.preamble=\\usepackage{kotex}\\setmainhangulfont"
-    r"{UnBatang}\\setsanshangulfont{UnDotum}\\setmonohangulfont{UnTaza}",
-)
-
-XELATEX_WITH_CJK = (
-    "-D latex_engine=xelatex",
-    "-D latex_elements.inputenc=",
-    r"-D latex_elements.fontenc=\\usepackage{xeCJK}",
-)
 
 
 def run(cmd, cwd=None) -> subprocess.CompletedProcess:
@@ -626,7 +565,8 @@ def parse_args():
     parser.add_argument(
         "--languages",
         nargs="*",
-        help="Language translation, as a PEP 545 language tag like" " 'fr' or 'pt-br'. "
+        help="Language translation, as a PEP 545 language tag like"
+        " 'fr' or 'pt-br'. "
         "Use 'all' to build all of them (it's the default behavior).",
         metavar="fr",
     )
@@ -1061,20 +1001,18 @@ def parse_versions_from_devguide():
 
 
 def parse_languages_from_config():
-    config = configparser.ConfigParser()
-    config.read(HERE / "config.ini")
-    versions, languages = [], []
-    for name, section in config.items():
-        if name == "DEFAULT":
-            continue
+    """Read config.toml to discover languages to build."""
+    config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
+    languages = []
+    for name, section in config["languages"].items():
         languages.append(
             Language(
                 name,
                 section.get("iso639_tag", name),
                 section["name"],
-                section.getboolean("in_prod", True),
-                sphinxopts=globals()[section.get("sphinxopts", "XELATEX_DEFAULT")],
-                html_only=section.get("html_only", False),
+                section.get("in_prod", config["defaults"]["in_prod"]),
+                sphinxopts=section.get("sphinxopts", config["defaults"]["sphinxopts"]),
+                html_only=section.get("html_only", config["defaults"]["html_only"]),
             )
         )
     return languages
@@ -1127,8 +1065,6 @@ def main():
         build_docs(args)
     finally:
         lock.close()
-
-
 
 
 if __name__ == "__main__":

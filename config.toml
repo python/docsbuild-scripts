@@ -1,0 +1,123 @@
+[defaults]
+# name has no default, it is mandatory.
+# iso639_tag defaults to section key.
+in_prod = true
+html_only = false
+sphinxopts = [
+    "-D latex_engine=xelatex",
+    "-D latex_elements.inputenc=",
+    "-D latex_elements.fontenc=",
+]
+
+
+[languages]
+
+[languages.en]
+name = "English"
+
+[languages.es]
+name = "Spanish"
+sphinxopts = [
+    '-D latex_engine=xelatex',
+    '-D latex_elements.inputenc=',
+    '-D latex_elements.fontenc=\\usepackage{fontspec}',
+]
+
+[languages.fr]
+name = "French"
+sphinxopts = [
+    '-D latex_engine=xelatex',
+    '-D latex_elements.inputenc=',
+    '-D latex_elements.fontenc=\\usepackage{fontspec}',
+]
+
+[languages.id]
+name = "Indonesian"
+in_prod = false
+
+[languages.it]
+name = "Italian"
+in_prod = false
+
+[languages.ja]
+name = "Japanese"
+html_only = true  # See https://github.com/python/python-docs-ja/issues/35
+sphinxopts = [
+    '-D latex_engine=lualatex',
+    '-D latex_elements.inputenc=',
+    '-D latex_elements.fontenc=',
+    '-D latex_docclass.manual=ltjsbook',
+    '-D latex_docclass.howto=ltjsarticle',
+
+    # supress polyglossia warnings
+    '-D latex_elements.polyglossia=',
+    '-D latex_elements.fontpkg=',
+
+    # preamble
+    # Render non-Japanese letters with luatex
+    # https://gist.github.com/zr-tex8r/e0931df922f38fbb67634f05dfdaf66b
+    # Workaround for the luatex-ja issue (Thanks to @jfbu)
+    # https://github.com/sphinx-doc/sphinx/issues/11179#issuecomment-1420715092
+    # https://osdn.net/projects/luatex-ja/ticket/47321
+    # subpress warning: (fancyhdr)Make it at least 16.4pt
+    '''-D latex_elements.preamble=
+    \\usepackage[noto-otf]{luatexja-preset}
+    \\usepackage{newunicodechar}
+    \\newunicodechar{^^^^212a}{K}
+    \\makeatletter
+    \\titleformat{\\subsubsection}{\\normalsize\\py@HeaderFamily}
+    {\\py@TitleColor\\thesubsubsection}{0.5em}{\\py@TitleColor}
+    \\titleformat{\\paragraph}{\\normalsize\\py@HeaderFamily}
+    {\\py@TitleColor\\theparagraph}{0.5em}{\\py@TitleColor}
+    \\titleformat{\\subparagraph}{\\normalsize\\py@HeaderFamily}
+    {\\py@TitleColor\\thesubparagraph}{0.5em}{\\py@TitleColor}
+    \\makeatother
+    \\setlength{\\footskip}{16.4pt}'''
+]
+
+[languages.ko]
+name = "Korean"
+sphinxopts = [
+    '-D latex_engine=xelatex',
+    '-D latex_elements.inputenc=',
+    '-D latex_elements.fontenc=',
+    '''-D latex_elements.preamble=
+\\usepackage{kotex}
+\\setmainhangulfont{UnBatang}
+\\setsanshangulfont{UnDotum}
+\\setmonohangulfont{UnTaza}''',
+]
+
+[languages.pl]
+name = "Polish"
+in_prod = false
+
+[languages.pt-br]
+iso639_tag = "pt_BR"
+name = "Brazilian Portuguese"
+
+[languages.tr]
+name = "Turkish"
+
+[languages.uk]
+name = "Ukrainian"
+in_prod = false
+html_only = true
+
+[languages.zh-cn]
+iso639_tag = "zh_CN"
+name = "Simplified Chinese"
+sphinxopts = [
+    '-D latex_engine=xelatex',
+    '-D latex_elements.inputenc=',
+    '-D latex_elements.fontenc=\\usepackage{xeCJK}',
+]
+
+[languages.zh-tw]
+iso639_tag = "zh_TW"
+name = "Traditional Chinese"
+sphinxopts = [
+    '-D latex_engine=xelatex',
+    '-D latex_elements.inputenc=',
+    '-D latex_elements.fontenc=\\usepackage{xeCJK}',
+]
