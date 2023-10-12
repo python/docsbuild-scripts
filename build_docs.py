@@ -24,6 +24,8 @@ Modified by Julien Palard to build translations.
 from argparse import ArgumentParser
 from contextlib import suppress, contextmanager
 from dataclasses import dataclass
+from datetime import datetime as dt, timezone
+from time import perf_counter
 import filecmp
 import json
 import logging
@@ -354,20 +356,6 @@ def locate_nearest_version(available_versions, target_version):
     return tuple_to_version(found)
 
 
-def translation_branch(repo: Repository, needed_version: str):
-    """Some cpython versions may be untranslated, being either too old or
-    too new.
-
-    This function looks for remote branches on the given repo, and
-    returns the name of the nearest existing branch.
-
-    It could be enhanced to also search for tags.
-    """
-    remote_branches = repo.run("branch", "-r").stdout
-    branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
-    return locate_nearest_version(branches, needed_version)
-
-
 @contextmanager
 def edit(file: Path):
     """Context manager to edit a file "in place", use it as:
@@ -652,6 +640,7 @@ class DocBuilder:
 
     def run(self) -> bool:
         """Build and publish a Python doc, for a language, and a version."""
+        start_time = perf_counter()
         try:
             self.cpython_repo.switch(self.version.branch_or_tag)
             if self.language.tag != "en":
@@ -659,6 +648,7 @@ class DocBuilder:
             self.build_venv()
             self.build()
             self.copy_build_to_webroot()
+            self.save_state(build_duration=perf_counter() - start_time)
         except Exception as err:
             logging.exception(
                 "Exception while building %s version %s",
@@ -676,10 +666,13 @@ class DocBuilder:
         return self.build_root / "cpython"
 
     def clone_translation(self):
-        """Clone the translation repository from github.
+        self.translation_repo.update()
+        self.translation_repo.switch(self.translation_branch)
 
-        See PEP 545 for repository naming convention.
-        """
+    @property
+    def translation_repo(self):
+        """See PEP 545 for translations repository naming convention."""
+
         locale_repo = f"https://github.com/python/python-docs-{self.language.tag}.git"
         locale_clone_dir = (
             self.build_root
@@ -688,9 +681,21 @@ class DocBuilder:
             / self.language.iso639_tag
             / "LC_MESSAGES"
         )
-        repo = Repository(locale_repo, locale_clone_dir)
-        repo.update()
-        repo.switch(translation_branch(repo, self.version.name))
+        return Repository(locale_repo, locale_clone_dir)
+
+    @property
+    def translation_branch(self):
+        """Some cpython versions may be untranslated, being either too old or
+        too new.
+
+        This function looks for remote branches on the given repo, and
+        returns the name of the nearest existing branch.
+
+        It could be enhanced to also search for tags.
+        """
+        remote_branches = self.translation_repo.run("branch", "-r").stdout
+        branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
+        return locate_nearest_version(branches, self.version.name)
 
     def build(self):
         """Build this version/language doc."""
@@ -921,6 +926,32 @@ class DocBuilder:
             self.version.name,
             self.language.tag,
         )
+
+    def save_state(self, build_duration):
+        """Save current cpython sha1 and current translation sha1.
+
+        Using this we can deduce if a rebuild is needed or not.
+        """
+        state_file = self.build_root / "state.toml"
+        try:
+            states = tomlkit.parse(state_file.read_text(encoding="UTF-8"))
+        except FileNotFoundError:
+            states = tomlkit.document()
+
+        state = {}
+        state["cpython_sha"] = self.cpython_repo.run("rev-parse", "HEAD").stdout.strip()
+        if self.language.tag != "en":
+            state["translation_sha"] = self.translation_repo.run(
+                "rev-parse", "HEAD"
+            ).stdout.strip()
+        state["last_build"] = dt.now(timezone.utc)
+        state["last_build_duration"] = build_duration
+
+        states.setdefault("build", {}).setdefault(self.language.tag, {})[
+            self.version.name
+        ] = state
+
+        state_file.write_text(tomlkit.dumps(states), encoding="UTF-8")
 
 
 def symlink(www_root: Path, language: Language, directory: str, name: str, group: str):
