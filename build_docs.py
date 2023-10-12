@@ -23,10 +23,9 @@ Modified by Julien Palard to build translations.
 """
 
 from argparse import ArgumentParser
-from contextlib import suppress
+from contextlib import suppress, contextmanager
 from dataclasses import dataclass
 import filecmp
-from itertools import chain, product
 import json
 import logging
 import logging.handlers
@@ -37,10 +36,8 @@ import shlex
 import shutil
 import subprocess
 import sys
-import time
 from bisect import bisect_left as bisect
 from collections import OrderedDict
-from contextlib import contextmanager
 from pathlib import Path
 from string import Template
 from textwrap import indent
@@ -49,10 +46,8 @@ from typing import Iterable
 import zc.lockfile
 import jinja2
 import requests
-from tomlkit import parse
+import tomlkit
 
-
-HERE = Path(__file__).resolve().parent
 
 try:
     from os import EX_OK, EX_SOFTWARE as EX_FAILURE
@@ -66,11 +61,7 @@ except ImportError:
 else:
     sentry_sdk.init()
 
-if not hasattr(shlex, "join"):
-    # Add shlex.join if missing (pre 3.8)
-    shlex.join = lambda split_command: " ".join(
-        shlex.quote(arg) for arg in split_command
-    )
+HERE = Path(__file__).resolve().parent
 
 
 @total_ordering
@@ -98,7 +89,8 @@ class Version:
         status = self.SYNONYMS.get(status, status)
         if status not in self.STATUSES:
             raise ValueError(
-                f"Version status expected to be one of: {', '.join(self.STATUSES|set(self.SYNONYMS.keys()))}, got {status!r}."
+                "Version status expected to be one of: "
+                f"{', '.join(self.STATUSES|set(self.SYNONYMS.keys()))}, got {status!r}."
             )
         self.name = name
         self.branch_or_tag = branch_or_tag
@@ -167,7 +159,7 @@ class Version:
     @staticmethod
     def current_stable(versions):
         """Find the current stable cPython version."""
-        return max([v for v in versions if v.status == "stable"], key=Version.as_tuple)
+        return max((v for v in versions if v.status == "stable"), key=Version.as_tuple)
 
     @staticmethod
     def current_dev(versions):
@@ -201,6 +193,7 @@ class Version:
 
     @classmethod
     def from_json(cls, name, values):
+        """Loads a version from devguide's json representation."""
         return cls(name, status=values["status"], branch_or_tag=values["branch"])
 
     def __eq__(self, other):
@@ -221,6 +214,7 @@ class Language:
 
     @staticmethod
     def filter(languages, language_tags=None):
+        """Filter a sequence of languages according to --languages."""
         if language_tags:
             languages_dict = {language.tag: language for language in languages}
             return [languages_dict[tag] for tag in language_tags]
@@ -447,7 +441,7 @@ def build_robots_txt(
     robots_file.chmod(0o775)
     run(["chgrp", group, robots_file])
     if not skip_cache_invalidation:
-        requests.request("PURGE", "https://docs.python.org/robots.txt")
+        requests.request("PURGE", "https://docs.python.org/robots.txt", timeout=30)
 
 
 def build_sitemap(
@@ -703,13 +697,19 @@ class DocBuilder:
         if self.language.tag == "ja":
             # Since luatex doesn't support \ufffd, replace \ufffd with '?'.
             # https://gist.github.com/zr-tex8r/e0931df922f38fbb67634f05dfdaf66b
-            # Luatex already fixed this issue, so we can remove this once Texlive is updated.
+            # Luatex already fixed this issue, so we can remove this once Texlive
+            # is updated.
             # (https://github.com/TeX-Live/luatex/commit/eaa95ce0a141eaf7a02)
-            subprocess.check_output("sed -i s/\N{REPLACEMENT CHARACTER}/?/g "
-                                    f"{locale_dirs}/ja/LC_MESSAGES/**/*.po",
-                                    shell=True)
-            subprocess.check_output("sed -i s/\N{REPLACEMENT CHARACTER}/?/g "
-                                    f"{self.checkout}/Doc/**/*.rst", shell=True)
+            subprocess.check_output(
+                "sed -i s/\N{REPLACEMENT CHARACTER}/?/g "
+                f"{locale_dirs}/ja/LC_MESSAGES/**/*.po",
+                shell=True,
+            )
+            subprocess.check_output(
+                "sed -i s/\N{REPLACEMENT CHARACTER}/?/g "
+                f"{self.checkout}/Doc/**/*.rst",
+                shell=True,
+            )
 
         if self.version.status == "EOL":
             sphinxopts.append("-D html_context.outdated=1")
@@ -983,7 +983,7 @@ def proofread_canonicals(www_root: Path, skip_cache_invalidation: bool) -> None:
             if not skip_cache_invalidation:
                 url = str(file).replace("/srv/", "https://")
                 logging.info("Purging %s from CDN", url)
-                requests.request("PURGE", url)
+                requests.request("PURGE", url, timeout=30)
 
 
 def purge_path(www_root: Path, path: Path):
@@ -995,7 +995,9 @@ def purge_path(www_root: Path, path: Path):
 
 def parse_versions_from_devguide():
     releases = requests.get(
-        "https://raw.githubusercontent.com/python/devguide/main/include/release-cycle.json"
+        "https://raw.githubusercontent.com/"
+        "python/devguide/main/include/release-cycle.json",
+        timeout=30,
     ).json()
     return [Version.from_json(name, release) for name, release in releases.items()]
 
@@ -1059,14 +1061,13 @@ def main():
         lock = zc.lockfile.LockFile(HERE / "build_docs.lock")
     except zc.lockfile.LockError:
         logging.info("Another builder is running... dying...")
-        return False
+        return EX_FAILURE
 
     try:
-        build_docs(args)
+        return EX_OK if build_docs(args) else EX_FAILURE
     finally:
         lock.close()
 
 
 if __name__ == "__main__":
-    all_built_successfully = main()
-    sys.exit(EX_OK if all_built_successfully else EX_FAILURE)
+    sys.exit(main())

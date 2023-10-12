@@ -54,14 +54,3 @@ of Sphinx we're using where:
     3.12       4.5.0  4.5.0  4.5.0  4.5.0  4.5.0  4.5.0  4.5.0  4.5.0  4.5.0    4.5.0  4.5.0  4.5.0    4.5.0
     3.13       6.2.1  6.2.1  6.2.1  6.2.1  6.2.1  6.2.1  6.2.1  6.2.1  6.2.1    6.2.1  6.2.1  6.2.1    6.2.1
     =========  =====  =====  =====  =====  =====  =====  =====  =====  =======  =====  =====  =======  =======
-
-## The GitHub hook server
-
-`build_docs_server.py` is a simple HTTP server handling GitHub Webhooks
-requests to build the doc when needed. It only needs `push` events.
-
-Its logging can be configured by giving a yaml file path to the
-`--logging-config` argument.
-
-By default the loglevel is `DEBUG` on `stderr`, the default config can
-be found in the code so one can bootstrap a different config from it.
