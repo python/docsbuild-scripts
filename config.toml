@@ -41,7 +41,6 @@ in_prod = false
 
 [languages.ja]
 name = "Japanese"
-html_only = true  # See https://github.com/python/python-docs-ja/issues/35
 sphinxopts = [
     '-D latex_engine=lualatex',
     '-D latex_elements.inputenc=',
