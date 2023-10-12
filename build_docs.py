@@ -75,24 +75,29 @@ class Version:
 
     STATUSES = {"EOL", "security-fixes", "stable", "pre-release", "in development"}
 
+    # Those synonyms map branch status vocabulary found in the devguide
+    # with our vocabulary.
+    SYNONYMS = {
+        "feature": "in development",
+        "bugfix": "stable",
+        "security": "security-fixes",
+        "end-of-life": "EOL",
+    }
+
     def __init__(
         self,
         name,
         *,
         status,
-        branch=None,
-        tag=None,
+        branch_or_tag=None,
     ):
+        status = self.SYNONYMS.get(status, status)
         if status not in self.STATUSES:
             raise ValueError(
-                f"Version status expected to be in {', '.join(self.STATUSES)}"
+                f"Version status expected to be one of: {', '.join(self.STATUSES|set(self.SYNONYMS.keys()))}, got {status!r}."
             )
         self.name = name
-        if branch is not None and tag is not None:
-            raise ValueError("Please build a version from either a branch or a tag.")
-        if branch is None and tag is None:
-            raise ValueError("Please build a version with at least a branch or a tag.")
-        self.branch_or_tag = branch or tag
+        self.branch_or_tag = branch_or_tag
         self.status = status
 
     def __repr__(self):
@@ -190,6 +195,10 @@ class Version:
                 )
             )
 
+    @classmethod
+    def from_json(cls, name, values):
+        return cls(name, status=values["status"], branch_or_tag=values["branch"])
+
     def __eq__(self, other):
         return self.name == other.name
 
@@ -205,6 +214,15 @@ class Language:
     in_prod: bool
     sphinxopts: tuple
     html_only: bool = False
+
+    @staticmethod
+    def filter(languages, language_tags=None):
+        if language_tags:
+            languages_dict = {language.tag: language for language in languages}
+            return [languages_dict[tag] for tag in language_tags]
+        return languages
+
+
 
 
 XELATEX_DEFAULT = (
@@ -572,8 +590,7 @@ def parse_args():
     parser.add_argument(
         "-b",
         "--branch",
-        choices=dict.fromkeys(chain(*((v.branch_or_tag, v.name) for v in VERSIONS))),
-        metavar=Version.current_dev().name,
+        metavar="3.7",
         help="Version to build (defaults to all maintained branches).",
     )
     parser.add_argument(
@@ -609,7 +626,6 @@ def parse_args():
     parser.add_argument(
         "--languages",
         nargs="*",
-        default="all",
         help="Language translation, as a PEP 545 language tag like" " 'fr' or 'pt-br'. "
         "Use 'all' to build all of them (it's the default behavior).",
         metavar="fr",
@@ -1037,44 +1053,42 @@ def purge_path(www_root: Path, path: Path):
     run(["curl", "-XPURGE", f"https://docs.python.org/{{{','.join(to_purge)}}}"])
 
 
-def parse_config():
+def parse_versions_from_devguide():
+    releases = requests.get(
+        "https://raw.githubusercontent.com/python/devguide/main/include/release-cycle.json"
+    ).json()
+    return [Version.from_json(name, release) for name, release in releases.items()]
+
+
+def parse_languages_from_config():
     config = configparser.ConfigParser()
     config.read(HERE / "config.ini")
     versions, languages = [], []
     for name, section in config.items():
-        if section.get("status"):  # It's a version
-            versions.append(
-                Version(
-                    name,
-                    status=section["status"],
-                    branch=section.get("branch"),
-                    tag=section.get("tag"),
-                )
+        if name == "DEFAULT":
+            continue
+        languages.append(
+            Language(
+                name,
+                section.get("iso639_tag", name),
+                section["name"],
+                section.getboolean("in_prod", True),
+                sphinxopts=globals()[section.get("sphinxopts", "XELATEX_DEFAULT")],
+                html_only=section.get("html_only", False),
             )
-        if section.get("name"):  # It's a language
-            languages.append(
-                Language(
-                    name,
-                    section.get("iso639_tag", name),
-                    section["name"],
-                    section.getboolean("in_prod", True),
-                    sphinxopts=globals()[section.get("sphinxopts", "XELATEX_DEFAULT")],
-                    html_only=section.get("html_only", False),
-                )
-            )
-    return versions, languages
+        )
+    return languages
 
 
 def build_docs(args) -> bool:
     """Build all docs (each languages and each versions)."""
-    versions, languages = parse_config()
-    languages_dict = {language.tag: language for language in languages}
-    todo = list(
-        product(
-            Version.filter(versions, args.branch),
-            [languages_dict[tag] for tag in args.languages],
-        )
-    )
+    versions = parse_versions_from_devguide()
+    languages = parse_languages_from_config()
+    todo = [
+        (version, language)
+        for version in Version.filter(versions, args.branch)
+        for language in Language.filter(languages, args.languages)
+    ]
     del args.branch
     del args.languages
     all_built_successfully = True
