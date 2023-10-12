@@ -60,19 +60,7 @@ sphinxopts = [
     # https://github.com/sphinx-doc/sphinx/issues/11179#issuecomment-1420715092
     # https://osdn.net/projects/luatex-ja/ticket/47321
     # subpress warning: (fancyhdr)Make it at least 16.4pt
-    '''-D latex_elements.preamble=
-    \\usepackage[noto-otf]{luatexja-preset}
-    \\usepackage{newunicodechar}
-    \\newunicodechar{^^^^212a}{K}
-    \\makeatletter
-    \\titleformat{\\subsubsection}{\\normalsize\\py@HeaderFamily}
-    {\\py@TitleColor\\thesubsubsection}{0.5em}{\\py@TitleColor}
-    \\titleformat{\\paragraph}{\\normalsize\\py@HeaderFamily}
-    {\\py@TitleColor\\theparagraph}{0.5em}{\\py@TitleColor}
-    \\titleformat{\\subparagraph}{\\normalsize\\py@HeaderFamily}
-    {\\py@TitleColor\\thesubparagraph}{0.5em}{\\py@TitleColor}
-    \\makeatother
-    \\setlength{\\footskip}{16.4pt}'''
+    '-D latex_elements.preamble=\\usepackage[noto-otf]{luatexja-preset}\\usepackage{newunicodechar}\\newunicodechar{^^^^212a}{K}\\makeatletter\\titleformat{\\subsubsection}{\\normalsize\\py@HeaderFamily}{\\py@TitleColor\\thesubsubsection}{0.5em}{\\py@TitleColor}\\titleformat{\\paragraph}{\\normalsize\\py@HeaderFamily}{\\py@TitleColor\\theparagraph}{0.5em}{\\py@TitleColor}\\titleformat{\\subparagraph}{\\normalsize\\py@HeaderFamily}{\\py@TitleColor\\thesubparagraph}{0.5em}{\\py@TitleColor}\\makeatother\\setlength{\\footskip}{16.4pt}'
 ]
 
 [languages.ko]
@@ -81,11 +69,7 @@ sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',
     '-D latex_elements.fontenc=',
-    '''-D latex_elements.preamble=
-\\usepackage{kotex}
-\\setmainhangulfont{UnBatang}
-\\setsanshangulfont{UnDotum}
-\\setmonohangulfont{UnTaza}''',
+    '-D latex_elements.preamble=\\usepackage{kotex}\\setmainhangulfont{UnBatang}\\setsanshangulfont{UnDotum}\\setmonohangulfont{UnTaza}',
 ]
 
 [languages.pl]
