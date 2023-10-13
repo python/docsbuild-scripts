@@ -25,7 +25,7 @@ from argparse import ArgumentParser
 from contextlib import suppress, contextmanager
 from dataclasses import dataclass
 from datetime import datetime as dt, timezone
-from time import perf_counter
+from time import perf_counter, sleep
 import filecmp
 import json
 import logging
@@ -279,6 +279,15 @@ class Repository:
 
     remote: str
     directory: Path
+
+    def fetch(self):
+        """Try (and retry) to run git fetch."""
+        try:
+            return self.run("fetch")
+        except subprocess.CalledProcessError as err:
+            logging.error("'git fetch' failed (%s), retrying...", err.stderr)
+            sleep(5)
+        return self.run("fetch")
 
     def run(self, *args):
         """Run git command in the clone repository."""
