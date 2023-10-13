@@ -657,10 +657,13 @@ class DocBuilder:
             self.cpython_repo.switch(self.version.branch_or_tag)
             if self.language.tag != "en":
                 self.clone_translation()
-            self.build_venv()
-            self.build()
-            self.copy_build_to_webroot()
-            self.save_state(build_duration=perf_counter() - start_time)
+            if self.should_rebuild():
+                self.build_venv()
+                self.build()
+                self.copy_build_to_webroot()
+                self.save_state(build_duration=perf_counter() - start_time)
+            else:
+                logging.info("Nothing changed.")
         except Exception as err:
             logging.exception("Badly handled exception, human, please help.")
             if sentry_sdk:
@@ -919,7 +922,35 @@ class DocBuilder:
                 purge(*[prefix + p for p in changed])
         logging.info("Publishing done")
 
-    def save_state(self, build_duration):
+    def should_rebuild(self):
+        state = self.load_state()
+        if not state:
+            return True
+        cpython_sha = self.cpython_repo.run("rev-parse", "HEAD").stdout.strip()
+        if self.language.tag != "en":
+            translation_sha = self.translation_repo.run(
+                "rev-parse", "HEAD"
+            ).stdout.strip()
+            if translation_sha != state["translation_sha"]:
+                return True
+        if cpython_sha != state["cpython_sha"]:
+            diff = self.cpython_repo.run(
+                "diff", "--name-only", state["cpython_sha"], cpython_sha
+            ).stdout
+            if "Doc/" in diff:
+                return True
+        return False
+
+    def load_state(self) -> dict:
+        state_file = self.build_root / "state.toml"
+        try:
+            return tomlkit.loads(state_file.read_text(encoding="UTF-8"))[
+                f"/{self.language.tag}/{self.version.name}/"
+            ]
+        except KeyError:
+            return {}
+
+    def save_state(self, build_duration: float):
         """Save current cpython sha1 and current translation sha1.
 
         Using this we can deduce if a rebuild is needed or not.
@@ -938,11 +969,7 @@ class DocBuilder:
             ).stdout.strip()
         state["last_build"] = dt.now(timezone.utc)
         state["last_build_duration"] = build_duration
-
-        states.setdefault("build", {}).setdefault(self.language.tag, {})[
-            self.version.name
-        ] = state
-
+        states[f"/{self.language.tag}/{self.version.name}/"] = state
         state_file.write_text(tomlkit.dumps(states), encoding="UTF-8")
 
 
