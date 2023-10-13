@@ -248,8 +248,6 @@ def run(cmd, cwd=None) -> subprocess.CompletedProcess:
             cmdstring,
             indent("\n".join(result.stdout.split("\n")[-20:]), "    "),
         )
-    else:
-        logging.debug("Run: %r OK", cmdstring)
     result.check_returncode()
     return result
 
@@ -609,11 +607,15 @@ def parse_args():
 def setup_logging(log_directory: Path):
     """Setup logging to stderr if ran by a human, or to a file if ran from a cron."""
     if sys.stderr.isatty():
-        logging.basicConfig(format="%(levelname)s:%(message)s", stream=sys.stderr)
+        logging.basicConfig(
+            format="%(asctime)s %(levelname)s: %(message)s", stream=sys.stderr
+        )
     else:
         log_directory.mkdir(parents=True, exist_ok=True)
         handler = logging.handlers.WatchedFileHandler(log_directory / "docsbuild.log")
-        handler.setFormatter(logging.Formatter("%(levelname)s:%(asctime)s:%(message)s"))
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
+        )
         logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.DEBUG)
 
@@ -650,6 +652,7 @@ class DocBuilder:
     def run(self) -> bool:
         """Build and publish a Python doc, for a language, and a version."""
         start_time = perf_counter()
+        logging.info("Running.")
         try:
             self.cpython_repo.switch(self.version.branch_or_tag)
             if self.language.tag != "en":
@@ -659,11 +662,7 @@ class DocBuilder:
             self.copy_build_to_webroot()
             self.save_state(build_duration=perf_counter() - start_time)
         except Exception as err:
-            logging.exception(
-                "Exception while building %s version %s",
-                self.language.tag,
-                self.version.name,
-            )
+            logging.exception("Badly handled exception, human, please help.")
             if sentry_sdk:
                 sentry_sdk.capture_exception(err)
             return False
@@ -708,11 +707,7 @@ class DocBuilder:
 
     def build(self):
         """Build this version/language doc."""
-        logging.info(
-            "Build start for version: %s, language: %s",
-            self.version.name,
-            self.language.tag,
-        )
+        logging.info("Build start.")
         sphinxopts = list(self.language.sphinxopts)
         sphinxopts.extend(["-q"])
         if self.language.tag != "en":
@@ -788,11 +783,7 @@ class DocBuilder:
         setup_switchers(
             self.versions, self.languages, self.checkout / "Doc" / "build" / "html"
         )
-        logging.info(
-            "Build done for version: %s, language: %s",
-            self.version.name,
-            self.language.tag,
-        )
+        logging.info("Build done.")
 
     def build_venv(self):
         """Build a venv for the specific Python version.
@@ -813,11 +804,7 @@ class DocBuilder:
 
     def copy_build_to_webroot(self):
         """Copy a given build to the appropriate webroot with appropriate rights."""
-        logging.info(
-            "Publishing start for version: %s, language: %s",
-            self.version.name,
-            self.language.tag,
-        )
+        logging.info("Publishing start.")
         self.www_root.mkdir(parents=True, exist_ok=True)
         if self.language.tag == "en":
             target = self.www_root / self.version.name
@@ -887,7 +874,7 @@ class DocBuilder:
                 ]
             )
         if self.full_build:
-            logging.debug("Copying dist files")
+            logging.debug("Copying dist files.")
             run(
                 [
                     "chown",
@@ -930,11 +917,7 @@ class DocBuilder:
             purge(*prefixes)
             for prefix in prefixes:
                 purge(*[prefix + p for p in changed])
-        logging.info(
-            "Publishing done for version: %s, language: %s",
-            self.version.name,
-            self.language.tag,
-        )
+        logging.info("Publishing done")
 
     def save_state(self, build_duration):
         """Save current cpython sha1 and current translation sha1.
@@ -1103,6 +1086,11 @@ def build_docs(args) -> bool:
     cpython_repo.update()
     while todo:
         version, language = todo.pop()
+        logging.root.handlers[0].setFormatter(
+            logging.Formatter(
+                f"%(asctime)s %(levelname)s {language.tag}/{version.name}: %(message)s"
+            )
+        )
         if sentry_sdk:
             with sentry_sdk.configure_scope() as scope:
                 scope.set_tag("version", version.name)
@@ -1111,6 +1099,10 @@ def build_docs(args) -> bool:
             version, versions, language, languages, cpython_repo, **vars(args)
         )
         all_built_successfully &= builder.run()
+    logging.root.handlers[0].setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
+    )
+
     build_sitemap(versions, languages, args.www_root, args.group)
     build_404(args.www_root, args.group)
     build_robots_txt(
