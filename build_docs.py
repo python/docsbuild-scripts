@@ -295,7 +295,7 @@ class Git:
             return  # Already cloned
         logging.info("Cloning %s into %s", self.repository, self.directory)
         self.directory.mkdir(mode=0o775, parents=True, exist_ok=True)
-        self.run("clone", self.repository, self.directory)
+        run(["git", "clone", self.repository, self.directory])
 
 
 def version_to_tuple(version):
