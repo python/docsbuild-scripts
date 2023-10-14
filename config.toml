@@ -9,9 +9,6 @@ sphinxopts = [
     "-D latex_elements.fontenc=",
 ]
 
-
-[languages]
-
 [languages.en]
 name = "English"
 
