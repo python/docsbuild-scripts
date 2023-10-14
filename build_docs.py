@@ -709,7 +709,7 @@ class DocBuilder:
             # https://gist.github.com/zr-tex8r/e0931df922f38fbb67634f05dfdaf66b
             # Luatex already fixed this issue, so we can remove this once Texlive
             # is updated.
-            # (https://github.com/TeX-Live/luatex/commit/eaa95ce0a141eaf7a02)
+            # (https://github.com/TeX-Live/luatex/commit/af5faf1)
             subprocess.check_output(
                 "sed -i s/\N{REPLACEMENT CHARACTER}/?/g "
                 f"{locale_dirs}/ja/LC_MESSAGES/**/*.po",
