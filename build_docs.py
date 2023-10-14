@@ -42,6 +42,7 @@ from pathlib import Path
 from string import Template
 from textwrap import indent
 from typing import Iterable
+from urllib.parse import urljoin
 
 import zc.lockfile
 import jinja2
@@ -448,7 +449,7 @@ def build_robots_txt(
     robots_file.chmod(0o775)
     run(["chgrp", group, robots_file])
     if not skip_cache_invalidation:
-        requests.request("PURGE", "https://docs.python.org/robots.txt", timeout=30)
+        purge("robots.txt")
 
 
 def build_sitemap(
@@ -904,13 +905,9 @@ class DocBuilder:
             prefixes = run(["find", "-L", targets_dir, "-samefile", target]).stdout
             prefixes = prefixes.replace(targets_dir + "/", "")
             prefixes = [prefix + "/" for prefix in prefixes.split("\n") if prefix]
-            to_purge = prefixes[:]
+            purge(*prefixes)
             for prefix in prefixes:
-                to_purge.extend(prefix + p for p in changed)
-            logging.info("Running CDN purge")
-            run(
-                ["curl", "-XPURGE", f"https://docs.python.org/{{{','.join(to_purge)}}}"]
-            )
+                purge(*[prefix + p for p in changed])
         logging.info(
             "Publishing done for version: %s, language: %s",
             self.version.name,
@@ -966,6 +963,28 @@ def dev_symlink(www_root: Path, group, versions, languages):
         symlink(www_root, language, current_dev, "dev", group)
 
 
+def purge(*paths):
+    """Remove one or many paths from docs.python.org's CDN.
+
+    To be used when a file change, so the CDN fetch the new one.
+    """
+    base = "https://docs.python.org/"
+    for path in paths:
+        url = urljoin(base, str(path))
+        logging.info("Purging %s from CDN", url)
+        requests.request("PURGE", url, timeout=30)
+
+
+def purge_path(www_root: Path, path: Path):
+    """Recursively remove a path from docs.python.org's CDN.
+
+    To be used when a directory change, so the CDN fetch the new one.
+    """
+    purge(*[file.relative_to(www_root) for file in path.glob("**/*")])
+    purge(path.relative_to(www_root))
+    purge(str(path.relative_to(www_root)) + "/")
+
+
 def proofread_canonicals(www_root: Path, skip_cache_invalidation: bool) -> None:
     """In www_root we check that all canonical links point to existing contents.
 
@@ -988,16 +1007,7 @@ def proofread_canonicals(www_root: Path, skip_cache_invalidation: bool) -> None:
             html = html.replace(canonical.group(0), "")
             file.write_text(html, encoding="UTF-8", errors="surrogateescape")
             if not skip_cache_invalidation:
-                url = str(file).replace("/srv/", "https://")
-                logging.info("Purging %s from CDN", url)
-                requests.request("PURGE", url, timeout=30)
-
-
-def purge_path(www_root: Path, path: Path):
-    to_purge = [str(file.relative_to(www_root)) for file in path.glob("**/*")]
-    to_purge.append(str(path.relative_to(www_root)))
-    to_purge.append(str(path.relative_to(www_root)) + "/")
-    run(["curl", "-XPURGE", f"https://docs.python.org/{{{','.join(to_purge)}}}"])
+                purge(str(file).replace("/srv/docs.python.org/", ""))
 
 
 def parse_versions_from_devguide():
