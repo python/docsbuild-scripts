@@ -340,7 +340,7 @@ def locate_nearest_version(available_versions, target_version):
     return tuple_to_version(found)
 
 
-def translation_branch(locale_repo, locale_clone_dir, needed_version: str):
+def translation_branch(repo: Git, needed_version: str):
     """Some cpython versions may be untranslated, being either too old or
     too new.
 
@@ -350,8 +350,7 @@ def translation_branch(locale_repo, locale_clone_dir, needed_version: str):
     It could be enhanced to return tags, if needed, just return the
     tag as a string (without the `origin/` branch prefix).
     """
-    Git(locale_repo, locale_clone_dir).clone()
-    remote_branches = run(["git", "-C", locale_clone_dir, "branch", "-r"]).stdout
+    remote_branches = repo.run("branch", "-r").stdout
     branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
     return "origin/" + locate_nearest_version(branches, needed_version)
 
@@ -677,9 +676,7 @@ class DocBuilder:
         )
         repo = Git(locale_repo, locale_clone_dir)
         repo.clone()
-        repo.switch(
-            translation_branch(locale_repo, locale_clone_dir, self.version.name)
-        )
+        repo.switch(translation_branch(repo, self.version.name))
 
     def clone_cpython(self):
         repo = Git("https://github.com/python/cpython.git", self.checkout)
