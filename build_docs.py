@@ -273,10 +273,10 @@ def changed_files(left, right):
 
 
 @dataclass
-class Git:
-    """Git command abstraction for our specific needs."""
+class Repository:
+    """Git repository abstraction for our specific needs."""
 
-    repository: str
+    remote: str
     directory: Path
 
     def run(self, *args):
@@ -297,9 +297,9 @@ class Git:
         """Maybe clone the repository, if not already cloned."""
         if (self.directory / ".git").is_dir():
             return  # Already cloned
-        logging.info("Cloning %s into %s", self.repository, self.directory)
+        logging.info("Cloning %s into %s", self.remote, self.directory)
         self.directory.mkdir(mode=0o775, parents=True, exist_ok=True)
-        run(["git", "clone", self.repository, self.directory])
+        run(["git", "clone", self.remote, self.directory])
 
 
 def version_to_tuple(version):
@@ -344,7 +344,7 @@ def locate_nearest_version(available_versions, target_version):
     return tuple_to_version(found)
 
 
-def translation_branch(repo: Git, needed_version: str):
+def translation_branch(repo: Repository, needed_version: str):
     """Some cpython versions may be untranslated, being either too old or
     too new.
 
@@ -678,12 +678,12 @@ class DocBuilder:
             / self.language.iso639_tag
             / "LC_MESSAGES"
         )
-        repo = Git(locale_repo, locale_clone_dir)
+        repo = Repository(locale_repo, locale_clone_dir)
         repo.clone()
         repo.switch(translation_branch(repo, self.version.name))
 
     def clone_cpython(self):
-        repo = Git("https://github.com/python/cpython.git", self.checkout)
+        repo = Repository("https://github.com/python/cpython.git", self.checkout)
         repo.clone()
         repo.switch(self.version.branch_or_tag)
 
