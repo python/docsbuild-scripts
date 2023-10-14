@@ -287,19 +287,25 @@ class Repository:
         """Return the reference of a given tag or branch."""
         return self.run("show-ref", "-s", pattern).stdout.strip()
 
+    def fetch(self):
+        self.run("fetch")
+
     def switch(self, branch_or_tag):
         """Reset and cleans the repository to the given branch or tag."""
-        self.run("fetch")
         self.run("reset", "--hard", self.get_ref(branch_or_tag), "--")
         self.run("clean", "-dfqx")
 
     def clone(self):
         """Maybe clone the repository, if not already cloned."""
         if (self.directory / ".git").is_dir():
-            return  # Already cloned
+            return False  # Already cloned
         logging.info("Cloning %s into %s", self.remote, self.directory)
         self.directory.mkdir(mode=0o775, parents=True, exist_ok=True)
         run(["git", "clone", self.remote, self.directory])
+        return True
+
+    def update(self):
+        self.clone() or self.fetch()
 
 
 def version_to_tuple(version):
@@ -620,6 +626,7 @@ class DocBuilder:
     versions: Iterable[Version]
     language: Language
     languages: Iterable[Language]
+    cpython_repo: Repository
     build_root: Path
     www_root: Path
     quick: bool
@@ -643,7 +650,7 @@ class DocBuilder:
     def run(self) -> bool:
         """Build and publish a Python doc, for a language, and a version."""
         try:
-            self.clone_cpython()
+            self.cpython_repo.switch(self.version.branch_or_tag)
             if self.language.tag != "en":
                 self.clone_translation()
             self.build_venv()
@@ -679,13 +686,8 @@ class DocBuilder:
             / "LC_MESSAGES"
         )
         repo = Repository(locale_repo, locale_clone_dir)
-        repo.clone()
+        repo.update()
         repo.switch(translation_branch(repo, self.version.name))
-
-    def clone_cpython(self):
-        repo = Repository("https://github.com/python/cpython.git", self.checkout)
-        repo.clone()
-        repo.switch(self.version.branch_or_tag)
 
     def build(self):
         """Build this version/language doc."""
@@ -1052,13 +1054,19 @@ def build_docs(args) -> bool:
     del args.branch
     del args.languages
     all_built_successfully = True
+    cpython_repo = Repository(
+        "https://github.com/python/cpython.git", args.build_root / "cpython"
+    )
+    cpython_repo.update()
     while todo:
         version, language = todo.pop()
         if sentry_sdk:
             with sentry_sdk.configure_scope() as scope:
                 scope.set_tag("version", version.name)
                 scope.set_tag("language", language.tag)
-        builder = DocBuilder(version, versions, language, languages, **vars(args))
+        builder = DocBuilder(
+            version, versions, language, languages, cpython_repo, **vars(args)
+        )
         all_built_successfully &= builder.run()
     build_sitemap(versions, languages, args.www_root, args.group)
     build_404(args.www_root, args.group)
