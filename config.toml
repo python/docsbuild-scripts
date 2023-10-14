@@ -1,6 +1,5 @@
 [defaults]
 # name has no default, it is mandatory.
-# iso639_tag defaults to section key.
 in_prod = true
 html_only = false
 sphinxopts = [
@@ -72,8 +71,7 @@ sphinxopts = [
 name = "Polish"
 in_prod = false
 
-[languages.pt-br]
-iso639_tag = "pt_BR"
+[languages.pt_BR]
 name = "Brazilian Portuguese"
 
 [languages.tr]
@@ -84,8 +82,7 @@ name = "Ukrainian"
 in_prod = false
 html_only = true
 
-[languages.zh-cn]
-iso639_tag = "zh_CN"
+[languages.zh_CN]
 name = "Simplified Chinese"
 sphinxopts = [
     '-D latex_engine=xelatex',
@@ -93,8 +90,7 @@ sphinxopts = [
     '-D latex_elements.fontenc=\\usepackage{xeCJK}',
 ]
 
-[languages.zh-tw]
-iso639_tag = "zh_TW"
+[languages.zh_TW]
 name = "Traditional Chinese"
 sphinxopts = [
     '-D latex_engine=xelatex',

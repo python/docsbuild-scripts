@@ -206,12 +206,15 @@ class Version:
 
 @dataclass(frozen=True, order=True)
 class Language:
-    tag: str
     iso639_tag: str
     name: str
     in_prod: bool
     sphinxopts: tuple
     html_only: bool = False
+
+    @property
+    def tag(self):
+        return self.iso639_tag.replace("_", "-").lower()
 
     @staticmethod
     def filter(languages, language_tags=None):
@@ -1024,11 +1027,10 @@ def parse_languages_from_config():
     config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
     languages = []
     defaults = config["defaults"]
-    for name, section in config["languages"].items():
+    for iso639_tag, section in config["languages"].items():
         languages.append(
             Language(
-                name,
-                section.get("iso639_tag", name),
+                iso639_tag,
                 section["name"],
                 section.get("in_prod", defaults["in_prod"]),
                 sphinxopts=section.get("sphinxopts", defaults["sphinxopts"]),
