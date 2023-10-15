@@ -540,7 +540,7 @@ def parse_args():
     parser.add_argument(
         "-b",
         "--branch",
-        metavar="3.7",
+        metavar="3.12",
         help="Version to build (defaults to all maintained branches).",
     )
     parser.add_argument(
