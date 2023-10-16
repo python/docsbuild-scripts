@@ -285,7 +285,12 @@ class Repository:
 
     def get_ref(self, pattern):
         """Return the reference of a given tag or branch."""
-        return self.run("show-ref", "-s", pattern).stdout.strip()
+        try:
+            # Maybe it's a branch
+            return self.run("show-ref", "-s", "origin/" + pattern).stdout.strip()
+        except subprocess.CalledProcessError:
+            # Maybe it's a tag
+            return self.run("show-ref", "-s", "tags/" + pattern).stdout.strip()
 
     def fetch(self):
         self.run("fetch")
@@ -357,12 +362,11 @@ def translation_branch(repo: Repository, needed_version: str):
     This function looks for remote branches on the given repo, and
     returns the name of the nearest existing branch.
 
-    It could be enhanced to return tags, if needed, just return the
-    tag as a string (without the `origin/` branch prefix).
+    It could be enhanced to also search for tags.
     """
     remote_branches = repo.run("branch", "-r").stdout
     branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
-    return "origin/" + locate_nearest_version(branches, needed_version)
+    return locate_nearest_version(branches, needed_version)
 
 
 @contextmanager
