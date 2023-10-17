@@ -2,15 +2,17 @@
 
 """Build the Python docs for various branches and various languages.
 
-Without any arguments builds docs for all active versions configured in the
-global VERSIONS list and all languages configured in the LANGUAGES list.
+Without any arguments builds docs for all active versions and
+languages.
+
+Languages are stored in `config.toml` while versions are discovered
+from the devguide.
 
 -q selects "quick build", which means to build only HTML.
 
 Translations are fetched from github repositories according to PEP
-545.  --languages allow select translations, use "--languages" to
-build all translations (default) or "--languages en" to skip all
-translations (as en is the untranslated version)..
+545. `--languages` allows to select translations, like `--languages
+en` to just build the english documents.
 
 This script was originally created and by Georg Brandl in March
 2010.
@@ -20,10 +22,9 @@ Modified by Julien Palard to build translations.
 """
 
 from argparse import ArgumentParser
-from contextlib import suppress
+from contextlib import suppress, contextmanager
 from dataclasses import dataclass
 import filecmp
-from itertools import chain, product
 import json
 import logging
 import logging.handlers
@@ -34,19 +35,19 @@ import shlex
 import shutil
 import subprocess
 import sys
-import time
 from bisect import bisect_left as bisect
 from collections import OrderedDict
-from contextlib import contextmanager
 from pathlib import Path
 from string import Template
 from textwrap import indent
+from typing import Iterable
+from urllib.parse import urljoin
 
 import zc.lockfile
 import jinja2
 import requests
+import tomlkit
 
-HERE = Path(__file__).resolve().parent
 
 try:
     from os import EX_OK, EX_SOFTWARE as EX_FAILURE
@@ -60,11 +61,7 @@ except ImportError:
 else:
     sentry_sdk.init()
 
-if not hasattr(shlex, "join"):
-    # Add shlex.join if missing (pre 3.8)
-    shlex.join = lambda split_command: " ".join(
-        shlex.quote(arg) for arg in split_command
-    )
+HERE = Path(__file__).resolve().parent
 
 
 @total_ordering
@@ -73,27 +70,31 @@ class Version:
 
     STATUSES = {"EOL", "security-fixes", "stable", "pre-release", "in development"}
 
+    # Those synonyms map branch status vocabulary found in the devguide
+    # with our vocabulary.
+    SYNONYMS = {
+        "feature": "in development",
+        "bugfix": "stable",
+        "security": "security-fixes",
+        "end-of-life": "EOL",
+    }
+
     def __init__(
         self,
         name,
         *,
         status,
-        branch=None,
-        tag=None,
-        sphinxopts=(),
+        branch_or_tag=None,
     ):
+        status = self.SYNONYMS.get(status, status)
         if status not in self.STATUSES:
             raise ValueError(
-                f"Version status expected to be in {', '.join(self.STATUSES)}"
+                "Version status expected to be one of: "
+                f"{', '.join(self.STATUSES|set(self.SYNONYMS.keys()))}, got {status!r}."
             )
         self.name = name
-        if branch is not None and tag is not None:
-            raise ValueError("Please build a version from either a branch or a tag.")
-        if branch is None and tag is None:
-            raise ValueError("Please build a version with at least a branch or a tag.")
-        self.branch_or_tag = branch or tag
+        self.branch_or_tag = branch_or_tag
         self.status = status
-        self.sphinxopts = list(sphinxopts)
 
     def __repr__(self):
         return f"Version({self.name})"
@@ -156,14 +157,14 @@ class Version:
         return [v for v in versions if v.status not in ("EOL", "security-fixes")]
 
     @staticmethod
-    def current_stable():
+    def current_stable(versions):
         """Find the current stable cPython version."""
-        return max([v for v in VERSIONS if v.status == "stable"], key=Version.as_tuple)
+        return max((v for v in versions if v.status == "stable"), key=Version.as_tuple)
 
     @staticmethod
-    def current_dev():
+    def current_dev(versions):
         """Find the current de cPython version."""
-        return max(VERSIONS, key=Version.as_tuple)
+        return max(versions, key=Version.as_tuple)
 
     @property
     def picker_label(self):
@@ -174,7 +175,7 @@ class Version:
             return f"pre ({self.name})"
         return self.name
 
-    def setup_indexsidebar(self, dest_path):
+    def setup_indexsidebar(self, versions, dest_path):
         """Build indexsidebar.html for Sphinx."""
         with open(
             HERE / "templates" / "indexsidebar.html", encoding="UTF-8"
@@ -185,10 +186,15 @@ class Version:
                 sidebar_template.render(
                     current_version=self,
                     versions=sorted(
-                        VERSIONS, key=lambda v: version_to_tuple(v.name), reverse=True
+                        versions, key=lambda v: version_to_tuple(v.name), reverse=True
                     ),
                 )
             )
+
+    @classmethod
+    def from_json(cls, name, values):
+        """Loads a version from devguide's json representation."""
+        return cls(name, status=values["status"], branch_or_tag=values["branch"])
 
     def __eq__(self, other):
         return self.name == other.name
@@ -197,111 +203,25 @@ class Version:
         return self.as_tuple() > other.as_tuple()
 
 
-
 @dataclass(frozen=True, order=True)
 class Language:
-    tag: str
     iso639_tag: str
     name: str
     in_prod: bool
     sphinxopts: tuple
     html_only: bool = False
 
+    @property
+    def tag(self):
+        return self.iso639_tag.replace("_", "-").lower()
 
-# EOL and security-fixes are not automatically built, no need to remove them
-# from the list, this way we can still rebuild them manually as needed.
-#
-# Please keep the list in reverse-order for ease of editing.
-VERSIONS = [
-    Version("3.13", branch="origin/main", status="in development"),
-    Version("3.12", branch="origin/3.12", status="stable"),
-    Version("3.11", branch="origin/3.11", status="stable"),
-    Version("3.10", branch="origin/3.10", status="security-fixes"),
-    Version("3.9", branch="origin/3.9", status="security-fixes"),
-    Version("3.8", branch="origin/3.8", status="security-fixes"),
-    Version("3.7", tag="3.7", status="EOL"),
-    Version("3.6", tag="3.6", status="EOL"),
-    Version("3.5", tag="3.5", status="EOL"),
-    Version("2.7", tag="2.7", status="EOL"),
-]
-
-XELATEX_DEFAULT = (
-    "-D latex_engine=xelatex",
-    "-D latex_elements.inputenc=",
-    "-D latex_elements.fontenc=",
-)
-
-LUALATEX_FOR_JP = (
-    "-D latex_engine=lualatex",
-    "-D latex_elements.inputenc=",
-    "-D latex_elements.fontenc=",
-    "-D latex_docclass.manual=ltjsbook",
-    "-D latex_docclass.howto=ltjsarticle",
-
-    # supress polyglossia warnings
-    "-D latex_elements.polyglossia=",
-    "-D latex_elements.fontpkg=",
-
-    # preamble
-    "-D latex_elements.preamble="
-
-    # Render non-Japanese letters with luatex
-    # https://gist.github.com/zr-tex8r/e0931df922f38fbb67634f05dfdaf66b
-    r"\\usepackage[noto-otf]{luatexja-preset}"
-    r"\\usepackage{newunicodechar}"
-    r"\\newunicodechar{^^^^212a}{K}"
-
-    # Workaround for the luatex-ja issue (Thanks to @jfbu)
-    # https://github.com/sphinx-doc/sphinx/issues/11179#issuecomment-1420715092
-    # https://osdn.net/projects/luatex-ja/ticket/47321
-    r"\\makeatletter"
-    r"\\titleformat{\\subsubsection}{\\normalsize\\py@HeaderFamily}"
-    r"{\\py@TitleColor\\thesubsubsection}{0.5em}{\\py@TitleColor}"
-    r"\\titleformat{\\paragraph}{\\normalsize\\py@HeaderFamily}"
-    r"{\\py@TitleColor\\theparagraph}{0.5em}{\\py@TitleColor}"
-    r"\\titleformat{\\subparagraph}{\\normalsize\\py@HeaderFamily}"
-    r"{\\py@TitleColor\\thesubparagraph}{0.5em}{\\py@TitleColor}"
-    r"\\makeatother"
-
-    # subpress warning: (fancyhdr)Make it at least 16.4pt
-    r"\\setlength{\\footskip}{16.4pt}"
-)
-
-XELATEX_WITH_FONTSPEC = (
-    "-D latex_engine=xelatex",
-    "-D latex_elements.inputenc=",
-    r"-D latex_elements.fontenc=\\usepackage{fontspec}",
-)
-
-XELATEX_FOR_KOREAN = (
-    "-D latex_engine=xelatex",
-    "-D latex_elements.inputenc=",
-    "-D latex_elements.fontenc=",
-    r"-D latex_elements.preamble=\\usepackage{kotex}\\setmainhangulfont"
-    r"{UnBatang}\\setsanshangulfont{UnDotum}\\setmonohangulfont{UnTaza}",
-)
-
-XELATEX_WITH_CJK = (
-    "-D latex_engine=xelatex",
-    "-D latex_elements.inputenc=",
-    r"-D latex_elements.fontenc=\\usepackage{xeCJK}",
-)
-
-LANGUAGES = {
-    Language("en", "en", "English", True, XELATEX_DEFAULT),
-    Language("es", "es", "Spanish", True, XELATEX_WITH_FONTSPEC),
-    Language("fr", "fr", "French", True, XELATEX_WITH_FONTSPEC),
-    Language("id", "id", "Indonesian", False, XELATEX_DEFAULT),
-    Language("it", "it", "Italian", False, XELATEX_DEFAULT),
-    Language("ja", "ja", "Japanese", True, LUALATEX_FOR_JP),
-    Language("ko", "ko", "Korean", True, XELATEX_FOR_KOREAN),
-    Language("pl", "pl", "Polish", False, XELATEX_DEFAULT),
-    Language("pt-br", "pt_BR", "Brazilian Portuguese", True, XELATEX_DEFAULT),
-    Language("tr", "tr", "Turkish", True, XELATEX_DEFAULT),
-    Language("uk", "uk", "Ukrainian", False, XELATEX_DEFAULT, html_only=True),
-    Language("zh-cn", "zh_CN", "Simplified Chinese", True, XELATEX_WITH_CJK),
-    Language("zh-tw", "zh_TW", "Traditional Chinese", True, XELATEX_WITH_CJK),
-}
+    @staticmethod
+    def filter(languages, language_tags=None):
+        """Filter a sequence of languages according to --languages."""
+        if language_tags:
+            languages_dict = {language.tag: language for language in languages}
+            return [languages_dict[tag] for tag in language_tags]
+        return languages
 
 
 def run(cmd, cwd=None) -> subprocess.CompletedProcess:
@@ -351,26 +271,45 @@ def changed_files(left, right):
     return changed
 
 
-def git_clone(repository: str, directory: Path, branch_or_tag=None):
-    """Clone or update the given repository in the given directory.
-    Optionally checking out a branch.
-    """
-    logging.info("Updating repository %s in %s", repository, directory)
-    try:
-        if not (directory / ".git").is_dir():
-            raise AssertionError("Not a git repository.")
-        run(["git", "-C", directory, "fetch"])
-        if branch_or_tag:
-            run(["git", "-C", directory, "reset", "--hard", branch_or_tag, "--"])
-            run(["git", "-C", directory, "clean", "-dfqx"])
-    except (subprocess.CalledProcessError, AssertionError):
-        if directory.exists():
-            shutil.rmtree(directory)
-        logging.info("Cloning %s into %s", repository, directory)
-        directory.mkdir(mode=0o775, parents=True, exist_ok=True)
-        run(["git", "clone", repository, directory])
-        if branch_or_tag:
-            run(["git", "-C", directory, "reset", "--hard", branch_or_tag, "--"])
+@dataclass
+class Repository:
+    """Git repository abstraction for our specific needs."""
+
+    remote: str
+    directory: Path
+
+    def run(self, *args):
+        """Run git command in the clone repository."""
+        return run(("git", "-C", self.directory) + args)
+
+    def get_ref(self, pattern):
+        """Return the reference of a given tag or branch."""
+        try:
+            # Maybe it's a branch
+            return self.run("show-ref", "-s", "origin/" + pattern).stdout.strip()
+        except subprocess.CalledProcessError:
+            # Maybe it's a tag
+            return self.run("show-ref", "-s", "tags/" + pattern).stdout.strip()
+
+    def fetch(self):
+        self.run("fetch")
+
+    def switch(self, branch_or_tag):
+        """Reset and cleans the repository to the given branch or tag."""
+        self.run("reset", "--hard", self.get_ref(branch_or_tag), "--")
+        self.run("clean", "-dfqx")
+
+    def clone(self):
+        """Maybe clone the repository, if not already cloned."""
+        if (self.directory / ".git").is_dir():
+            return False  # Already cloned
+        logging.info("Cloning %s into %s", self.remote, self.directory)
+        self.directory.mkdir(mode=0o775, parents=True, exist_ok=True)
+        run(["git", "clone", self.remote, self.directory])
+        return True
+
+    def update(self):
+        self.clone() or self.fetch()
 
 
 def version_to_tuple(version):
@@ -415,20 +354,18 @@ def locate_nearest_version(available_versions, target_version):
     return tuple_to_version(found)
 
 
-def translation_branch(locale_repo, locale_clone_dir, needed_version: str):
+def translation_branch(repo: Repository, needed_version: str):
     """Some cpython versions may be untranslated, being either too old or
     too new.
 
     This function looks for remote branches on the given repo, and
     returns the name of the nearest existing branch.
 
-    It could be enhanced to return tags, if needed, just return the
-    tag as a string (without the `origin/` branch prefix).
+    It could be enhanced to also search for tags.
     """
-    git_clone(locale_repo, locale_clone_dir)
-    remote_branches = run(["git", "-C", locale_clone_dir, "branch", "-r"]).stdout
+    remote_branches = repo.run("branch", "-r").stdout
     branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
-    return "origin/" + locate_nearest_version(branches, needed_version)
+    return locate_nearest_version(branches, needed_version)
 
 
 @contextmanager
@@ -448,7 +385,9 @@ def edit(file: Path):
     temporary.rename(file)
 
 
-def setup_switchers(html_root: Path):
+def setup_switchers(
+    versions: Iterable[Version], languages: Iterable[Language], html_root: Path
+):
     """Setup cross-links between cpython versions:
     - Cross-link various languages in a language switcher
     - Cross-link various versions in a version switcher
@@ -466,7 +405,7 @@ def setup_switchers(html_root: Path):
                         sorted(
                             [
                                 (language.tag, language.name)
-                                for language in LANGUAGES
+                                for language in languages
                                 if language.in_prod
                             ]
                         )
@@ -477,7 +416,7 @@ def setup_switchers(html_root: Path):
                         [
                             (version.name, version.picker_label)
                             for version in sorted(
-                                VERSIONS,
+                                versions,
                                 key=lambda v: version_to_tuple(v.name),
                                 reverse=True,
                             )
@@ -501,7 +440,13 @@ def setup_switchers(html_root: Path):
                 ofile.write(line)
 
 
-def build_robots_txt(www_root: Path, group, skip_cache_invalidation):
+def build_robots_txt(
+    versions: Iterable[Version],
+    languages: Iterable[Language],
+    www_root: Path,
+    group,
+    skip_cache_invalidation,
+):
     """Disallow crawl of EOL versions in robots.txt."""
     if not www_root.exists():
         logging.info("Skipping robots.txt generation (www root does not even exists).")
@@ -511,15 +456,17 @@ def build_robots_txt(www_root: Path, group, skip_cache_invalidation):
         template = jinja2.Template(template_file.read())
     with open(robots_file, "w", encoding="UTF-8") as robots_txt_file:
         robots_txt_file.write(
-            template.render(languages=LANGUAGES, versions=VERSIONS) + "\n"
+            template.render(languages=languages, versions=versions) + "\n"
         )
     robots_file.chmod(0o775)
     run(["chgrp", group, robots_file])
     if not skip_cache_invalidation:
-        requests.request("PURGE", "https://docs.python.org/robots.txt")
+        purge("robots.txt")
 
 
-def build_sitemap(www_root: Path, group):
+def build_sitemap(
+    versions: Iterable[Version], languages: Iterable[Language], www_root: Path, group
+):
     """Build a sitemap with all live versions and translations."""
     if not www_root.exists():
         logging.info("Skipping sitemap generation (www root does not even exists).")
@@ -528,7 +475,7 @@ def build_sitemap(www_root: Path, group):
         template = jinja2.Template(template_file.read())
     sitemap_file = www_root / "sitemap.xml"
     sitemap_file.write_text(
-        template.render(languages=LANGUAGES, versions=VERSIONS) + "\n", encoding="UTF-8"
+        template.render(languages=languages, versions=versions) + "\n", encoding="UTF-8"
     )
     sitemap_file.chmod(0o664)
     run(["chgrp", group, sitemap_file])
@@ -596,8 +543,7 @@ def parse_args():
     parser.add_argument(
         "-b",
         "--branch",
-        choices=dict.fromkeys(chain(*((v.branch_or_tag, v.name) for v in VERSIONS))),
-        metavar=Version.current_dev().name,
+        metavar="3.12",
         help="Version to build (defaults to all maintained branches).",
     )
     parser.add_argument(
@@ -633,8 +579,9 @@ def parse_args():
     parser.add_argument(
         "--languages",
         nargs="*",
-        default={language.tag for language in LANGUAGES},
-        help="Language translation, as a PEP 545 language tag like" " 'fr' or 'pt-br'.",
+        help="Language translation, as a PEP 545 language tag like"
+        " 'fr' or 'pt-br'. "
+        "Builds all available languages by default.",
         metavar="fr",
     )
     parser.add_argument(
@@ -679,7 +626,10 @@ class DocBuilder:
     """Builder for a cpython version and a language."""
 
     version: Version
+    versions: Iterable[Version]
     language: Language
+    languages: Iterable[Language]
+    cpython_repo: Repository
     build_root: Path
     www_root: Path
     quick: bool
@@ -703,7 +653,7 @@ class DocBuilder:
     def run(self) -> bool:
         """Build and publish a Python doc, for a language, and a version."""
         try:
-            self.clone_cpython()
+            self.cpython_repo.switch(self.version.branch_or_tag)
             if self.language.tag != "en":
                 self.clone_translation()
             self.build_venv()
@@ -726,6 +676,10 @@ class DocBuilder:
         return self.build_root / "cpython"
 
     def clone_translation(self):
+        """Clone the translation repository from github.
+
+        See PEP 545 for repository naming convention.
+        """
         locale_repo = f"https://github.com/python/python-docs-{self.language.tag}.git"
         locale_clone_dir = (
             self.build_root
@@ -734,18 +688,9 @@ class DocBuilder:
             / self.language.iso639_tag
             / "LC_MESSAGES"
         )
-        git_clone(
-            locale_repo,
-            locale_clone_dir,
-            translation_branch(locale_repo, locale_clone_dir, self.version.name),
-        )
-
-    def clone_cpython(self):
-        git_clone(
-            "https://github.com/python/cpython.git",
-            self.checkout,
-            self.version.branch_or_tag,
-        )
+        repo = Repository(locale_repo, locale_clone_dir)
+        repo.update()
+        repo.switch(translation_branch(repo, self.version.name))
 
     def build(self):
         """Build this version/language doc."""
@@ -754,7 +699,7 @@ class DocBuilder:
             self.version.name,
             self.language.tag,
         )
-        sphinxopts = list(self.language.sphinxopts) + list(self.version.sphinxopts)
+        sphinxopts = list(self.language.sphinxopts)
         sphinxopts.extend(["-q"])
         if self.language.tag != "en":
             locale_dirs = self.build_root / self.version.name / "locale"
@@ -768,13 +713,19 @@ class DocBuilder:
         if self.language.tag == "ja":
             # Since luatex doesn't support \ufffd, replace \ufffd with '?'.
             # https://gist.github.com/zr-tex8r/e0931df922f38fbb67634f05dfdaf66b
-            # Luatex already fixed this issue, so we can remove this once Texlive is updated.
-            # (https://github.com/TeX-Live/luatex/commit/eaa95ce0a141eaf7a02)
-            subprocess.check_output("sed -i s/\N{REPLACEMENT CHARACTER}/?/g "
-                                    f"{locale_dirs}/ja/LC_MESSAGES/**/*.po",
-                                    shell=True)
-            subprocess.check_output("sed -i s/\N{REPLACEMENT CHARACTER}/?/g "
-                                    f"{self.checkout}/Doc/**/*.rst", shell=True)
+            # Luatex already fixed this issue, so we can remove this once Texlive
+            # is updated.
+            # (https://github.com/TeX-Live/luatex/commit/af5faf1)
+            subprocess.check_output(
+                "sed -i s/\N{REPLACEMENT CHARACTER}/?/g "
+                f"{locale_dirs}/ja/LC_MESSAGES/**/*.po",
+                shell=True,
+            )
+            subprocess.check_output(
+                "sed -i s/\N{REPLACEMENT CHARACTER}/?/g "
+                f"{self.checkout}/Doc/**/*.rst",
+                shell=True,
+            )
 
         if self.version.status == "EOL":
             sphinxopts.append("-D html_context.outdated=1")
@@ -785,7 +736,7 @@ class DocBuilder:
                 if self.version.status in ("in development", "pre-release")
                 else "stable"
             )
-            + ("" if self.full_build  else "-html")
+            + ("" if self.full_build else "-html")
         )
         logging.info("Running make %s", maketarget)
         python = self.venv / "bin" / "python"
@@ -801,7 +752,8 @@ class DocBuilder:
             ]
         )
         self.version.setup_indexsidebar(
-            self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html"
+            self.versions,
+            self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html",
         )
         run(
             [
@@ -819,7 +771,9 @@ class DocBuilder:
         )
         run(["mkdir", "-p", self.log_directory])
         run(["chgrp", "-R", self.group, self.log_directory])
-        setup_switchers(self.checkout / "Doc" / "build" / "html")
+        setup_switchers(
+            self.versions, self.languages, self.checkout / "Doc" / "build" / "html"
+        )
         logging.info(
             "Build done for version: %s, language: %s",
             self.version.name,
@@ -959,13 +913,9 @@ class DocBuilder:
             prefixes = run(["find", "-L", targets_dir, "-samefile", target]).stdout
             prefixes = prefixes.replace(targets_dir + "/", "")
             prefixes = [prefix + "/" for prefix in prefixes.split("\n") if prefix]
-            to_purge = prefixes[:]
+            purge(*prefixes)
             for prefix in prefixes:
-                to_purge.extend(prefix + p for p in changed)
-            logging.info("Running CDN purge")
-            run(
-                ["curl", "-XPURGE", f"https://docs.python.org/{{{','.join(to_purge)}}}"]
-            )
+                purge(*[prefix + p for p in changed])
         logging.info(
             "Publishing done for version: %s, language: %s",
             self.version.name,
@@ -992,7 +942,9 @@ def symlink(www_root: Path, language: Language, directory: str, name: str, group
     purge_path(www_root, link)
 
 
-def major_symlinks(www_root: Path, group):
+def major_symlinks(
+    www_root: Path, group, versions: Iterable[Version], languages: Iterable[Language]
+):
     """Maintains the /2/ and /3/ symlinks for each languages.
 
     Like:
@@ -1000,13 +952,13 @@ def major_symlinks(www_root: Path, group):
     - /fr/3/ → /fr/3.9/
     - /es/3/ → /es/3.9/
     """
-    current_stable = Version.current_stable().name
-    for language in LANGUAGES:
+    current_stable = Version.current_stable(versions).name
+    for language in languages:
         symlink(www_root, language, current_stable, "3", group)
         symlink(www_root, language, "2.7", "2", group)
 
 
-def dev_symlink(www_root: Path, group):
+def dev_symlink(www_root: Path, group, versions, languages):
     """Maintains the /dev/ symlinks for each languages.
 
     Like:
@@ -1014,9 +966,31 @@ def dev_symlink(www_root: Path, group):
     - /fr/dev/ → /fr/3.11/
     - /es/dev/ → /es/3.11/
     """
-    current_dev = Version.current_dev().name
-    for language in LANGUAGES:
+    current_dev = Version.current_dev(versions).name
+    for language in languages:
         symlink(www_root, language, current_dev, "dev", group)
+
+
+def purge(*paths):
+    """Remove one or many paths from docs.python.org's CDN.
+
+    To be used when a file change, so the CDN fetch the new one.
+    """
+    base = "https://docs.python.org/"
+    for path in paths:
+        url = urljoin(base, str(path))
+        logging.info("Purging %s from CDN", url)
+        requests.request("PURGE", url, timeout=30)
+
+
+def purge_path(www_root: Path, path: Path):
+    """Recursively remove a path from docs.python.org's CDN.
+
+    To be used when a directory change, so the CDN fetch the new one.
+    """
+    purge(*[file.relative_to(www_root) for file in path.glob("**/*")])
+    purge(path.relative_to(www_root))
+    purge(str(path.relative_to(www_root)) + "/")
 
 
 def proofread_canonicals(www_root: Path, skip_cache_invalidation: bool) -> None:
@@ -1041,40 +1015,69 @@ def proofread_canonicals(www_root: Path, skip_cache_invalidation: bool) -> None:
             html = html.replace(canonical.group(0), "")
             file.write_text(html, encoding="UTF-8", errors="surrogateescape")
             if not skip_cache_invalidation:
-                url = str(file).replace("/srv/", "https://")
-                logging.info("Purging %s from CDN", url)
-                requests.request("PURGE", url)
+                purge(str(file).replace("/srv/docs.python.org/", ""))
 
 
-def purge_path(www_root: Path, path: Path):
-    to_purge = [str(file.relative_to(www_root)) for file in path.glob("**/*")]
-    to_purge.append(str(path.relative_to(www_root)))
-    to_purge.append(str(path.relative_to(www_root)) + "/")
-    run(["curl", "-XPURGE", f"https://docs.python.org/{{{','.join(to_purge)}}}"])
+def parse_versions_from_devguide():
+    releases = requests.get(
+        "https://raw.githubusercontent.com/"
+        "python/devguide/main/include/release-cycle.json",
+        timeout=30,
+    ).json()
+    return [Version.from_json(name, release) for name, release in releases.items()]
+
+
+def parse_languages_from_config():
+    """Read config.toml to discover languages to build."""
+    config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
+    languages = []
+    defaults = config["defaults"]
+    for iso639_tag, section in config["languages"].items():
+        languages.append(
+            Language(
+                iso639_tag,
+                section["name"],
+                section.get("in_prod", defaults["in_prod"]),
+                sphinxopts=section.get("sphinxopts", defaults["sphinxopts"]),
+                html_only=section.get("html_only", defaults["html_only"]),
+            )
+        )
+    return languages
 
 
 def build_docs(args) -> bool:
     """Build all docs (each languages and each versions)."""
-    languages_dict = {language.tag: language for language in LANGUAGES}
-    versions = Version.filter(VERSIONS, args.branch)
-    languages = [languages_dict[tag] for tag in args.languages]
-    del args.languages
+    versions = parse_versions_from_devguide()
+    languages = parse_languages_from_config()
+    todo = [
+        (version, language)
+        for version in Version.filter(versions, args.branch)
+        for language in Language.filter(languages, args.languages)
+    ]
     del args.branch
-    todo = list(product(versions, languages))
+    del args.languages
     all_built_successfully = True
+    cpython_repo = Repository(
+        "https://github.com/python/cpython.git", args.build_root / "cpython"
+    )
+    cpython_repo.update()
     while todo:
         version, language = todo.pop()
         if sentry_sdk:
             with sentry_sdk.configure_scope() as scope:
                 scope.set_tag("version", version.name)
                 scope.set_tag("language", language.tag)
-        builder = DocBuilder(version, language, **vars(args))
+        builder = DocBuilder(
+            version, versions, language, languages, cpython_repo, **vars(args)
+        )
         all_built_successfully &= builder.run()
-    build_sitemap(args.www_root, args.group)
+    build_sitemap(versions, languages, args.www_root, args.group)
     build_404(args.www_root, args.group)
-    build_robots_txt(args.www_root, args.group, args.skip_cache_invalidation)
-    major_symlinks(args.www_root, args.group)
-    dev_symlink(args.www_root, args.group)
+    build_robots_txt(
+        versions, languages, args.www_root, args.group, args.skip_cache_invalidation
+    )
+    major_symlinks(args.www_root, args.group, versions, languages)
+    dev_symlink(args.www_root, args.group, versions, languages)
     proofread_canonicals(args.www_root, args.skip_cache_invalidation)
 
     return all_built_successfully
@@ -1089,16 +1092,13 @@ def main():
         lock = zc.lockfile.LockFile(HERE / "build_docs.lock")
     except zc.lockfile.LockError:
         logging.info("Another builder is running... dying...")
-        return False
+        return EX_FAILURE
 
     try:
-        build_docs(args)
+        return EX_OK if build_docs(args) else EX_FAILURE
     finally:
         lock.close()
 
 
-
-
 if __name__ == "__main__":
-    all_built_successfully = main()
-    sys.exit(EX_OK if all_built_successfully else EX_FAILURE)
+    sys.exit(main())
