@@ -11,9 +11,8 @@ from the devguide.
 -q selects "quick build", which means to build only HTML.
 
 Translations are fetched from github repositories according to PEP
-545.  --languages allow select translations, use "--languages" to
-build all translations (default) or "--languages en" to skip all
-translations (as en is the untranslated version)..
+545. `--languages` allows to select translations, like `--languages
+en` to just build the english documents.
 
 This script was originally created and by Georg Brandl in March
 2010.
@@ -582,7 +581,7 @@ def parse_args():
         nargs="*",
         help="Language translation, as a PEP 545 language tag like"
         " 'fr' or 'pt-br'. "
-        "Use 'all' to build all of them (it's the default behavior).",
+        "Builds all available languages by default.",
         metavar="fr",
     )
     parser.add_argument(
