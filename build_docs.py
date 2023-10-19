@@ -300,9 +300,6 @@ class Repository:
             # Maybe it's a tag
             return self.run("show-ref", "-s", "tags/" + pattern).stdout.strip()
 
-    def fetch(self):
-        self.run("fetch")
-
     def switch(self, branch_or_tag):
         """Reset and cleans the repository to the given branch or tag."""
         self.run("reset", "--hard", self.get_ref(branch_or_tag), "--")
