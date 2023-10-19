@@ -24,8 +24,6 @@ Modified by Julien Palard to build translations.
 from argparse import ArgumentParser
 from contextlib import suppress, contextmanager
 from dataclasses import dataclass
-from datetime import datetime as dt, timezone
-from time import perf_counter, sleep
 import filecmp
 import json
 import logging
@@ -39,9 +37,11 @@ import subprocess
 import sys
 from bisect import bisect_left as bisect
 from collections import OrderedDict
+from datetime import datetime as dt, timezone
 from pathlib import Path
 from string import Template
 from textwrap import indent
+from time import perf_counter, sleep
 from typing import Iterable
 from urllib.parse import urljoin
 
