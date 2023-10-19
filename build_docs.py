@@ -662,8 +662,6 @@ class DocBuilder:
                 self.build()
                 self.copy_build_to_webroot()
                 self.save_state(build_duration=perf_counter() - start_time)
-            else:
-                logging.info("Nothing changed.")
         except Exception as err:
             logging.exception("Badly handled exception, human, please help.")
             if sentry_sdk:
@@ -925,6 +923,7 @@ class DocBuilder:
     def should_rebuild(self):
         state = self.load_state()
         if not state:
+            logging.info("Should rebuild: no previous state found.")
             return True
         cpython_sha = self.cpython_repo.run("rev-parse", "HEAD").stdout.strip()
         if self.language.tag != "en":
@@ -932,13 +931,24 @@ class DocBuilder:
                 "rev-parse", "HEAD"
             ).stdout.strip()
             if translation_sha != state["translation_sha"]:
+                logging.info(
+                    "Should rebuild: new translations (from %s to %s)",
+                    state["translation_sha"],
+                    translation_sha,
+                )
                 return True
         if cpython_sha != state["cpython_sha"]:
             diff = self.cpython_repo.run(
                 "diff", "--name-only", state["cpython_sha"], cpython_sha
             ).stdout
             if "Doc/" in diff:
+                logging.info(
+                    "Should rebuild: Doc/ has changed (from %s to %s)",
+                    state["cpython_sha"],
+                    cpython_sha,
+                )
                 return True
+        logging.info("Nothing changed, no rebuild needed.")
         return False
 
     def load_state(self) -> dict:
