@@ -954,7 +954,7 @@ class DocBuilder:
             return tomlkit.loads(state_file.read_text(encoding="UTF-8"))[
                 f"/{self.language.tag}/{self.version.name}/"
             ]
-        except KeyError:
+        except (KeyError, FileNotFoundError):
             return {}
 
     def save_state(self, build_duration: float):
