@@ -37,9 +37,11 @@ import subprocess
 import sys
 from bisect import bisect_left as bisect
 from collections import OrderedDict
+from datetime import datetime as dt, timezone
 from pathlib import Path
 from string import Template
 from textwrap import indent
+from time import perf_counter, sleep
 from typing import Iterable
 from urllib.parse import urljoin
 
@@ -246,8 +248,6 @@ def run(cmd, cwd=None) -> subprocess.CompletedProcess:
             cmdstring,
             indent("\n".join(result.stdout.split("\n")[-20:]), "    "),
         )
-    else:
-        logging.debug("Run: %r OK", cmdstring)
     result.check_returncode()
     return result
 
@@ -292,7 +292,13 @@ class Repository:
             return self.run("show-ref", "-s", "tags/" + pattern).stdout.strip()
 
     def fetch(self):
-        self.run("fetch")
+        """Try (and retry) to run git fetch."""
+        try:
+            return self.run("fetch")
+        except subprocess.CalledProcessError as err:
+            logging.error("'git fetch' failed (%s), retrying...", err.stderr)
+            sleep(5)
+        return self.run("fetch")
 
     def switch(self, branch_or_tag):
         """Reset and cleans the repository to the given branch or tag."""
@@ -352,20 +358,6 @@ def locate_nearest_version(available_versions, target_version):
     except IndexError:
         found = available_versions_tuples[-1]
     return tuple_to_version(found)
-
-
-def translation_branch(repo: Repository, needed_version: str):
-    """Some cpython versions may be untranslated, being either too old or
-    too new.
-
-    This function looks for remote branches on the given repo, and
-    returns the name of the nearest existing branch.
-
-    It could be enhanced to also search for tags.
-    """
-    remote_branches = repo.run("branch", "-r").stdout
-    branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
-    return locate_nearest_version(branches, needed_version)
 
 
 @contextmanager
@@ -612,11 +604,15 @@ def parse_args():
 def setup_logging(log_directory: Path):
     """Setup logging to stderr if ran by a human, or to a file if ran from a cron."""
     if sys.stderr.isatty():
-        logging.basicConfig(format="%(levelname)s:%(message)s", stream=sys.stderr)
+        logging.basicConfig(
+            format="%(asctime)s %(levelname)s: %(message)s", stream=sys.stderr
+        )
     else:
         log_directory.mkdir(parents=True, exist_ok=True)
         handler = logging.handlers.WatchedFileHandler(log_directory / "docsbuild.log")
-        handler.setFormatter(logging.Formatter("%(levelname)s:%(asctime)s:%(message)s"))
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
+        )
         logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.DEBUG)
 
@@ -652,19 +648,19 @@ class DocBuilder:
 
     def run(self) -> bool:
         """Build and publish a Python doc, for a language, and a version."""
+        start_time = perf_counter()
+        logging.info("Running.")
         try:
             self.cpython_repo.switch(self.version.branch_or_tag)
             if self.language.tag != "en":
                 self.clone_translation()
-            self.build_venv()
-            self.build()
-            self.copy_build_to_webroot()
+            if self.should_rebuild():
+                self.build_venv()
+                self.build()
+                self.copy_build_to_webroot()
+                self.save_state(build_duration=perf_counter() - start_time)
         except Exception as err:
-            logging.exception(
-                "Exception while building %s version %s",
-                self.language.tag,
-                self.version.name,
-            )
+            logging.exception("Badly handled exception, human, please help.")
             if sentry_sdk:
                 sentry_sdk.capture_exception(err)
             return False
@@ -676,10 +672,13 @@ class DocBuilder:
         return self.build_root / "cpython"
 
     def clone_translation(self):
-        """Clone the translation repository from github.
+        self.translation_repo.update()
+        self.translation_repo.switch(self.translation_branch)
 
-        See PEP 545 for repository naming convention.
-        """
+    @property
+    def translation_repo(self):
+        """See PEP 545 for translations repository naming convention."""
+
         locale_repo = f"https://github.com/python/python-docs-{self.language.tag}.git"
         locale_clone_dir = (
             self.build_root
@@ -688,17 +687,25 @@ class DocBuilder:
             / self.language.iso639_tag
             / "LC_MESSAGES"
         )
-        repo = Repository(locale_repo, locale_clone_dir)
-        repo.update()
-        repo.switch(translation_branch(repo, self.version.name))
+        return Repository(locale_repo, locale_clone_dir)
+
+    @property
+    def translation_branch(self):
+        """Some cpython versions may be untranslated, being either too old or
+        too new.
+
+        This function looks for remote branches on the given repo, and
+        returns the name of the nearest existing branch.
+
+        It could be enhanced to also search for tags.
+        """
+        remote_branches = self.translation_repo.run("branch", "-r").stdout
+        branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
+        return locate_nearest_version(branches, self.version.name)
 
     def build(self):
         """Build this version/language doc."""
-        logging.info(
-            "Build start for version: %s, language: %s",
-            self.version.name,
-            self.language.tag,
-        )
+        logging.info("Build start.")
         sphinxopts = list(self.language.sphinxopts)
         sphinxopts.extend(["-q"])
         if self.language.tag != "en":
@@ -774,11 +781,7 @@ class DocBuilder:
         setup_switchers(
             self.versions, self.languages, self.checkout / "Doc" / "build" / "html"
         )
-        logging.info(
-            "Build done for version: %s, language: %s",
-            self.version.name,
-            self.language.tag,
-        )
+        logging.info("Build done.")
 
     def build_venv(self):
         """Build a venv for the specific Python version.
@@ -799,11 +802,7 @@ class DocBuilder:
 
     def copy_build_to_webroot(self):
         """Copy a given build to the appropriate webroot with appropriate rights."""
-        logging.info(
-            "Publishing start for version: %s, language: %s",
-            self.version.name,
-            self.language.tag,
-        )
+        logging.info("Publishing start.")
         self.www_root.mkdir(parents=True, exist_ok=True)
         if self.language.tag == "en":
             target = self.www_root / self.version.name
@@ -873,7 +872,7 @@ class DocBuilder:
                 ]
             )
         if self.full_build:
-            logging.debug("Copying dist files")
+            logging.debug("Copying dist files.")
             run(
                 [
                     "chown",
@@ -916,11 +915,69 @@ class DocBuilder:
             purge(*prefixes)
             for prefix in prefixes:
                 purge(*[prefix + p for p in changed])
-        logging.info(
-            "Publishing done for version: %s, language: %s",
-            self.version.name,
-            self.language.tag,
-        )
+        logging.info("Publishing done")
+
+    def should_rebuild(self):
+        state = self.load_state()
+        if not state:
+            logging.info("Should rebuild: no previous state found.")
+            return True
+        cpython_sha = self.cpython_repo.run("rev-parse", "HEAD").stdout.strip()
+        if self.language.tag != "en":
+            translation_sha = self.translation_repo.run(
+                "rev-parse", "HEAD"
+            ).stdout.strip()
+            if translation_sha != state["translation_sha"]:
+                logging.info(
+                    "Should rebuild: new translations (from %s to %s)",
+                    state["translation_sha"],
+                    translation_sha,
+                )
+                return True
+        if cpython_sha != state["cpython_sha"]:
+            diff = self.cpython_repo.run(
+                "diff", "--name-only", state["cpython_sha"], cpython_sha
+            ).stdout
+            if "Doc/" in diff:
+                logging.info(
+                    "Should rebuild: Doc/ has changed (from %s to %s)",
+                    state["cpython_sha"],
+                    cpython_sha,
+                )
+                return True
+        logging.info("Nothing changed, no rebuild needed.")
+        return False
+
+    def load_state(self) -> dict:
+        state_file = self.build_root / "state.toml"
+        try:
+            return tomlkit.loads(state_file.read_text(encoding="UTF-8"))[
+                f"/{self.language.tag}/{self.version.name}/"
+            ]
+        except KeyError:
+            return {}
+
+    def save_state(self, build_duration: float):
+        """Save current cpython sha1 and current translation sha1.
+
+        Using this we can deduce if a rebuild is needed or not.
+        """
+        state_file = self.build_root / "state.toml"
+        try:
+            states = tomlkit.parse(state_file.read_text(encoding="UTF-8"))
+        except FileNotFoundError:
+            states = tomlkit.document()
+
+        state = {}
+        state["cpython_sha"] = self.cpython_repo.run("rev-parse", "HEAD").stdout.strip()
+        if self.language.tag != "en":
+            state["translation_sha"] = self.translation_repo.run(
+                "rev-parse", "HEAD"
+            ).stdout.strip()
+        state["last_build"] = dt.now(timezone.utc)
+        state["last_build_duration"] = build_duration
+        states[f"/{self.language.tag}/{self.version.name}/"] = state
+        state_file.write_text(tomlkit.dumps(states), encoding="UTF-8")
 
 
 def symlink(www_root: Path, language: Language, directory: str, name: str, group: str):
@@ -1063,6 +1120,11 @@ def build_docs(args) -> bool:
     cpython_repo.update()
     while todo:
         version, language = todo.pop()
+        logging.root.handlers[0].setFormatter(
+            logging.Formatter(
+                f"%(asctime)s %(levelname)s {language.tag}/{version.name}: %(message)s"
+            )
+        )
         if sentry_sdk:
             with sentry_sdk.configure_scope() as scope:
                 scope.set_tag("version", version.name)
@@ -1071,6 +1133,10 @@ def build_docs(args) -> bool:
             version, versions, language, languages, cpython_repo, **vars(args)
         )
         all_built_successfully &= builder.run()
+    logging.root.handlers[0].setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
+    )
+
     build_sitemap(versions, languages, args.www_root, args.group)
     build_404(args.www_root, args.group)
     build_robots_txt(
