@@ -278,15 +278,6 @@ class Repository:
     remote: str
     directory: Path
 
-    def fetch(self):
-        """Try (and retry) to run git fetch."""
-        try:
-            return self.run("fetch")
-        except subprocess.CalledProcessError as err:
-            logging.error("'git fetch' failed (%s), retrying...", err.stderr)
-            sleep(5)
-        return self.run("fetch")
-
     def run(self, *args):
         """Run git command in the clone repository."""
         return run(("git", "-C", self.directory) + args)
@@ -299,6 +290,15 @@ class Repository:
         except subprocess.CalledProcessError:
             # Maybe it's a tag
             return self.run("show-ref", "-s", "tags/" + pattern).stdout.strip()
+
+    def fetch(self):
+        """Try (and retry) to run git fetch."""
+        try:
+            return self.run("fetch")
+        except subprocess.CalledProcessError as err:
+            logging.error("'git fetch' failed (%s), retrying...", err.stderr)
+            sleep(5)
+        return self.run("fetch")
 
     def switch(self, branch_or_tag):
         """Reset and cleans the repository to the given branch or tag."""
