@@ -1036,7 +1036,7 @@ def purge(*paths):
     base = "https://docs.python.org/"
     for path in paths:
         url = urljoin(base, str(path))
-        logging.info("Purging %s from CDN", url)
+        logging.debug("Purging %s from CDN", url)
         requests.request("PURGE", url, timeout=30)
 
 
