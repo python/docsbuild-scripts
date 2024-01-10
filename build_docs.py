@@ -584,7 +584,7 @@ def parse_args():
     parser.add_argument(
         "--theme",
         default="python-docs-theme",
-        help="Python package to use for python-docs-theme: Usefull to test branches:"
+        help="Python package to use for python-docs-theme: Useful to test branches:"
         " --theme git+https://github.com/obulat/python-docs-theme@master",
     )
     args = parser.parse_args()
