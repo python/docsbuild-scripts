@@ -79,15 +79,10 @@ class Version:
         "bugfix": "stable",
         "security": "security-fixes",
         "end-of-life": "EOL",
+        "prerelease": "pre-release",
     }
 
-    def __init__(
-        self,
-        name,
-        *,
-        status,
-        branch_or_tag=None,
-    ):
+    def __init__(self, name, *, status, branch_or_tag=None):
         status = self.SYNONYMS.get(status, status)
         if status not in self.STATUSES:
             raise ValueError(
