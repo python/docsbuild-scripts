@@ -33,7 +33,7 @@ in_prod = false
 
 [languages.it]
 name = "Italian"
-in_prod = false
+in_prod = true
 
 [languages.ja]
 name = "Japanese"
