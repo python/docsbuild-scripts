@@ -28,7 +28,7 @@ import filecmp
 import json
 import logging
 import logging.handlers
-from functools import total_ordering
+from functools import partial, total_ordering
 from os import readlink
 import re
 import shlex
@@ -1109,12 +1109,11 @@ def build_docs(args) -> bool:
     del args.branch
     del args.languages
     all_built_successfully = True
-    cpython_repo = Repository(
-        "https://github.com/python/cpython.git", args.build_root / "cpython"
-    )
-    cpython_repo.update()
+    cpython_repo = partial(Repository, "https://github.com/python/cpython.git")
     while todo:
         version, language = todo.pop()
+        cpython_branch_repo = cpython_repo(args.build_root / "cpython_branches" / version)
+        cpython_branch_repo.update()
         logging.root.handlers[0].setFormatter(
             logging.Formatter(
                 f"%(asctime)s %(levelname)s {language.tag}/{version.name}: %(message)s"
@@ -1125,7 +1124,7 @@ def build_docs(args) -> bool:
                 scope.set_tag("version", version.name)
                 scope.set_tag("language", language.tag)
         builder = DocBuilder(
-            version, versions, language, languages, cpython_repo, **vars(args)
+            version, versions, language, languages, cpython_branch_repo, **vars(args)
         )
         all_built_successfully &= builder.run()
     logging.root.handlers[0].setFormatter(
