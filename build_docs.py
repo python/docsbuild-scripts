@@ -1115,7 +1115,7 @@ def build_docs(args) -> bool:
     cpython_repo = partial(Repository, "https://github.com/python/cpython.git")
     while todo:
         version, language = todo.pop()
-        cpython_branch_repo = cpython_repo(args.build_root / "cpython_branches" / version)
+        cpython_branch_repo = cpython_repo(args.build_root / "cpython_branches" / version.name)
         cpython_branch_repo.update()
         logging.root.handlers[0].setFormatter(
             logging.Formatter(
