@@ -975,7 +975,7 @@ class DocBuilder:
         state_file.write_text(tomlkit.dumps(states), encoding="UTF-8")
 
 
-def symlink(www_root: Path, language: Language, directory: str, name: str, group: str):
+def symlink(www_root: Path, language: Language, directory: str, name: str, group: str, skip_cache_invalidation: bool):
     """Used by major_symlinks and dev_symlink to maintain symlinks."""
     if language.tag == "en":  # english is rooted on /, no /en/
         path = www_root
@@ -991,11 +991,12 @@ def symlink(www_root: Path, language: Language, directory: str, name: str, group
         link.unlink()
     link.symlink_to(directory)
     run(["chown", "-h", ":" + group, str(link)])
-    purge_path(www_root, link)
+    if not skip_cache_invalidation:
+        purge_path(www_root, link)
 
 
 def major_symlinks(
-    www_root: Path, group, versions: Iterable[Version], languages: Iterable[Language]
+    www_root: Path, group, versions: Iterable[Version], languages: Iterable[Language], skip_cache_invalidation: bool
 ):
     """Maintains the /2/ and /3/ symlinks for each languages.
 
@@ -1006,11 +1007,11 @@ def major_symlinks(
     """
     current_stable = Version.current_stable(versions).name
     for language in languages:
-        symlink(www_root, language, current_stable, "3", group)
-        symlink(www_root, language, "2.7", "2", group)
+        symlink(www_root, language, current_stable, "3", group, skip_cache_invalidation)
+        symlink(www_root, language, "2.7", "2", group, skip_cache_invalidation)
 
 
-def dev_symlink(www_root: Path, group, versions, languages):
+def dev_symlink(www_root: Path, group, versions, languages, skip_cache_invalidation: bool):
     """Maintains the /dev/ symlinks for each languages.
 
     Like:
@@ -1020,7 +1021,7 @@ def dev_symlink(www_root: Path, group, versions, languages):
     """
     current_dev = Version.current_dev(versions).name
     for language in languages:
-        symlink(www_root, language, current_dev, "dev", group)
+        symlink(www_root, language, current_dev, "dev", group, skip_cache_invalidation)
 
 
 def purge(*paths):
@@ -1137,8 +1138,8 @@ def build_docs(args) -> bool:
     build_robots_txt(
         versions, languages, args.www_root, args.group, args.skip_cache_invalidation
     )
-    major_symlinks(args.www_root, args.group, versions, languages)
-    dev_symlink(args.www_root, args.group, versions, languages)
+    major_symlinks(args.www_root, args.group, versions, languages, args.skip_cache_invalidation)
+    dev_symlink(args.www_root, args.group, versions, languages, args.skip_cache_invalidation)
     proofread_canonicals(args.www_root, args.skip_cache_invalidation)
 
     return all_built_successfully
