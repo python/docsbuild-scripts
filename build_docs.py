@@ -30,6 +30,7 @@ import logging
 import logging.handlers
 from functools import partial, total_ordering
 from os import readlink
+import platform
 import re
 import shlex
 import shutil
@@ -745,13 +746,14 @@ class DocBuilder:
         sphinxbuild = self.venv / "bin" / "sphinx-build"
         blurb = self.venv / "bin" / "blurb"
         # Disable cpython switchers, we handle them now:
+
+        def is_mac():
+            return platform.system() == 'Darwin'
+
         run(
-            [
-                "sed",
-                "-i",
-                "s/ *-A switchers=1//",
-                self.checkout / "Doc" / "Makefile",
-            ]
+            ["sed", "-i"]
+            + ([""] if is_mac() else [])
+            + ["s/ *-A switchers=1//", self.checkout / "Doc" / "Makefile"]
         )
         self.version.setup_indexsidebar(
             self.versions,
