@@ -1,4 +1,4 @@
-(function() {
+(async function() {
   'use strict';
 
   if (!String.prototype.startsWith) {
@@ -18,7 +18,19 @@
     '(?:dev)',
     '(?:release/\\d.\\d[\\x\\d\\.]*)'];
 
-  const all_versions = $VERSIONS;
+  // Fetch all available documentation versions from `release-cycle.json`
+  const releaseCycleURL = "https://raw.githubusercontent.com/python/devguide/main/include/release-cycle.json";
+  const releaseCycleResponse = await fetch(releaseCycleURL, { method: "GET"});
+  if (!releaseCycleResponse.ok) {
+    throw new Error("Error downloading release-cycle.json file.");
+  }
+  const releaseCycleData = await releaseCycleResponse.json();
+
+  const all_versions = new Array();
+  for (const version of releaseCycleData ) {
+    all_versions.push(version);
+  }
+  // TODO: fetch available languges from an external JSON file
   const all_languages = $LANGUAGES;
 
   function quote_attr(str) {
