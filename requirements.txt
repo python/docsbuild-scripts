@@ -1,5 +1,5 @@
 jinja2
-requests
 sentry-sdk
 tomlkit
+urllib3
 zc.lockfile
