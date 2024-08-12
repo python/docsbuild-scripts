@@ -10,12 +10,11 @@ from the devguide.
 
 -q selects "quick build", which means to build only HTML.
 
-Translations are fetched from github repositories according to PEP
-545. `--languages` allows to select translations, like `--languages
-en` to just build the english documents.
+Translations are fetched from GitHub repositories according to PEP
+545. `--languages` allows selecting translations, like `--languages
+en` to just build the English documents.
 
-This script was originally created and by Georg Brandl in March
-2010.
+This script was originally created by Georg Brandl in March 2010.
 Modified by Benjamin Peterson to do CDN cache invalidation.
 Modified by Julien Palard to build translations.
 
@@ -69,7 +68,7 @@ HERE = Path(__file__).resolve().parent
 
 @total_ordering
 class Version:
-    """Represents a cpython version and its documentation builds dependencies."""
+    """Represents a CPython version and its documentation build dependencies."""
 
     STATUSES = {"EOL", "security-fixes", "stable", "pre-release", "in development"}
 
@@ -147,7 +146,7 @@ class Version:
 
         If *branch* is given, only *versions* matching *branch* are returned.
 
-        Else all live version are returned (this mean no EOL and no
+        Else all live versions are returned (this means no EOL and no
         security-fixes branches).
         """
         if branch:
@@ -156,12 +155,12 @@ class Version:
 
     @staticmethod
     def current_stable(versions):
-        """Find the current stable cPython version."""
+        """Find the current stable CPython version."""
         return max((v for v in versions if v.status == "stable"), key=Version.as_tuple)
 
     @staticmethod
     def current_dev(versions):
-        """Find the current de cPython version."""
+        """Find the current CPython version in development."""
         return max(versions, key=Version.as_tuple)
 
     @property
@@ -360,7 +359,7 @@ def locate_nearest_version(available_versions, target_version):
 def edit(file: Path):
     """Context manager to edit a file "in place", use it as:
 
-    with edit("/etc/hosts") as i, o:
+    with edit("/etc/hosts") as (i, o):
         for line in i:
             o.write(line.replace("localhoat", "localhost"))
     """
@@ -376,7 +375,7 @@ def edit(file: Path):
 def setup_switchers(
     versions: Iterable[Version], languages: Iterable[Language], html_root: Path
 ):
-    """Setup cross-links between cpython versions:
+    """Setup cross-links between CPython versions:
     - Cross-link various languages in a language switcher
     - Cross-link various versions in a version switcher
     """
@@ -437,7 +436,7 @@ def build_robots_txt(
 ):
     """Disallow crawl of EOL versions in robots.txt."""
     if not www_root.exists():
-        logging.info("Skipping robots.txt generation (www root does not even exists).")
+        logging.info("Skipping robots.txt generation (www root does not even exist).")
         return
     robots_file = www_root / "robots.txt"
     with open(HERE / "templates" / "robots.txt", encoding="UTF-8") as template_file:
@@ -457,7 +456,7 @@ def build_sitemap(
 ):
     """Build a sitemap with all live versions and translations."""
     if not www_root.exists():
-        logging.info("Skipping sitemap generation (www root does not even exists).")
+        logging.info("Skipping sitemap generation (www root does not even exist).")
         return
     with open(HERE / "templates" / "sitemap.xml", encoding="UTF-8") as template_file:
         template = jinja2.Template(template_file.read())
@@ -472,7 +471,7 @@ def build_sitemap(
 def build_404(www_root: Path, group):
     """Build a nice 404 error page to display in case PDFs are not built yet."""
     if not www_root.exists():
-        logging.info("Skipping 404 page generation (www root does not even exists).")
+        logging.info("Skipping 404 page generation (www root does not even exist).")
         return
     not_found_file = www_root / "404.html"
     shutil.copyfile(HERE / "templates" / "404.html", not_found_file)
@@ -550,7 +549,7 @@ def parse_args():
     )
     parser.add_argument(
         "--skip-cache-invalidation",
-        help="Skip fastly cache invalidation.",
+        help="Skip Fastly cache invalidation.",
         action="store_true",
     )
     parser.add_argument(
@@ -598,7 +597,7 @@ def parse_args():
 
 
 def setup_logging(log_directory: Path):
-    """Setup logging to stderr if ran by a human, or to a file if ran from a cron."""
+    """Setup logging to stderr if run by a human, or to a file if run from a cron."""
     if sys.stderr.isatty():
         logging.basicConfig(
             format="%(asctime)s %(levelname)s: %(message)s", stream=sys.stderr
@@ -615,7 +614,7 @@ def setup_logging(log_directory: Path):
 
 @dataclass
 class DocBuilder:
-    """Builder for a cpython version and a language."""
+    """Builder for a CPython version and a language."""
 
     version: Version
     versions: Iterable[Version]
@@ -634,7 +633,7 @@ class DocBuilder:
     def full_build(self):
         """Tell if a full build is needed.
 
-        A full build is slow, it builds pdf, txt, epub, texinfo, and
+        A full build is slow; it builds pdf, txt, epub, texinfo, and
         archives everything.
 
         A partial build only builds HTML and does not archive, it's
@@ -664,7 +663,7 @@ class DocBuilder:
 
     @property
     def checkout(self) -> Path:
-        """Path to cpython git clone."""
+        """Path to CPython git clone."""
         return self.build_root / "cpython"
 
     def clone_translation(self):
@@ -687,7 +686,7 @@ class DocBuilder:
 
     @property
     def translation_branch(self):
-        """Some cpython versions may be untranslated, being either too old or
+        """Some CPython versions may be untranslated, being either too old or
         too new.
 
         This function looks for remote branches on the given repo, and
@@ -745,7 +744,7 @@ class DocBuilder:
         python = self.venv / "bin" / "python"
         sphinxbuild = self.venv / "bin" / "sphinx-build"
         blurb = self.venv / "bin" / "blurb"
-        # Disable cpython switchers, we handle them now:
+        # Disable CPython switchers, we handle them now:
 
         def is_mac():
             return platform.system() == 'Darwin'
@@ -955,7 +954,7 @@ class DocBuilder:
             return {}
 
     def save_state(self, build_duration: float):
-        """Save current cpython sha1 and current translation sha1.
+        """Save current CPython sha1 and current translation sha1.
 
         Using this we can deduce if a rebuild is needed or not.
         """
@@ -979,7 +978,7 @@ class DocBuilder:
 
 def symlink(www_root: Path, language: Language, directory: str, name: str, group: str, skip_cache_invalidation: bool):
     """Used by major_symlinks and dev_symlink to maintain symlinks."""
-    if language.tag == "en":  # english is rooted on /, no /en/
+    if language.tag == "en":  # English is rooted on /, no /en/
         path = www_root
     else:
         path = www_root / language.tag
@@ -1000,7 +999,7 @@ def symlink(www_root: Path, language: Language, directory: str, name: str, group
 def major_symlinks(
     www_root: Path, group, versions: Iterable[Version], languages: Iterable[Language], skip_cache_invalidation: bool
 ):
-    """Maintains the /2/ and /3/ symlinks for each languages.
+    """Maintains the /2/ and /3/ symlinks for each language.
 
     Like:
     - /3/ → /3.9/
@@ -1014,7 +1013,7 @@ def major_symlinks(
 
 
 def dev_symlink(www_root: Path, group, versions, languages, skip_cache_invalidation: bool):
-    """Maintains the /dev/ symlinks for each languages.
+    """Maintains the /dev/ symlinks for each language.
 
     Like:
     - /dev/ → /3.11/
@@ -1029,7 +1028,7 @@ def dev_symlink(www_root: Path, group, versions, languages, skip_cache_invalidat
 def purge(*paths):
     """Remove one or many paths from docs.python.org's CDN.
 
-    To be used when a file change, so the CDN fetch the new one.
+    To be used when a file changes, so the CDN fetches the new one.
     """
     base = "https://docs.python.org/"
     for path in paths:
@@ -1041,7 +1040,7 @@ def purge(*paths):
 def purge_path(www_root: Path, path: Path):
     """Recursively remove a path from docs.python.org's CDN.
 
-    To be used when a directory change, so the CDN fetch the new one.
+    To be used when a directory changes, so the CDN fetches the new one.
     """
     purge(*[file.relative_to(www_root) for file in path.glob("**/*")])
     purge(path.relative_to(www_root))
@@ -1101,7 +1100,7 @@ def parse_languages_from_config():
 
 
 def build_docs(args) -> bool:
-    """Build all docs (each languages and each versions)."""
+    """Build all docs (each language and each version)."""
     versions = parse_versions_from_devguide()
     languages = parse_languages_from_config()
     todo = [

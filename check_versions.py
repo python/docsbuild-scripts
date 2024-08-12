@@ -20,12 +20,12 @@ def parse_args():
         description="""Check the version of our build in different branches
         Hint: Use with | column -t"""
     )
-    parser.add_argument("cpython_clone", help="Path to a clone of cpython", type=Path)
+    parser.add_argument("cpython_clone", help="Path to a clone of CPython", type=Path)
     return parser.parse_args()
 
 
 def remote_by_url(repo: git.Repo, url_pattern: str):
-    """Find a remote of repo matching the regex url_pattern."""
+    """Find a remote in the repo that matches the URL pattern."""
     for remote in repo.remotes:
         for url in remote.urls:
             if re.search(url_pattern, url):
