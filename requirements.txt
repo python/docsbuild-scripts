@@ -1,5 +1,5 @@
 jinja2
 requests
-sentry-sdk
+sentry-sdk>=2
 tomlkit
 zc.lockfile
