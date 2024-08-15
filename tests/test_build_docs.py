@@ -15,7 +15,12 @@ from build_docs import format_seconds
         (185, "3m 5s"),
         (454, "7m 34s"),
         (7456, "2h 4m 16s"),
+        (30.1, "30s"),
+        (60.2, "1m 0s"),
+        (185.3, "3m 5s"),
+        (454.4, "7m 34s"),
+        (7456.5, "2h 4m 16s"),
     ],
 )
-def test_format_seconds(seconds: int, expected: str) -> None:
+def test_format_seconds(seconds: float, expected: str) -> None:
     assert format_seconds(seconds) == expected

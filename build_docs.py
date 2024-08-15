@@ -1155,7 +1155,7 @@ def build_docs(args) -> bool:
 def format_seconds(seconds: float) -> str:
     hours, remainder = divmod(seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
-    seconds = round(seconds)
+    hours, minutes, seconds = int(hours), int(minutes), round(seconds)
 
     match (hours, minutes, seconds):
         case 0, 0, s:
