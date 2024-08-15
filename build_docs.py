@@ -28,7 +28,7 @@ import filecmp
 import json
 import logging
 import logging.handlers
-from functools import total_ordering, cache
+from functools import total_ordering
 from os import readlink
 import platform
 import re
@@ -1151,7 +1151,6 @@ def build_docs(args) -> bool:
     return all_built_successfully
 
 
-@cache
 def format_seconds(seconds: float) -> str:
     hours, remainder = divmod(seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
