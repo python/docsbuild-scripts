@@ -1104,6 +1104,20 @@ def parse_languages_from_config():
     return languages
 
 
+def format_seconds(seconds: float) -> str:
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    hours, minutes, seconds = int(hours), int(minutes), round(seconds)
+
+    match (hours, minutes, seconds):
+        case 0, 0, s:
+            return f"{s}s"
+        case 0, m, s:
+            return f"{m}m {s}s"
+        case h, m, s:
+            return f"{h}h {m}m {s}s"
+
+
 def build_docs(args) -> bool:
     """Build all docs (each languages and each versions)."""
     versions = parse_versions_from_devguide()
@@ -1149,20 +1163,6 @@ def build_docs(args) -> bool:
     proofread_canonicals(args.www_root, args.skip_cache_invalidation)
 
     return all_built_successfully
-
-
-def format_seconds(seconds: float) -> str:
-    hours, remainder = divmod(seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    hours, minutes, seconds = int(hours), int(minutes), round(seconds)
-
-    match (hours, minutes, seconds):
-        case 0, 0, s:
-            return f"{s}s"
-        case 0, m, s:
-            return f"{m}m {s}s"
-        case h, m, s:
-            return f"{h}h {m}m {s}s"
 
 
 def main():
