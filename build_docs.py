@@ -1120,6 +1120,8 @@ def format_seconds(seconds: float) -> str:
 
 def build_docs(args) -> bool:
     """Build all docs (each languages and each versions)."""
+    logging.info("Full build start.")
+    start_time = perf_counter()
     versions = parse_versions_from_devguide()
     languages = parse_languages_from_config()
     todo = [
@@ -1161,6 +1163,8 @@ def build_docs(args) -> bool:
     major_symlinks(args.www_root, args.group, versions, languages, args.skip_cache_invalidation)
     dev_symlink(args.www_root, args.group, versions, languages, args.skip_cache_invalidation)
     proofread_canonicals(args.www_root, args.skip_cache_invalidation)
+
+    logging.info("Full build done (%s).", format_seconds(perf_counter() - start_time))
 
     return all_built_successfully
 
