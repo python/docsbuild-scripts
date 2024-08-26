@@ -1117,7 +1117,6 @@ def build_docs(args) -> bool:
     cpython_repo = Repository(
         "https://github.com/python/cpython.git", args.build_root / "cpython"
     )
-    cpython_repo.update()
     while todo:
         version, language = todo.pop()
         logging.root.handlers[0].setFormatter(
@@ -1129,6 +1128,7 @@ def build_docs(args) -> bool:
             with sentry_sdk.configure_scope() as scope:
                 scope.set_tag("version", version.name)
                 scope.set_tag("language", language.tag)
+        cpython_repo.update()
         builder = DocBuilder(
             version, versions, language, languages, cpython_repo, **vars(args)
         )
