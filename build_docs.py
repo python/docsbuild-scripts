@@ -1078,7 +1078,9 @@ def parse_versions_from_devguide():
         "python/devguide/main/include/release-cycle.json",
         timeout=30,
     ).json()
-    return [Version.from_json(name, release) for name, release in releases.items()]
+    versions = [Version.from_json(name, release) for name, release in releases.items()]
+    versions.sort(key=Version.as_tuple)
+    return versions
 
 
 def parse_languages_from_config():
