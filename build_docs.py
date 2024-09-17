@@ -789,6 +789,7 @@ class DocBuilder:
         run([sys.executable, "-m", "venv", venv_path])
         run(
             [venv_path / "bin" / "python", "-m", "pip", "install", "--upgrade"]
+            + ["--upgrade-strategy=eager"]
             + [self.theme]
             + self.version.requirements,
             cwd=self.checkout / "Doc",
