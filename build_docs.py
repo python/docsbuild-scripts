@@ -1126,9 +1126,9 @@ def build_docs(args) -> bool:
             )
         )
         if sentry_sdk:
-            with sentry_sdk.configure_scope() as scope:
-                scope.set_tag("version", version.name)
-                scope.set_tag("language", language.tag)
+            scope = sentry_sdk.get_isolation_scope()
+            scope.set_tag("version", version.name)
+            scope.set_tag("language", language.tag)
         builder = DocBuilder(
             version, versions, language, languages, cpython_repo, **vars(args)
         )
