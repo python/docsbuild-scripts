@@ -701,6 +701,7 @@ class DocBuilder:
     def build(self):
         """Build this version/language doc."""
         logging.info("Build start.")
+        start_time = perf_counter()
         sphinxopts = list(self.language.sphinxopts)
         sphinxopts.extend(["-q"])
         if self.language.tag != "en":
@@ -777,7 +778,7 @@ class DocBuilder:
         setup_switchers(
             self.versions, self.languages, self.checkout / "Doc" / "build" / "html"
         )
-        logging.info("Build done.")
+        logging.info("Build done (%s).", format_seconds(perf_counter() - start_time))
 
     def build_venv(self):
         """Build a venv for the specific Python version.
@@ -800,6 +801,7 @@ class DocBuilder:
     def copy_build_to_webroot(self, http: urllib3.PoolManager) -> None:
         """Copy a given build to the appropriate webroot with appropriate rights."""
         logging.info("Publishing start.")
+        start_time = perf_counter()
         self.www_root.mkdir(parents=True, exist_ok=True)
         if self.language.tag == "en":
             target = self.www_root / self.version.name
@@ -912,7 +914,9 @@ class DocBuilder:
             purge(http, *prefixes)
             for prefix in prefixes:
                 purge(http, *[prefix + p for p in changed])
-        logging.info("Publishing done")
+        logging.info(
+            "Publishing done (%s).", format_seconds(perf_counter() - start_time)
+        )
 
     def should_rebuild(self):
         state = self.load_state()
@@ -1141,8 +1145,24 @@ def parse_languages_from_config():
     return languages
 
 
+def format_seconds(seconds: float) -> str:
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    hours, minutes, seconds = int(hours), int(minutes), round(seconds)
+
+    match (hours, minutes, seconds):
+        case 0, 0, s:
+            return f"{s}s"
+        case 0, m, s:
+            return f"{m}m {s}s"
+        case h, m, s:
+            return f"{h}h {m}m {s}s"
+
+
 def build_docs(args) -> bool:
     """Build all docs (each language and each version)."""
+    logging.info("Full build start.")
+    start_time = perf_counter()
     http = urllib3.PoolManager()
     versions = parse_versions_from_devguide(http)
     languages = parse_languages_from_config()
@@ -1204,6 +1224,8 @@ def build_docs(args) -> bool:
         http,
     )
     proofread_canonicals(args.www_root, args.skip_cache_invalidation, http)
+
+    logging.info("Full build done (%s).", format_seconds(perf_counter() - start_time))
 
     return all_built_successfully
 
