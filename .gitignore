@@ -1,6 +1,8 @@
 /build_root/
 /logs/
 /www/
+# temporary lock file created while building the docs
+build_docs.lock
 
 
 # Created by https://www.gitignore.io/api/python
