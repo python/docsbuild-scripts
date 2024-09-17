@@ -45,11 +45,10 @@ from time import perf_counter, sleep
 from typing import Iterable
 from urllib.parse import urljoin
 
-import zc.lockfile
 import jinja2
-import requests
 import tomlkit
-
+import urllib3
+import zc.lockfile
 
 try:
     from os import EX_OK, EX_SOFTWARE as EX_FAILURE
@@ -433,7 +432,8 @@ def build_robots_txt(
     www_root: Path,
     group,
     skip_cache_invalidation,
-):
+    http: urllib3.PoolManager,
+) -> None:
     """Disallow crawl of EOL versions in robots.txt."""
     if not www_root.exists():
         logging.info("Skipping robots.txt generation (www root does not even exist).")
@@ -448,7 +448,7 @@ def build_robots_txt(
     robots_file.chmod(0o775)
     run(["chgrp", group, robots_file])
     if not skip_cache_invalidation:
-        purge("robots.txt")
+        purge(http, "robots.txt")
 
 
 def build_sitemap(
@@ -641,7 +641,7 @@ class DocBuilder:
         """
         return not self.quick and not self.language.html_only
 
-    def run(self) -> bool:
+    def run(self, http: urllib3.PoolManager) -> bool:
         """Build and publish a Python doc, for a language, and a version."""
         start_time = perf_counter()
         logging.info("Running.")
@@ -652,7 +652,7 @@ class DocBuilder:
             if self.should_rebuild():
                 self.build_venv()
                 self.build()
-                self.copy_build_to_webroot()
+                self.copy_build_to_webroot(http)
                 self.save_state(build_duration=perf_counter() - start_time)
         except Exception as err:
             logging.exception("Badly handled exception, human, please help.")
@@ -797,7 +797,7 @@ class DocBuilder:
         run([venv_path / "bin" / "python", "-m", "pip", "freeze", "--all"])
         self.venv = venv_path
 
-    def copy_build_to_webroot(self):
+    def copy_build_to_webroot(self, http: urllib3.PoolManager) -> None:
         """Copy a given build to the appropriate webroot with appropriate rights."""
         logging.info("Publishing start.")
         self.www_root.mkdir(parents=True, exist_ok=True)
@@ -909,9 +909,9 @@ class DocBuilder:
             prefixes = run(["find", "-L", targets_dir, "-samefile", target]).stdout
             prefixes = prefixes.replace(targets_dir + "/", "")
             prefixes = [prefix + "/" for prefix in prefixes.split("\n") if prefix]
-            purge(*prefixes)
+            purge(http, *prefixes)
             for prefix in prefixes:
-                purge(*[prefix + p for p in changed])
+                purge(http, *[prefix + p for p in changed])
         logging.info("Publishing done")
 
     def should_rebuild(self):
@@ -977,7 +977,15 @@ class DocBuilder:
         state_file.write_text(tomlkit.dumps(states), encoding="UTF-8")
 
 
-def symlink(www_root: Path, language: Language, directory: str, name: str, group: str, skip_cache_invalidation: bool):
+def symlink(
+    www_root: Path,
+    language: Language,
+    directory: str,
+    name: str,
+    group: str,
+    skip_cache_invalidation: bool,
+    http: urllib3.PoolManager,
+) -> None:
     """Used by major_symlinks and dev_symlink to maintain symlinks."""
     if language.tag == "en":  # English is rooted on /, no /en/
         path = www_root
@@ -994,12 +1002,17 @@ def symlink(www_root: Path, language: Language, directory: str, name: str, group
     link.symlink_to(directory)
     run(["chown", "-h", ":" + group, str(link)])
     if not skip_cache_invalidation:
-        purge_path(www_root, link)
+        purge_path(http, www_root, link)
 
 
 def major_symlinks(
-    www_root: Path, group, versions: Iterable[Version], languages: Iterable[Language], skip_cache_invalidation: bool
-):
+    www_root: Path,
+    group: str,
+    versions: Iterable[Version],
+    languages: Iterable[Language],
+    skip_cache_invalidation: bool,
+    http: urllib3.PoolManager,
+) -> None:
     """Maintains the /2/ and /3/ symlinks for each language.
 
     Like:
@@ -1009,11 +1022,26 @@ def major_symlinks(
     """
     current_stable = Version.current_stable(versions).name
     for language in languages:
-        symlink(www_root, language, current_stable, "3", group, skip_cache_invalidation)
-        symlink(www_root, language, "2.7", "2", group, skip_cache_invalidation)
+        symlink(
+            www_root,
+            language,
+            current_stable,
+            "3",
+            group,
+            skip_cache_invalidation,
+            http,
+        )
+        symlink(www_root, language, "2.7", "2", group, skip_cache_invalidation, http)
 
 
-def dev_symlink(www_root: Path, group, versions, languages, skip_cache_invalidation: bool):
+def dev_symlink(
+    www_root: Path,
+    group,
+    versions,
+    languages,
+    skip_cache_invalidation: bool,
+    http: urllib3.PoolManager,
+) -> None:
     """Maintains the /dev/ symlinks for each language.
 
     Like:
@@ -1023,10 +1051,18 @@ def dev_symlink(www_root: Path, group, versions, languages, skip_cache_invalidat
     """
     current_dev = Version.current_dev(versions).name
     for language in languages:
-        symlink(www_root, language, current_dev, "dev", group, skip_cache_invalidation)
+        symlink(
+            www_root,
+            language,
+            current_dev,
+            "dev",
+            group,
+            skip_cache_invalidation,
+            http,
+        )
 
 
-def purge(*paths):
+def purge(http: urllib3.PoolManager, *paths: Path | str) -> None:
     """Remove one or many paths from docs.python.org's CDN.
 
     To be used when a file changes, so the CDN fetches the new one.
@@ -1035,20 +1071,22 @@ def purge(*paths):
     for path in paths:
         url = urljoin(base, str(path))
         logging.debug("Purging %s from CDN", url)
-        requests.request("PURGE", url, timeout=30)
+        http.request("PURGE", url, timeout=30)
 
 
-def purge_path(www_root: Path, path: Path):
+def purge_path(http: urllib3.PoolManager, www_root: Path, path: Path) -> None:
     """Recursively remove a path from docs.python.org's CDN.
 
     To be used when a directory changes, so the CDN fetches the new one.
     """
-    purge(*[file.relative_to(www_root) for file in path.glob("**/*")])
-    purge(path.relative_to(www_root))
-    purge(str(path.relative_to(www_root)) + "/")
+    purge(http, *[file.relative_to(www_root) for file in path.glob("**/*")])
+    purge(http, path.relative_to(www_root))
+    purge(http, str(path.relative_to(www_root)) + "/")
 
 
-def proofread_canonicals(www_root: Path, skip_cache_invalidation: bool) -> None:
+def proofread_canonicals(
+    www_root: Path, skip_cache_invalidation: bool, http: urllib3.PoolManager
+) -> None:
     """In www_root we check that all canonical links point to existing contents.
 
     It can happen that a canonical is "broken":
@@ -1070,11 +1108,12 @@ def proofread_canonicals(www_root: Path, skip_cache_invalidation: bool) -> None:
             html = html.replace(canonical.group(0), "")
             file.write_text(html, encoding="UTF-8", errors="surrogateescape")
             if not skip_cache_invalidation:
-                purge(str(file).replace("/srv/docs.python.org/", ""))
+                purge(http, str(file).replace("/srv/docs.python.org/", ""))
 
 
-def parse_versions_from_devguide():
-    releases = requests.get(
+def parse_versions_from_devguide(http: urllib3.PoolManager) -> list[Version]:
+    releases = http.request(
+        "GET",
         "https://raw.githubusercontent.com/"
         "python/devguide/main/include/release-cycle.json",
         timeout=30,
@@ -1104,7 +1143,8 @@ def parse_languages_from_config():
 
 def build_docs(args) -> bool:
     """Build all docs (each language and each version)."""
-    versions = parse_versions_from_devguide()
+    http = urllib3.PoolManager()
+    versions = parse_versions_from_devguide(http)
     languages = parse_languages_from_config()
     todo = [
         (version, language)
@@ -1132,7 +1172,7 @@ def build_docs(args) -> bool:
         builder = DocBuilder(
             version, versions, language, languages, cpython_repo, **vars(args)
         )
-        all_built_successfully &= builder.run()
+        all_built_successfully &= builder.run(http)
     logging.root.handlers[0].setFormatter(
         logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
     )
@@ -1140,11 +1180,30 @@ def build_docs(args) -> bool:
     build_sitemap(versions, languages, args.www_root, args.group)
     build_404(args.www_root, args.group)
     build_robots_txt(
-        versions, languages, args.www_root, args.group, args.skip_cache_invalidation
+        versions,
+        languages,
+        args.www_root,
+        args.group,
+        args.skip_cache_invalidation,
+        http,
     )
-    major_symlinks(args.www_root, args.group, versions, languages, args.skip_cache_invalidation)
-    dev_symlink(args.www_root, args.group, versions, languages, args.skip_cache_invalidation)
-    proofread_canonicals(args.www_root, args.skip_cache_invalidation)
+    major_symlinks(
+        args.www_root,
+        args.group,
+        versions,
+        languages,
+        args.skip_cache_invalidation,
+        http,
+    )
+    dev_symlink(
+        args.www_root,
+        args.group,
+        versions,
+        languages,
+        args.skip_cache_invalidation,
+        http,
+    )
+    proofread_canonicals(args.www_root, args.skip_cache_invalidation, http)
 
     return all_built_successfully
 
