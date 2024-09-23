@@ -1,19 +1,19 @@
 """Check the frequency of the rebuild loop.
 
-This must be run in a directory that has the ``docsbuild.log.*`` files.
+This must be run in a directory that has the ``docsbuild.log*`` files.
 For example:
 
 .. code-block:: bash
 
-   $ cd docsbuild-logs
-   $ scp "adam@docs.nyc1.psf.io:/var/log/docsbuild/docsbuild.log*" .
-   $ python ../check_times.py
+   $ scp "adam@docs.nyc1.psf.io:/var/log/docsbuild/docsbuild.log*" docsbuild-logs
+   $ python check_times.py
 """
 
 import datetime as dt
 import gzip
 from pathlib import Path
 
+from build_docs import format_seconds
 
 def get_lines() -> list[str]:
     lines = []
@@ -31,7 +31,7 @@ def calc_time(lines: list[str]) -> None:
     start = end = language = version = start_timestamp = None
     reason = lang_ver = ''
 
-    print("Start                | Version | Language | Build          | Reason")
+    print("Start                | Version | Language | Build          | Trigger")
     print(":--                  | :--:    | :--:     | --:            | :--:")
 
     for line in lines:
@@ -52,7 +52,7 @@ def calc_time(lines: list[str]) -> None:
             timestamp = line[:23].replace(",", ".")
             language, version = line.split(" ")[3].removesuffix(":").split("/")
             start = dt.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S.%f")
-            start_timestamp = f"{line[:16]} GMT"
+            start_timestamp = f"{line[:16]} UTC"
 
         if start and ": Build done " in line:
             timestamp = line[:23].replace(",", ".")
@@ -68,21 +68,13 @@ def calc_time(lines: list[str]) -> None:
             start = end = start_timestamp = None
 
         if ': Full build done' in line:
-            timestamp = f"{line[:16]} GMT"
+            timestamp = f"{line[:16]} UTC"
             _, fmt_duration = line.removesuffix(").").split("(")
             print(f"{timestamp: <20} | --FULL- | -BUILD-- | {fmt_duration :<14} | -----------")
 
     if start and end is None:
         print(f"{start_timestamp: <20} | {version: <7} | {language: <8} | In progress... | {reason}")
 
-
-def format_seconds(seconds: float) -> str:
-    hours, minutes = divmod(seconds, 3600)
-    minutes, _ = divmod(minutes, 60)
-    hours, minutes = int(hours), int(minutes)
-    if hours == 0:
-        return f"{minutes}m"
-    return f"{hours}h {minutes}m"
 
 
 if __name__ == "__main__":
