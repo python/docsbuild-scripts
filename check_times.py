@@ -64,8 +64,7 @@ def calc_time(lines: list[str]) -> None:
             fmt_duration = format_seconds(duration)
             if lang_ver != f'{language}/{version}':
                 reason = ''
-            if True or language == "en":
-                print(f"{start_timestamp: <20} | {version: <7} | {language: <8} | {fmt_duration :<14} | {reason}")
+            print(f"{start_timestamp: <20} | {version: <7} | {language: <8} | {fmt_duration :<14} | {reason}")
             start = end = start_timestamp = None
 
         if ': Full build done' in line:
@@ -74,8 +73,7 @@ def calc_time(lines: list[str]) -> None:
             print(f"{timestamp: <20} | --FULL- | -BUILD-- | {fmt_duration :<14} | -----------")
 
     if start and end is None:
-        if True or language == "en":
-            print(f"{start_timestamp: <20} | {version: <7} | {language: <8} | In progress... | {reason}")
+        print(f"{start_timestamp: <20} | {version: <7} | {language: <8} | In progress... | {reason}")
 
 
 def format_seconds(seconds: float) -> str:
