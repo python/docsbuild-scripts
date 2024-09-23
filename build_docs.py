@@ -182,9 +182,7 @@ class Version:
             sidebar_file.write(
                 sidebar_template.render(
                     current_version=self,
-                    versions=sorted(
-                        versions, key=lambda v: version_to_tuple(v.name), reverse=True
-                    ),
+                    versions=versions[::-1],
                 )
             )
 
@@ -339,12 +337,7 @@ def locate_nearest_version(available_versions, target_version):
     '3.7'
     """
 
-    available_versions_tuples = sorted(
-        [
-            version_to_tuple(available_version)
-            for available_version in set(available_versions)
-        ]
-    )
+    available_versions_tuples = sorted(map(version_to_tuple, set(available_versions)))
     target_version_tuple = version_to_tuple(target_version)
     try:
         found = available_versions_tuples[
@@ -402,11 +395,7 @@ def setup_switchers(
                     OrderedDict(
                         [
                             (version.name, version.picker_label)
-                            for version in sorted(
-                                versions,
-                                key=lambda v: version_to_tuple(v.name),
-                                reverse=True,
-                            )
+                            for version in reversed(versions)
                         ]
                     )
                 ),
