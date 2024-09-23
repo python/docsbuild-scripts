@@ -37,7 +37,6 @@ import shutil
 import subprocess
 import sys
 from bisect import bisect_left as bisect
-from collections import OrderedDict
 from datetime import datetime as dt, timezone
 from pathlib import Path
 from string import Template
@@ -372,6 +371,9 @@ def setup_switchers(
     - Cross-link various languages in a language switcher
     - Cross-link various versions in a version switcher
     """
+    languages_map = dict(sorted((l.tag, l.name) for l in languages if l.in_prod))
+    versions_map = {v.name: v.picker_label for v in reversed(versions)}
+
     with open(
         HERE / "templates" / "switchers.js", encoding="UTF-8"
     ) as switchers_template_file:
@@ -380,25 +382,8 @@ def setup_switchers(
     switchers_path.write_text(
         template.safe_substitute(
             {
-                "LANGUAGES": json.dumps(
-                    OrderedDict(
-                        sorted(
-                            [
-                                (language.tag, language.name)
-                                for language in languages
-                                if language.in_prod
-                            ]
-                        )
-                    )
-                ),
-                "VERSIONS": json.dumps(
-                    OrderedDict(
-                        [
-                            (version.name, version.picker_label)
-                            for version in reversed(versions)
-                        ]
-                    )
-                ),
+                "LANGUAGES": json.dumps(languages_map),
+                "VERSIONS": json.dumps(versions_map),
             }
         ),
         encoding="UTF-8",
