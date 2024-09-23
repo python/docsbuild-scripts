@@ -13,6 +13,11 @@ repos:
       - id: requirements-txt-fixer
       - id: trailing-whitespace
 
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.7
+    hooks:
+      - id: ruff-format
+
   - repo: https://github.com/python-jsonschema/check-jsonschema
     rev: 0.29.2
     hooks:

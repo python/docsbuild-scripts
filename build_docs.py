@@ -748,7 +748,7 @@ class DocBuilder:
         # Disable CPython switchers, we handle them now:
 
         def is_mac():
-            return platform.system() == 'Darwin'
+            return platform.system() == "Darwin"
 
         run(
             ["sed", "-i"]
