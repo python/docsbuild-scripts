@@ -381,10 +381,8 @@ def setup_switchers(
     switchers_path = html_root / "_static" / "switchers.js"
     switchers_path.write_text(
         template.safe_substitute(
-            {
-                "LANGUAGES": json.dumps(languages_map),
-                "VERSIONS": json.dumps(versions_map),
-            }
+            LANGUAGES=json.dumps(languages_map),
+            VERSIONS=json.dumps(versions_map),
         ),
         encoding="UTF-8",
     )
