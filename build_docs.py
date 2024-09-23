@@ -20,6 +20,8 @@ Modified by Julien Palard to build translations.
 
 """
 
+from __future__ import annotations
+
 from argparse import ArgumentParser
 from collections.abc import Sequence
 from contextlib import suppress, contextmanager
@@ -171,19 +173,15 @@ class Version:
             return f"pre ({self.name})"
         return self.name
 
-    def setup_indexsidebar(self, versions, dest_path):
+    def setup_indexsidebar(self, versions: Sequence[Version], dest_path: Path):
         """Build indexsidebar.html for Sphinx."""
-        with open(
-            HERE / "templates" / "indexsidebar.html", encoding="UTF-8"
-        ) as sidebar_template_file:
-            sidebar_template = jinja2.Template(sidebar_template_file.read())
-        with open(dest_path, "w", encoding="UTF-8") as sidebar_file:
-            sidebar_file.write(
-                sidebar_template.render(
-                    current_version=self,
-                    versions=versions[::-1],
-                )
-            )
+        template_path = HERE / "templates" / "indexsidebar.html"
+        template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
+        rendered_template = template.render(
+            current_version=self,
+            versions=versions[::-1],
+        )
+        dest_path.write_text(rendered_template, encoding="UTF-8")
 
     @classmethod
     def from_json(cls, name, values):
@@ -374,19 +372,17 @@ def setup_switchers(
     languages_map = dict(sorted((l.tag, l.name) for l in languages if l.in_prod))
     versions_map = {v.name: v.picker_label for v in reversed(versions)}
 
-    with open(
-        HERE / "templates" / "switchers.js", encoding="UTF-8"
-    ) as switchers_template_file:
-        template = Template(switchers_template_file.read())
+    switchers_template_file = HERE / "templates" / "switchers.js"
     switchers_path = html_root / "_static" / "switchers.js"
-    switchers_path.write_text(
-        template.safe_substitute(
-            LANGUAGES=json.dumps(languages_map),
-            VERSIONS=json.dumps(versions_map),
-        ),
-        encoding="UTF-8",
+
+    template = Template(switchers_template_file.read_text(encoding="UTF-8"))
+    rendered_template = template.safe_substitute(
+        LANGUAGES=json.dumps(languages_map),
+        VERSIONS=json.dumps(versions_map),
     )
-    for file in Path(html_root).glob("**/*.html"):
+    switchers_path.write_text(rendered_template, encoding="UTF-8")
+
+    for file in html_root.glob("**/*.html"):
         depth = len(file.relative_to(html_root).parts) - 1
         src = f"{'../' * depth}_static/switchers.js"
         script = f'    <script type="text/javascript" src="{src}"></script>\n'
@@ -411,15 +407,13 @@ def build_robots_txt(
     if not www_root.exists():
         logging.info("Skipping robots.txt generation (www root does not even exist).")
         return
-    robots_file = www_root / "robots.txt"
-    with open(HERE / "templates" / "robots.txt", encoding="UTF-8") as template_file:
-        template = jinja2.Template(template_file.read())
-    with open(robots_file, "w", encoding="UTF-8") as robots_txt_file:
-        robots_txt_file.write(
-            template.render(languages=languages, versions=versions) + "\n"
-        )
-    robots_file.chmod(0o775)
-    run(["chgrp", group, robots_file])
+    template_path = HERE / "templates" / "robots.txt"
+    template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
+    rendered_template = template.render(languages=languages, versions=versions)
+    robots_path = www_root / "robots.txt"
+    robots_path.write_text(rendered_template + "\n", encoding="UTF-8")
+    robots_path.chmod(0o775)
+    run(["chgrp", group, robots_path])
     if not skip_cache_invalidation:
         purge(http, "robots.txt")
 
@@ -431,14 +425,13 @@ def build_sitemap(
     if not www_root.exists():
         logging.info("Skipping sitemap generation (www root does not even exist).")
         return
-    with open(HERE / "templates" / "sitemap.xml", encoding="UTF-8") as template_file:
-        template = jinja2.Template(template_file.read())
-    sitemap_file = www_root / "sitemap.xml"
-    sitemap_file.write_text(
-        template.render(languages=languages, versions=versions) + "\n", encoding="UTF-8"
-    )
-    sitemap_file.chmod(0o664)
-    run(["chgrp", group, sitemap_file])
+    template_path = HERE / "templates" / "sitemap.xml"
+    template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
+    rendered_template = template.render(languages=languages, versions=versions)
+    sitemap_path = www_root / "sitemap.xml"
+    sitemap_path.write_text(rendered_template + "\n", encoding="UTF-8")
+    sitemap_path.chmod(0o664)
+    run(["chgrp", group, sitemap_path])
 
 
 def build_404(www_root: Path, group):
@@ -867,10 +860,7 @@ class DocBuilder:
                 [
                     "cp",
                     "-a",
-                    *[
-                        str(dist)
-                        for dist in (Path(self.checkout) / "Doc" / "dist").glob("*")
-                    ],
+                    *(self.checkout / "Doc" / "dist").glob("*"),
                     target / "archives",
                 ]
             )
@@ -972,7 +962,7 @@ def symlink(
     directory_path = path / directory
     if not directory_path.exists():
         return  # No touching link, dest doc not built yet.
-    if link.exists() and readlink(str(link)) == directory:
+    if link.exists() and readlink(link) == directory:
         return  # Link is already pointing to right doc.
     if link.exists():
         link.unlink()
