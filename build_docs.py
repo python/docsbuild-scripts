@@ -20,7 +20,7 @@ Modified by Julien Palard to build translations.
 
 """
 
-from __future__  import annotations
+from __future__ import annotations
 
 from argparse import ArgumentParser
 from collections.abc import Sequence
