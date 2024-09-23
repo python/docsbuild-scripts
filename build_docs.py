@@ -21,6 +21,7 @@ Modified by Julien Palard to build translations.
 """
 
 from argparse import ArgumentParser
+from collections.abc import Sequence
 from contextlib import suppress, contextmanager
 from dataclasses import dataclass
 import filecmp
@@ -372,7 +373,7 @@ def edit(file: Path):
 
 
 def setup_switchers(
-    versions: Iterable[Version], languages: Iterable[Language], html_root: Path
+    versions: Sequence[Version], languages: Sequence[Language], html_root: Path
 ):
     """Setup cross-links between CPython versions:
     - Cross-link various languages in a language switcher
@@ -617,9 +618,9 @@ class DocBuilder:
     """Builder for a CPython version and a language."""
 
     version: Version
-    versions: Iterable[Version]
+    versions: Sequence[Version]
     language: Language
-    languages: Iterable[Language]
+    languages: Sequence[Language]
     cpython_repo: Repository
     build_root: Path
     www_root: Path
@@ -1127,7 +1128,7 @@ def parse_versions_from_devguide(http: urllib3.PoolManager) -> list[Version]:
     return versions
 
 
-def parse_languages_from_config():
+def parse_languages_from_config() -> list[Language]:
     """Read config.toml to discover languages to build."""
     config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
     languages = []
