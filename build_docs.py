@@ -21,6 +21,7 @@ Modified by Julien Palard to build translations.
 """
 
 from argparse import ArgumentParser
+from collections.abc import Sequence
 from contextlib import suppress, contextmanager
 from dataclasses import dataclass
 import filecmp
@@ -36,7 +37,6 @@ import shutil
 import subprocess
 import sys
 from bisect import bisect_left as bisect
-from collections import OrderedDict
 from datetime import datetime as dt, timezone
 from pathlib import Path
 from string import Template
@@ -181,9 +181,7 @@ class Version:
             sidebar_file.write(
                 sidebar_template.render(
                     current_version=self,
-                    versions=sorted(
-                        versions, key=lambda v: version_to_tuple(v.name), reverse=True
-                    ),
+                    versions=versions[::-1],
                 )
             )
 
@@ -338,12 +336,7 @@ def locate_nearest_version(available_versions, target_version):
     '3.7'
     """
 
-    available_versions_tuples = sorted(
-        [
-            version_to_tuple(available_version)
-            for available_version in set(available_versions)
-        ]
-    )
+    available_versions_tuples = sorted(map(version_to_tuple, set(available_versions)))
     target_version_tuple = version_to_tuple(target_version)
     try:
         found = available_versions_tuples[
@@ -372,12 +365,15 @@ def edit(file: Path):
 
 
 def setup_switchers(
-    versions: Iterable[Version], languages: Iterable[Language], html_root: Path
+    versions: Sequence[Version], languages: Sequence[Language], html_root: Path
 ):
     """Setup cross-links between CPython versions:
     - Cross-link various languages in a language switcher
     - Cross-link various versions in a version switcher
     """
+    languages_map = dict(sorted((l.tag, l.name) for l in languages if l.in_prod))
+    versions_map = {v.name: v.picker_label for v in reversed(versions)}
+
     with open(
         HERE / "templates" / "switchers.js", encoding="UTF-8"
     ) as switchers_template_file:
@@ -385,31 +381,8 @@ def setup_switchers(
     switchers_path = html_root / "_static" / "switchers.js"
     switchers_path.write_text(
         template.safe_substitute(
-            {
-                "LANGUAGES": json.dumps(
-                    OrderedDict(
-                        sorted(
-                            [
-                                (language.tag, language.name)
-                                for language in languages
-                                if language.in_prod
-                            ]
-                        )
-                    )
-                ),
-                "VERSIONS": json.dumps(
-                    OrderedDict(
-                        [
-                            (version.name, version.picker_label)
-                            for version in sorted(
-                                versions,
-                                key=lambda v: version_to_tuple(v.name),
-                                reverse=True,
-                            )
-                        ]
-                    )
-                ),
-            }
+            LANGUAGES=json.dumps(languages_map),
+            VERSIONS=json.dumps(versions_map),
         ),
         encoding="UTF-8",
     )
@@ -617,9 +590,9 @@ class DocBuilder:
     """Builder for a CPython version and a language."""
 
     version: Version
-    versions: Iterable[Version]
+    versions: Sequence[Version]
     language: Language
-    languages: Iterable[Language]
+    languages: Sequence[Language]
     cpython_repo: Repository
     build_root: Path
     www_root: Path
@@ -1127,7 +1100,7 @@ def parse_versions_from_devguide(http: urllib3.PoolManager) -> list[Version]:
     return versions
 
 
-def parse_languages_from_config():
+def parse_languages_from_config() -> list[Language]:
     """Read config.toml to discover languages to build."""
     config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
     languages = []
@@ -1166,10 +1139,13 @@ def build_docs(args) -> bool:
     http = urllib3.PoolManager()
     versions = parse_versions_from_devguide(http)
     languages = parse_languages_from_config()
+    # Reverse languages but not versions, because we take version-language
+    # pairs from the end of the list, effectively reversing it.
+    # This runs languages in config.toml order and versions newest first.
     todo = [
         (version, language)
         for version in Version.filter(versions, args.branch)
-        for language in Language.filter(languages, args.languages)
+        for language in reversed(Language.filter(languages, args.languages))
     ]
     del args.branch
     del args.languages
