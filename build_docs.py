@@ -1156,10 +1156,13 @@ def build_docs(args) -> bool:
     http = urllib3.PoolManager()
     versions = parse_versions_from_devguide(http)
     languages = parse_languages_from_config()
+    # Reverse languages but not versions, because we take version-language
+    # pairs from the end of the list, effectively reversing it.
+    # This runs languages in config.toml order and versions newest first.
     todo = [
         (version, language)
         for version in Version.filter(versions, args.branch)
-        for language in Language.filter(languages, args.languages)
+        for language in reversed(Language.filter(languages, args.languages))
     ]
     del args.branch
     del args.languages
