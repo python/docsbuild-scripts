@@ -1,6 +1,15 @@
 name: Test
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    paths-ignore:
+      - "check_times.py"
+      - "check_versions.py"
+  pull_request:
+    paths-ignore:
+      - "check_times.py"
+      - "check_versions.py"
+  workflow_dispatch:
 
 permissions:
   contents: read
