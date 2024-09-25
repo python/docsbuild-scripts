@@ -949,9 +949,9 @@ class DocBuilder:
         states[key] = state
         state_file.write_text(tomlkit.dumps(states), encoding="UTF-8")
 
-        tbl = tomlkit.inline_table()
-        tbl |= state
-        logging.info("Saved new rebuild state for %s: %s", key, tbl.as_string())
+        table = tomlkit.inline_table()
+        table |= state
+        logging.info("Saved new rebuild state for %s: %s", key, table.as_string())
 
 
 def symlink(
