@@ -5,7 +5,8 @@ For example:
 
 .. code-block:: bash
 
-   $ scp "adam@docs.nyc1.psf.io:/var/log/docsbuild/docsbuild.log*" docsbuild-logs
+   $ mkdir -p docsbuild-logs
+   $ scp "adam@docs.nyc1.psf.io:/var/log/docsbuild/docsbuild.log*" docsbuild-logs/
    $ python check_times.py
 """
 
@@ -15,15 +16,17 @@ from pathlib import Path
 
 from build_docs import format_seconds
 
+LOGS_ROOT = Path('docsbuild-logs').resolve()
+
 
 def get_lines() -> list[str]:
     lines = []
-    zipped_logs = list(Path.cwd().glob("docsbuild.log.*.gz"))
+    zipped_logs = list(LOGS_ROOT.glob("docsbuild.log.*.gz"))
     zipped_logs.sort(key=lambda p: int(p.name.split(".")[-2]), reverse=True)
     for logfile in zipped_logs:
         with gzip.open(logfile, "rt", encoding="utf-8") as f:
             lines += f.readlines()
-    with open("docsbuild.log", encoding="utf-8") as f:
+    with open(LOGS_ROOT / "docsbuild.log", encoding="utf-8") as f:
         lines += f.readlines()
     return lines
 
