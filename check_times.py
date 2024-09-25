@@ -16,7 +16,7 @@ from pathlib import Path
 
 from build_docs import format_seconds
 
-LOGS_ROOT = Path('docsbuild-logs').resolve()
+LOGS_ROOT = Path("docsbuild-logs").resolve()
 
 
 def get_lines() -> list[str]:
