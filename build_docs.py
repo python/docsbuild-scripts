@@ -44,7 +44,7 @@ from pathlib import Path
 from string import Template
 from textwrap import indent
 from time import perf_counter, sleep
-from typing import Iterable
+from typing import Iterable, Literal
 from urllib.parse import urljoin
 
 import jinja2
@@ -488,10 +488,15 @@ def parse_args():
         description="Runs a build of the Python docs for various branches."
     )
     parser.add_argument(
+        "--select-output",
+        choices=("no-html", "only-html"),
+        help="Choose what outputs to build.",
+    )
+    parser.add_argument(
         "-q",
         "--quick",
         action="store_true",
-        help="Make HTML files only (Makefile rules suffixed with -html).",
+        help="Run a quick build (only HTML files).",
     )
     parser.add_argument(
         "-b",
@@ -589,6 +594,7 @@ class DocBuilder:
     cpython_repo: Repository
     build_root: Path
     www_root: Path
+    select_output: Literal["no-html", "only-html"] | None
     quick: bool
     group: str
     log_directory: Path
@@ -596,16 +602,10 @@ class DocBuilder:
     theme: Path
 
     @property
-    def full_build(self):
-        """Tell if a full build is needed.
-
-        A full build is slow; it builds pdf, txt, epub, texinfo, and
-        archives everything.
-
-        A partial build only builds HTML and does not archive, it's
-        fast.
-        """
-        return not self.quick and not self.language.html_only
+    def html_only(self):
+        return (
+            self.select_output == "only-html" or self.quick or self.language.html_only
+        )
 
     def run(self, http: urllib3.PoolManager) -> bool:
         """Build and publish a Python doc, for a language, and a version."""
@@ -698,15 +698,13 @@ class DocBuilder:
 
         if self.version.status == "EOL":
             sphinxopts.append("-D html_context.outdated=1")
-        maketarget = (
-            "autobuild-"
-            + (
-                "dev"
-                if self.version.status in ("in development", "pre-release")
-                else "stable"
-            )
-            + ("" if self.full_build else "-html")
-        )
+
+        if self.version.status in ("in development", "pre-release"):
+            maketarget = "autobuild-dev"
+        else:
+            maketarget = "autobuild-stable"
+        if self.html_only:
+            maketarget += "-html"
         logging.info("Running make %s", maketarget)
         python = self.venv / "bin" / "python"
         sphinxbuild = self.venv / "bin" / "sphinx-build"
@@ -815,28 +813,18 @@ class DocBuilder:
                 ";",
             ]
         )
-        if self.full_build:
-            run(
-                [
-                    "rsync",
-                    "-a",
-                    "--delete-delay",
-                    "--filter",
-                    "P archives/",
-                    str(self.checkout / "Doc" / "build" / "html") + "/",
-                    target,
-                ]
-            )
-        else:
-            run(
-                [
-                    "rsync",
-                    "-a",
-                    str(self.checkout / "Doc" / "build" / "html") + "/",
-                    target,
-                ]
-            )
-        if self.full_build:
+        run(
+            [
+                "rsync",
+                "-a",
+                "--delete-delay",
+                "--filter",
+                "P archives/",
+                str(self.checkout / "Doc" / "build" / "html") + "/",
+                target,
+            ]
+        )
+        if not self.quick:
             logging.debug("Copying dist files.")
             run(
                 [
@@ -1201,8 +1189,17 @@ def main():
     args = parse_args()
     setup_logging(args.log_directory)
 
+    if args.select_output is None:
+        build_docs_with_lock(args, "build_docs.lock")
+    elif args.select_output == "no-html":
+        build_docs_with_lock(args, "build_docs_archives.lock")
+    elif args.select_output == "only-html":
+        build_docs_with_lock(args, "build_docs_html.lock")
+
+
+def build_docs_with_lock(args, lockfile_name):
     try:
-        lock = zc.lockfile.LockFile(HERE / "build_docs.lock")
+        lock = zc.lockfile.LockFile(HERE / lockfile_name)
     except zc.lockfile.LockError:
         logging.info("Another builder is running... dying...")
         return EX_FAILURE
