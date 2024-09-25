@@ -48,7 +48,7 @@ from typing import Iterable
 from urllib.parse import urljoin
 
 import jinja2
-import tomlkit
+import tomllib
 import urllib3
 import zc.lockfile
 
@@ -915,7 +915,7 @@ class DocBuilder:
     def load_state(self) -> dict:
         state_file = self.build_root / "state.toml"
         try:
-            return tomlkit.loads(state_file.read_text(encoding="UTF-8"))[
+            return tomllib.loads(state_file.read_text(encoding="UTF-8"))[
                 f"/{self.language.tag}/{self.version.name}/"
             ]
         except (KeyError, FileNotFoundError):
@@ -928,9 +928,9 @@ class DocBuilder:
         """
         state_file = self.build_root / "state.toml"
         try:
-            states = tomlkit.parse(state_file.read_text(encoding="UTF-8"))
+            states = tomllib.parse(state_file.read_text(encoding="UTF-8"))
         except FileNotFoundError:
-            states = tomlkit.document()
+            states = tomllib.document()
 
         state = {}
         state["cpython_sha"] = self.cpython_repo.run("rev-parse", "HEAD").stdout.strip()
@@ -941,7 +941,7 @@ class DocBuilder:
         state["last_build"] = dt.now(timezone.utc)
         state["last_build_duration"] = build_duration
         states[f"/{self.language.tag}/{self.version.name}/"] = state
-        state_file.write_text(tomlkit.dumps(states), encoding="UTF-8")
+        state_file.write_text(tomllib.dumps(states), encoding="UTF-8")
 
 
 def symlink(
@@ -1092,7 +1092,7 @@ def parse_versions_from_devguide(http: urllib3.PoolManager) -> list[Version]:
 
 def parse_languages_from_config() -> list[Language]:
     """Read config.toml to discover languages to build."""
-    config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
+    config = tomllib.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
     languages = []
     defaults = config["defaults"]
     for iso639_tag, section in config["languages"].items():
