@@ -610,6 +610,7 @@ class DocBuilder:
     def run(self, http: urllib3.PoolManager) -> bool:
         """Build and publish a Python doc, for a language, and a version."""
         start_time = perf_counter()
+        start_timestamp = dt.now(tz=timezone.utc).replace(microsecond=0)
         logging.info("Running.")
         try:
             self.cpython_repo.switch(self.version.branch_or_tag)
@@ -619,7 +620,10 @@ class DocBuilder:
                 self.build_venv()
                 self.build()
                 self.copy_build_to_webroot(http)
-                self.save_state(build_duration=perf_counter() - start_time)
+                self.save_state(
+                    build_start=start_timestamp,
+                    build_duration=perf_counter() - start_time,
+                )
         except Exception as err:
             logging.exception("Badly handled exception, human, please help.")
             if sentry_sdk:
@@ -921,7 +925,7 @@ class DocBuilder:
         except (KeyError, FileNotFoundError):
             return {}
 
-    def save_state(self, build_duration: float):
+    def save_state(self, build_start: dt, build_duration: float):
         """Save current CPython sha1 and current translation sha1.
 
         Using this we can deduce if a rebuild is needed or not.
@@ -932,16 +936,22 @@ class DocBuilder:
         except FileNotFoundError:
             states = tomlkit.document()
 
-        state = {}
-        state["cpython_sha"] = self.cpython_repo.run("rev-parse", "HEAD").stdout.strip()
+        key = f"/{self.language.tag}/{self.version.name}/"
+        state = {
+            "last_build_start": build_start,
+            "last_build_duration": round(build_duration, 0),
+            "cpython_sha": self.cpython_repo.run("rev-parse", "HEAD").stdout.strip(),
+        }
         if self.language.tag != "en":
             state["translation_sha"] = self.translation_repo.run(
                 "rev-parse", "HEAD"
             ).stdout.strip()
-        state["last_build"] = dt.now(timezone.utc)
-        state["last_build_duration"] = build_duration
-        states[f"/{self.language.tag}/{self.version.name}/"] = state
+        states[key] = state
         state_file.write_text(tomlkit.dumps(states), encoding="UTF-8")
+
+        tbl = tomlkit.inline_table()
+        tbl |= state
+        logging.info("Saved new rebuild state for %s: %s", key, tbl.as_string())
 
 
 def symlink(
