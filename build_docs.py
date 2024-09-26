@@ -630,7 +630,7 @@ class DocBuilder:
     @property
     def checkout(self) -> Path:
         """Path to CPython git clone."""
-        return self.build_root / "cpython"
+        return self.build_root / _checkout_name(self.select_output)
 
     def clone_translation(self):
         self.translation_repo.update()
@@ -1129,7 +1129,8 @@ def build_docs(args) -> bool:
     del args.languages
     all_built_successfully = True
     cpython_repo = Repository(
-        "https://github.com/python/cpython.git", args.build_root / "cpython"
+        "https://github.com/python/cpython.git",
+        args.build_root / _checkout_name(args.select_output),
     )
     while todo:
         version, language = todo.pop()
@@ -1182,6 +1183,12 @@ def build_docs(args) -> bool:
     logging.info("Full build done (%s).", format_seconds(perf_counter() - start_time))
 
     return all_built_successfully
+
+
+def _checkout_name(select_output: str | None) -> str:
+    if select_output is not None:
+        return f"cpython-{select_output}"
+    return "cpython"
 
 
 def main():
