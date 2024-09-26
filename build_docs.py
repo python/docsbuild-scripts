@@ -22,7 +22,7 @@ Modified by Julien Palard to build translations.
 
 from __future__ import annotations
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from collections.abc import Sequence
 from contextlib import suppress, contextmanager
 from dataclasses import dataclass
@@ -1204,7 +1204,7 @@ def main():
         build_docs_with_lock(args, "build_docs_html.lock")
 
 
-def build_docs_with_lock(args, lockfile_name):
+def build_docs_with_lock(args: Namespace, lockfile_name: str) -> int:
     try:
         lock = zc.lockfile.LockFile(HERE / lockfile_name)
     except zc.lockfile.LockError:
