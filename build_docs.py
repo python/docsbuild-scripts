@@ -616,13 +616,14 @@ class DocBuilder:
             self.cpython_repo.switch(self.version.branch_or_tag)
             if self.language.tag != "en":
                 self.clone_translation()
-            if self.should_rebuild():
+            if trigger_reason := self.should_rebuild():
                 self.build_venv()
                 self.build()
                 self.copy_build_to_webroot(http)
                 self.save_state(
                     build_start=start_timestamp,
                     build_duration=perf_counter() - start_time,
+                    trigger=trigger_reason,
                 )
         except Exception as err:
             logging.exception("Badly handled exception, human, please help.")
@@ -889,7 +890,7 @@ class DocBuilder:
         state = self.load_state()
         if not state:
             logging.info("Should rebuild: no previous state found.")
-            return True
+            return "no previous state"
         cpython_sha = self.cpython_repo.run("rev-parse", "HEAD").stdout.strip()
         if self.language.tag != "en":
             translation_sha = self.translation_repo.run(
@@ -901,7 +902,7 @@ class DocBuilder:
                     state["translation_sha"],
                     translation_sha,
                 )
-                return True
+                return "new translations"
         if cpython_sha != state["cpython_sha"]:
             diff = self.cpython_repo.run(
                 "diff", "--name-only", state["cpython_sha"], cpython_sha
@@ -912,7 +913,7 @@ class DocBuilder:
                     state["cpython_sha"],
                     cpython_sha,
                 )
-                return True
+                return "Doc/ has changed"
         logging.info("Nothing changed, no rebuild needed.")
         return False
 
@@ -925,7 +926,7 @@ class DocBuilder:
         except (KeyError, FileNotFoundError):
             return {}
 
-    def save_state(self, build_start: dt, build_duration: float):
+    def save_state(self, build_start: dt, build_duration: float, trigger: str):
         """Save current CPython sha1 and current translation sha1.
 
         Using this we can deduce if a rebuild is needed or not.
@@ -940,6 +941,7 @@ class DocBuilder:
         state = {
             "last_build_start": build_start,
             "last_build_duration": round(build_duration, 0),
+            "triggered_by": trigger,
             "cpython_sha": self.cpython_repo.run("rev-parse", "HEAD").stdout.strip(),
         }
         if self.language.tag != "en":
