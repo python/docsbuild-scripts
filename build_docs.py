@@ -220,7 +220,7 @@ def run(cmd, cwd=None) -> subprocess.CompletedProcess:
     """Like subprocess.run, with logging before and after the command execution."""
     cmd = [str(arg) for arg in cmd]
     cmdstring = shlex.join(cmd)
-    logging.debug("Run: %r", cmdstring)
+    logging.debug("Run: '%s'", cmdstring)
     result = subprocess.run(
         cmd,
         cwd=cwd,
@@ -240,6 +240,21 @@ def run(cmd, cwd=None) -> subprocess.CompletedProcess:
         )
     result.check_returncode()
     return result
+
+
+def run_with_logging(cmd, cwd=None):
+    """Like subprocess.check_call, with logging before the command execution."""
+    cmd = list(map(str, cmd))
+    logging.debug("Run: %s", shlex.join(cmd))
+    with subprocess.Popen(cmd, cwd=cwd, encoding="utf-8") as p:
+        try:
+            for line in p.stdout:
+                logging.debug(">>>>   %s", line.rstrip())
+        except:
+            p.kill()
+            raise
+    if return_code := p.poll():
+        raise subprocess.CalledProcessError(return_code, cmd[0])
 
 
 def changed_files(left, right):
@@ -728,7 +743,7 @@ class DocBuilder:
             self.versions,
             self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html",
         )
-        run(
+        run_with_logging(
             [
                 "make",
                 "-C",
