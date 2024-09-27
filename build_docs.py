@@ -582,18 +582,19 @@ def parse_args():
     return args
 
 
-def setup_logging(log_directory: Path):
+def setup_logging(log_directory: Path, select_output: str | None):
     """Setup logging to stderr if run by a human, or to a file if run from a cron."""
+    log_format = "%(asctime)s %(levelname)s: %(message)s"
     if sys.stderr.isatty():
-        logging.basicConfig(
-            format="%(asctime)s %(levelname)s: %(message)s", stream=sys.stderr
-        )
+        logging.basicConfig(format=log_format, stream=sys.stderr)
     else:
         log_directory.mkdir(parents=True, exist_ok=True)
-        handler = logging.handlers.WatchedFileHandler(log_directory / "docsbuild.log")
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
-        )
+        if select_output is None:
+            filename = log_directory / "docsbuild.log"
+        else:
+            filename = log_directory / f"docsbuild-{select_output}.log"
+        handler = logging.handlers.WatchedFileHandler(filename)
+        handler.setFormatter(logging.Formatter(log_format))
         logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.DEBUG)
 
@@ -1221,7 +1222,7 @@ def _checkout_name(select_output: str | None) -> str:
 def main():
     """Script entry point."""
     args = parse_args()
-    setup_logging(args.log_directory)
+    setup_logging(args.log_directory, args.select_output)
 
     if args.select_output is None:
         build_docs_with_lock(args, "build_docs.lock")
