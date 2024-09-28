@@ -255,7 +255,7 @@ def run_with_logging(cmd, cwd=None):
         encoding="utf-8",
     ) as p:
         try:
-            for line in (p.stdout or ()):
+            for line in p.stdout or ():
                 logging.debug(">>>>   %s", line.rstrip())
         except:
             p.kill()
