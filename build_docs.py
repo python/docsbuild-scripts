@@ -248,7 +248,7 @@ def run_with_logging(cmd, cwd=None):
     logging.debug("Run: %s", shlex.join(cmd))
     with subprocess.Popen(cmd, cwd=cwd, encoding="utf-8") as p:
         try:
-            for line in p.stdout:
+            for line in (p.stdout or ()):
                 logging.debug(">>>>   %s", line.rstrip())
         except:
             p.kill()
