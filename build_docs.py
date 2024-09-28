@@ -246,7 +246,14 @@ def run_with_logging(cmd, cwd=None):
     """Like subprocess.check_call, with logging before the command execution."""
     cmd = list(map(str, cmd))
     logging.debug("Run: %s", shlex.join(cmd))
-    with subprocess.Popen(cmd, cwd=cwd, encoding="utf-8") as p:
+    with subprocess.Popen(
+        cmd,
+        cwd=cwd,
+        stdin=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    ) as p:
         try:
             for line in (p.stdout or ()):
                 logging.debug(">>>>   %s", line.rstrip())
