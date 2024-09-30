@@ -1,17 +1,17 @@
 """Check the frequency of the rebuild loop.
 
-This must be run in a directory that has the ``docsbuild.log*`` files.
+This must be run in a directory that has the ``docsbuild*`` log files.
 For example:
 
 .. code-block:: bash
 
    $ mkdir -p docsbuild-logs
-   $ scp "adam@docs.nyc1.psf.io:/var/log/docsbuild/docsbuild.log*" docsbuild-logs/
+   $ scp "adam@docs.nyc1.psf.io:/var/log/docsbuild/docsbuild*" docsbuild-logs/
    $ python check_times.py
 """
 
-import datetime as dt
 import gzip
+import tomllib
 from pathlib import Path
 
 from build_docs import format_seconds
@@ -19,21 +19,21 @@ from build_docs import format_seconds
 LOGS_ROOT = Path("docsbuild-logs").resolve()
 
 
-def get_lines() -> list[str]:
+def get_lines(filename: str = "docsbuild.log") -> list[str]:
     lines = []
-    zipped_logs = list(LOGS_ROOT.glob("docsbuild.log.*.gz"))
+    zipped_logs = list(LOGS_ROOT.glob(f"{filename}.*.gz"))
     zipped_logs.sort(key=lambda p: int(p.name.split(".")[-2]), reverse=True)
     for logfile in zipped_logs:
         with gzip.open(logfile, "rt", encoding="utf-8") as f:
             lines += f.readlines()
-    with open(LOGS_ROOT / "docsbuild.log", encoding="utf-8") as f:
+    with open(LOGS_ROOT / filename, encoding="utf-8") as f:
         lines += f.readlines()
     return lines
 
 
 def calc_time(lines: list[str]) -> None:
-    start = end = language = version = start_timestamp = None
-    reason = lang_ver = ""
+    in_progress = False
+    in_progress_line = ""
 
     print("Start                | Version | Language | Build          | Trigger")
     print(":--                  | :--:    | :--:     | --:            | :--:")
@@ -41,50 +41,42 @@ def calc_time(lines: list[str]) -> None:
     for line in lines:
         line = line.strip()
 
-        if ": Should rebuild: " in line:
-            if "no previous state found" in line:
-                reason = "brand new"
-            elif "new translations" in line:
-                reason = "translation"
-            elif "Doc/ has changed" in line:
-                reason = "docs"
-            else:
-                reason = ""
-            lang_ver = line.split(" ")[3].removesuffix(":")
+        if "Saved new rebuild state for" in line:
+            _, state = line.split("Saved new rebuild state for", 1)
+            key, state_toml = state.strip().split(": ", 1)
+            language, version = key.strip("/").split("/", 1)
+            state_data = tomllib.loads(f"t = {state_toml}")["t"]
+            start = state_data["last_build_start"]
+            fmt_duration = format_seconds(state_data["last_build_duration"])
+            reason = state_data["triggered_by"]
+            print(
+                f"{start:%Y-%m-%d %H:%M UTC} | {version: <7} | {language: <8} | {fmt_duration :<14} | {reason}"
+            )
 
         if line.endswith("Build start."):
-            timestamp = line[:23].replace(",", ".")
-            language, version = line.split(" ")[3].removesuffix(":").split("/")
-            start = dt.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S.%f")
-            start_timestamp = f"{line[:16]} UTC"
+            in_progress = True
+            in_progress_line = line
 
-        if start and ": Build done " in line:
-            timestamp = line[:23].replace(",", ".")
-            language, version = line.split(" ")[3].removesuffix(":").split("/")
-            end = dt.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S.%f")
+        if in_progress and ": Build done " in line:
+            in_progress = False
 
-        if start and end:
-            duration = (end - start).total_seconds()
-            fmt_duration = format_seconds(duration)
-            if lang_ver != f"{language}/{version}":
-                reason = ""
-            print(
-                f"{start_timestamp: <20} | {version: <7} | {language: <8} | {fmt_duration :<14} | {reason}"
-            )
-            start = end = start_timestamp = None
-
-        if ": Full build done" in line:
-            timestamp = f"{line[:16]} UTC"
-            _, fmt_duration = line.removesuffix(").").split("(")
-            print(
-                f"{timestamp: <20} | --FULL- | -BUILD-- | {fmt_duration :<14} | -----------"
-            )
-
-    if start and end is None:
+    if in_progress:
+        start_timestamp = f"{in_progress_line[:16]} UTC"
+        language, version = in_progress_line.split(" ")[3].removesuffix(":").split("/")
         print(
-            f"{start_timestamp: <20} | {version: <7} | {language: <8} | In progress... | {reason}"
+            f"{start_timestamp: <20} | {version: <7} | {language: <8} | In progress... | ..."
         )
+
+    print()
 
 
 if __name__ == "__main__":
-    calc_time(get_lines())
+    print("Build times (HTML only)")
+    print("=======================")
+    print()
+    calc_time(get_lines("docsbuild-only-html.log"))
+
+    print("Build times (no HTML)")
+    print("=====================")
+    print()
+    calc_time(get_lines("docsbuild-no-html.log"))
