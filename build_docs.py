@@ -32,7 +32,6 @@ import logging
 import logging.handlers
 from functools import total_ordering
 from os import readlink
-import platform
 import re
 import shlex
 import shutil
@@ -630,6 +629,11 @@ class DocBuilder:
             self.select_output == "only-html" or self.quick or self.language.html_only
         )
 
+    @property
+    def includes_html(self):
+        """Does the build we are running include HTML output?"""
+        return self.select_output != "no-html"
+
     def run(self, http: urllib3.PoolManager) -> bool:
         """Build and publish a Python doc, for a language, and a version."""
         start_time = perf_counter()
@@ -737,20 +741,18 @@ class DocBuilder:
         python = self.venv / "bin" / "python"
         sphinxbuild = self.venv / "bin" / "sphinx-build"
         blurb = self.venv / "bin" / "blurb"
-        # Disable CPython switchers, we handle them now:
 
-        def is_mac():
-            return platform.system() == "Darwin"
-
-        run(
-            ["sed", "-i"]
-            + ([""] if is_mac() else [])
-            + ["s/ *-A switchers=1//", self.checkout / "Doc" / "Makefile"]
-        )
-        self.version.setup_indexsidebar(
-            self.versions,
-            self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html",
-        )
+        if self.includes_html:
+            # Disable CPython switchers, we handle them now:
+            run(
+                ["sed", "-i"]
+                + ([""] if sys.platform == "darwin" else [])
+                + ["s/ *-A switchers=1//", self.checkout / "Doc" / "Makefile"]
+            )
+            self.version.setup_indexsidebar(
+                self.versions,
+                self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html",
+            )
         run_with_logging(
             [
                 "make",
@@ -767,9 +769,10 @@ class DocBuilder:
         )
         run(["mkdir", "-p", self.log_directory])
         run(["chgrp", "-R", self.group, self.log_directory])
-        setup_switchers(
-            self.versions, self.languages, self.checkout / "Doc" / "build" / "html"
-        )
+        if self.includes_html:
+            setup_switchers(
+                self.versions, self.languages, self.checkout / "Doc" / "build" / "html"
+            )
         logging.info("Build done (%s).", format_seconds(perf_counter() - start_time))
 
     def build_venv(self):
@@ -817,42 +820,47 @@ class DocBuilder:
         except subprocess.CalledProcessError as err:
             logging.warning("Can't change group of %s: %s", target, str(err))
 
-        changed = changed_files(self.checkout / "Doc" / "build" / "html", target)
-        logging.info("Copying HTML files to %s", target)
-        run(
-            [
-                "chown",
-                "-R",
-                ":" + self.group,
-                self.checkout / "Doc" / "build" / "html/",
-            ]
-        )
-        run(["chmod", "-R", "o+r", self.checkout / "Doc" / "build" / "html"])
-        run(
-            [
-                "find",
-                self.checkout / "Doc" / "build" / "html",
-                "-type",
-                "d",
-                "-exec",
-                "chmod",
-                "o+x",
-                "{}",
-                ";",
-            ]
-        )
-        run(
-            [
-                "rsync",
-                "-a",
-                "--delete-delay",
-                "--filter",
-                "P archives/",
-                str(self.checkout / "Doc" / "build" / "html") + "/",
-                target,
-            ]
-        )
+        changed = []
+        if self.includes_html:
+            # Copy built HTML files to webroot (default /srv/docs.python.org)
+            changed = changed_files(self.checkout / "Doc" / "build" / "html", target)
+            logging.info("Copying HTML files to %s", target)
+            run(
+                [
+                    "chown",
+                    "-R",
+                    ":" + self.group,
+                    self.checkout / "Doc" / "build" / "html/",
+                ]
+            )
+            run(["chmod", "-R", "o+r", self.checkout / "Doc" / "build" / "html"])
+            run(
+                [
+                    "find",
+                    self.checkout / "Doc" / "build" / "html",
+                    "-type",
+                    "d",
+                    "-exec",
+                    "chmod",
+                    "o+x",
+                    "{}",
+                    ";",
+                ]
+            )
+            run(
+                [
+                    "rsync",
+                    "-a",
+                    "--delete-delay",
+                    "--filter",
+                    "P archives/",
+                    str(self.checkout / "Doc" / "build" / "html") + "/",
+                    target,
+                ]
+            )
+
         if not self.quick:
+            # Copy archive files to /archives/
             logging.debug("Copying dist files.")
             run(
                 [
