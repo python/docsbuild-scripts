@@ -929,10 +929,10 @@ class DocBuilder:
         return False
 
     def load_state(self) -> dict:
-        if self.select_output is None:
-            state_file = self.build_root / "state.toml"
-        else:
+        if self.select_output is not None:
             state_file = self.build_root / f"state-{self.select_output}.toml"
+        else:
+            state_file = self.build_root / "state.toml"
         try:
             return tomlkit.loads(state_file.read_text(encoding="UTF-8"))[
                 f"/{self.language.tag}/{self.version.name}/"
@@ -945,10 +945,10 @@ class DocBuilder:
 
         Using this we can deduce if a rebuild is needed or not.
         """
-        if self.select_output is None:
-            state_file = self.build_root / "state.toml"
-        else:
+        if self.select_output is not None:
             state_file = self.build_root / f"state-{self.select_output}.toml"
+        else:
+            state_file = self.build_root / "state.toml"
         try:
             states = tomlkit.parse(state_file.read_text(encoding="UTF-8"))
         except FileNotFoundError:
