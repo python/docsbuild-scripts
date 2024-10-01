@@ -640,6 +640,9 @@ class DocBuilder:
         start_timestamp = dt.now(tz=timezone.utc).replace(microsecond=0)
         logging.info("Running.")
         try:
+            if self.language.html_only and not self.includes_html:
+                logging.info("Skipping non-HTML build (language is HTML-only).")
+                return True
             self.cpython_repo.switch(self.version.branch_or_tag)
             if self.language.tag != "en":
                 self.clone_translation()
