@@ -704,7 +704,6 @@ class DocBuilder:
         logging.info("Build start.")
         start_time = perf_counter()
         sphinxopts = list(self.language.sphinxopts)
-        sphinxopts.extend(["-q"])
         if self.language.tag != "en":
             locale_dirs = self.build_root / self.version.name / "locale"
             sphinxopts.extend(
