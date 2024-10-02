@@ -60,6 +60,13 @@ def calc_time(lines: list[str]) -> None:
         if in_progress and ": Build done " in line:
             in_progress = False
 
+        if ": Full build done" in line:
+            timestamp = f"{line[:16]} UTC"
+            _, fmt_duration = line.removesuffix(").").split("(")
+            print(
+                f"{timestamp: <20} | --FULL- | -BUILD-- | {fmt_duration :<14} | -----------"
+            )
+
     if in_progress:
         start_timestamp = f"{in_progress_line[:16]} UTC"
         language, version = in_progress_line.split(" ")[3].removesuffix(":").split("/")
