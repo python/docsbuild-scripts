@@ -929,7 +929,7 @@ class DocBuilder:
             diff = self.cpython_repo.run(
                 "diff", "--name-only", state["cpython_sha"], cpython_sha
             ).stdout
-            if "Doc/" in diff:
+            if "Doc/" in diff or "Misc/NEWS.d/" in diff:
                 logging.info(
                     "Should rebuild: Doc/ has changed (from %s to %s)",
                     state["cpython_sha"],
