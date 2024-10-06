@@ -41,7 +41,6 @@ from bisect import bisect_left as bisect
 from datetime import datetime as dt, timezone
 from pathlib import Path
 from string import Template
-from textwrap import indent
 from time import perf_counter, sleep
 from typing import Iterable, Literal
 from urllib.parse import urljoin
@@ -217,7 +216,7 @@ class Language:
 
 def run(cmd, cwd=None) -> subprocess.CompletedProcess:
     """Like subprocess.run, with logging before and after the command execution."""
-    cmd = [str(arg) for arg in cmd]
+    cmd = list(map(str, cmd))
     cmdstring = shlex.join(cmd)
     logging.debug("Run: '%s'", cmdstring)
     result = subprocess.run(
@@ -233,9 +232,9 @@ def run(cmd, cwd=None) -> subprocess.CompletedProcess:
     if result.returncode:
         # Log last 20 lines, those are likely the interesting ones.
         logging.error(
-            "Run: %r KO:\n%s",
+            "Run: '%s' KO:\n%s",
             cmdstring,
-            indent("\n".join(result.stdout.split("\n")[-20:]), "    "),
+            "\n".join(f"    {line}" for line in result.stdout.split("\n")[-20:]),
         )
     result.check_returncode()
     return result
@@ -244,7 +243,7 @@ def run(cmd, cwd=None) -> subprocess.CompletedProcess:
 def run_with_logging(cmd, cwd=None):
     """Like subprocess.check_call, with logging before the command execution."""
     cmd = list(map(str, cmd))
-    logging.debug("Run: %s", shlex.join(cmd))
+    logging.debug("Run: '%s'", shlex.join(cmd))
     with subprocess.Popen(
         cmd,
         cwd=cwd,
@@ -255,7 +254,7 @@ def run_with_logging(cmd, cwd=None):
     ) as p:
         try:
             for line in p.stdout or ():
-                logging.debug(">>>>   %s", line.rstrip())
+                logging.debug(">>>> %s", line.rstrip())
         except:
             p.kill()
             raise
