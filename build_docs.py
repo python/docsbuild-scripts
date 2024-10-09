@@ -415,23 +415,19 @@ def setup_switchers(
                 ofile.write(line)
 
 
-def build_robots_txt(
-    versions: Iterable[Version],
-    languages: Iterable[Language],
+def copy_robots_txt(
     www_root: Path,
     group,
     skip_cache_invalidation,
     http: urllib3.PoolManager,
 ) -> None:
-    """Disallow crawl of EOL versions in robots.txt."""
+    """Copy robots.txt to www_root."""
     if not www_root.exists():
-        logging.info("Skipping robots.txt generation (www root does not even exist).")
+        logging.info("Skipping copying robots.txt (www root does not even exist).")
         return
     template_path = HERE / "templates" / "robots.txt"
-    template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
-    rendered_template = template.render(languages=languages, versions=versions)
     robots_path = www_root / "robots.txt"
-    robots_path.write_text(rendered_template + "\n", encoding="UTF-8")
+    shutil.copyfile(template_path, robots_path)
     robots_path.chmod(0o775)
     run(["chgrp", group, robots_path])
     if not skip_cache_invalidation:
@@ -1204,9 +1200,7 @@ def build_docs(args) -> bool:
 
     build_sitemap(versions, languages, args.www_root, args.group)
     build_404(args.www_root, args.group)
-    build_robots_txt(
-        versions,
-        languages,
+    copy_robots_txt(
         args.www_root,
         args.group,
         args.skip_cache_invalidation,
