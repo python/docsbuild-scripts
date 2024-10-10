@@ -110,10 +110,8 @@ class Version:
         """
         if self.name == "3.5":
             return ["jieba", "blurb", "sphinx==1.8.4", "jinja2<3.1", "docutils<=0.17.1"]
-        if self.name in ("3.7", "3.6", "2.7"):
+        if self.name in {"3.7", "3.6", "2.7"}:
             return ["jieba", "blurb", "sphinx==2.3.1", "jinja2<3.1", "docutils<=0.17.1"]
-        if self.name == ("3.8", "3.9"):
-            return ["jieba", "blurb", "sphinx==2.4.4", "jinja2<3.1", "docutils<=0.17.1"]
 
         return [
             "jieba",  # To improve zh search.
