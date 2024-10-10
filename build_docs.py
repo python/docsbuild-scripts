@@ -504,7 +504,7 @@ def parse_args():
     )
     parser.add_argument(
         "--select-output",
-        choices=("no-html", "only-html"),
+        choices=("no-html", "only-html", "only-html-en"),
         help="Choose what outputs to build.",
     )
     parser.add_argument(
@@ -610,7 +610,7 @@ class DocBuilder:
     cpython_repo: Repository
     build_root: Path
     www_root: Path
-    select_output: Literal["no-html", "only-html"] | None
+    select_output: Literal["no-html", "only-html", "only-html-en"] | None
     quick: bool
     group: str
     log_directory: Path
@@ -620,7 +620,9 @@ class DocBuilder:
     @property
     def html_only(self):
         return (
-            self.select_output == "only-html" or self.quick or self.language.html_only
+            self.select_output.startswith("only-html")
+            or self.quick
+            or self.language.html_only
         )
 
     @property
@@ -1245,6 +1247,8 @@ def main():
         build_docs_with_lock(args, "build_docs_archives.lock")
     elif args.select_output == "only-html":
         build_docs_with_lock(args, "build_docs_html.lock")
+    elif args.select_output == "only-html-en":
+        build_docs_with_lock(args, "build_docs_html_en.lock")
 
 
 def build_docs_with_lock(args: Namespace, lockfile_name: str) -> int:
