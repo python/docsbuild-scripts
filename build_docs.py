@@ -620,7 +620,7 @@ class DocBuilder:
     @property
     def html_only(self):
         return (
-            self.select_output.startswith("only-html")
+            self.select_output in {"only-html", "only-html-en"}
             or self.quick
             or self.language.html_only
         )
