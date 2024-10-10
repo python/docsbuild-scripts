@@ -115,6 +115,7 @@ class Version:
 
         return [
             "jieba",  # To improve zh search.
+            "PyStemmer~=2.2.0",  # To improve performance for word stemming.
             "-rrequirements.txt",
         ]
 
