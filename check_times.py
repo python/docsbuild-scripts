@@ -78,6 +78,11 @@ def calc_time(lines: list[str]) -> None:
 
 
 if __name__ == "__main__":
+    print("Build times (HTML only; English)")
+    print("=======================")
+    print()
+    calc_time(get_lines("docsbuild-only-html-en.log"))
+
     print("Build times (HTML only)")
     print("=======================")
     print()
