@@ -7,13 +7,15 @@ import logging
 import re
 
 import httpx
+import urllib3
 from tabulate import tabulate
 import git
 
 import build_docs
 
 logger = logging.getLogger(__name__)
-VERSIONS = build_docs.parse_versions_from_devguide()
+http = urllib3.PoolManager()
+VERSIONS = build_docs.parse_versions_from_devguide(http)
 LANGUAGES = build_docs.parse_languages_from_config()
 
 
