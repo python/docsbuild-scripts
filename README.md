@@ -34,9 +34,9 @@ of Sphinx we're using where:
     3.9        ø              sphinx==2.4.4       needs_sphinx='1.8'
     3.10       ø              sphinx==3.4.3       needs_sphinx='3.2'
     3.11       ø              sphinx~=7.2.0       needs_sphinx='4.2'
-    3.12       ø              sphinx~=8.1.0       needs_sphinx='6.2.1'
-    3.13       ø              sphinx~=8.1.0       needs_sphinx='6.2.1'
-    3.14       ø              sphinx~=8.1.0       needs_sphinx='6.2.1'
+    3.12       ø              sphinx~=8.1.0       needs_sphinx='7.2.6'
+    3.13       ø              sphinx~=8.1.0       needs_sphinx='7.2.6'
+    3.14       ø              sphinx~=8.1.0       needs_sphinx='7.2.6'
     =========  =============  ==================  ====================
 
     Sphinx build as seen on docs.python.org:
