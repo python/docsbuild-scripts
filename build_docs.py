@@ -31,7 +31,7 @@ import json
 import logging
 import logging.handlers
 from functools import total_ordering
-from os import readlink
+from os import getenv, readlink
 import re
 import shlex
 import shutil
@@ -895,13 +895,8 @@ class DocBuilder:
 
         logging.info("%s files changed", len(changed))
         if changed and not self.skip_cache_invalidation:
-            targets_dir = str(self.www_root)
-            prefixes = run(["find", "-L", targets_dir, "-samefile", target]).stdout
-            prefixes = prefixes.replace(targets_dir + "/", "")
-            prefixes = [prefix + "/" for prefix in prefixes.split("\n") if prefix]
-            purge(http, *prefixes)
-            for prefix in prefixes:
-                purge(http, *[prefix + p for p in changed])
+            surrogate_key = f"{self.language.tag}/{self.version.name}"
+            purge_surrogate_key(http, surrogate_key)
         logging.info(
             "Publishing done (%s).", format_seconds(perf_counter() - start_time)
         )
@@ -1007,7 +1002,8 @@ def symlink(
     link.symlink_to(directory)
     run(["chown", "-h", ":" + group, str(link)])
     if not skip_cache_invalidation:
-        purge_path(http, www_root, link)
+        surrogate_key = f"{language.tag}/{name}"
+        purge_surrogate_key(http, surrogate_key)
 
 
 def major_symlinks(
@@ -1081,14 +1077,25 @@ def purge(http: urllib3.PoolManager, *paths: Path | str) -> None:
         http.request("PURGE", url, timeout=30)
 
 
-def purge_path(http: urllib3.PoolManager, www_root: Path, path: Path) -> None:
-    """Recursively remove a path from docs.python.org's CDN.
+def purge_surrogate_key(http: urllib3.PoolManager, surrogate_key: str) -> None:
+    """Remove paths from docs.python.org's CDN.
 
+    All paths matching the given 'Surrogate-Key' will be removed.
+    This is set by the Nginx server for every language-version pair.
     To be used when a directory changes, so the CDN fetches the new one.
+
+    https://www.fastly.com/documentation/reference/api/purging/#purge-tag
     """
-    purge(http, *[file.relative_to(www_root) for file in path.glob("**/*")])
-    purge(http, path.relative_to(www_root))
-    purge(http, str(path.relative_to(www_root)) + "/")
+    service_id = getenv("FASTLY_SERVICE_ID", "__UNSET__")
+    fastly_key = getenv("FASTLY_TOKEN", "__UNSET__")
+
+    logging.info("Purging Surrogate-Key '%s' from CDN", surrogate_key)
+    http.request(
+        "POST",
+        f"https://api.fastly.com/service/{service_id}/purge/{surrogate_key}",
+        headers={"Fastly-Key": fastly_key},
+        timeout=30,
+    )
 
 
 def proofread_canonicals(
