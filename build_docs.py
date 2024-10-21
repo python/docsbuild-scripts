@@ -424,6 +424,7 @@ def copy_robots_txt(
     if not www_root.exists():
         logging.info("Skipping copying robots.txt (www root does not even exist).")
         return
+    logging.info("Copying robots.txt...")
     template_path = HERE / "templates" / "robots.txt"
     robots_path = www_root / "robots.txt"
     shutil.copyfile(template_path, robots_path)
@@ -440,6 +441,7 @@ def build_sitemap(
     if not www_root.exists():
         logging.info("Skipping sitemap generation (www root does not even exist).")
         return
+    logging.info("Starting sitemap generation...")
     template_path = HERE / "templates" / "sitemap.xml"
     template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
     rendered_template = template.render(languages=languages, versions=versions)
@@ -454,6 +456,7 @@ def build_404(www_root: Path, group):
     if not www_root.exists():
         logging.info("Skipping 404 page generation (www root does not even exist).")
         return
+    logging.info("Copying 404 page...")
     not_found_file = www_root / "404.html"
     shutil.copyfile(HERE / "templates" / "404.html", not_found_file)
     not_found_file.chmod(0o664)
@@ -1022,6 +1025,7 @@ def major_symlinks(
     - /fr/3/ → /fr/3.9/
     - /es/3/ → /es/3.9/
     """
+    logging.info("Creating major version symlinks...")
     current_stable = Version.current_stable(versions).name
     for language in languages:
         symlink(
@@ -1051,6 +1055,7 @@ def dev_symlink(
     - /fr/dev/ → /fr/3.11/
     - /es/dev/ → /es/3.11/
     """
+    logging.info("Creating development version symlinks...")
     current_dev = Version.current_dev(versions).name
     for language in languages:
         symlink(
@@ -1096,6 +1101,7 @@ def proofread_canonicals(
     - /3.11/whatsnew/3.11.html typically would link to
     /3/whatsnew/3.11.html, which may not exist yet.
     """
+    logging.info("Checking canonical links...")
     canonical_re = re.compile(
         """<link rel="canonical" href="https://docs.python.org/([^"]*)" />"""
     )
