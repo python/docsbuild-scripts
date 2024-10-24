@@ -996,10 +996,9 @@ def symlink(
     if not directory_path.exists():
         return  # No touching link, dest doc not built yet.
 
-    link_exists = link.exists()
-    if not link_exists or readlink(link) != directory:
+    if not link.exists() or readlink(link) != directory:
         # Link does not exist or points to the wrong target.
-        if link_exists:
+        if link.exists():
             link.unlink()
         link.symlink_to(directory)
         run(["chown", "-h", f":{group}", str(link)])
