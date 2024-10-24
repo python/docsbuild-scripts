@@ -995,12 +995,14 @@ def symlink(
     directory_path = path / directory
     if not directory_path.exists():
         return  # No touching link, dest doc not built yet.
-    if link.exists() and readlink(link) == directory:
-        return  # Link is already pointing to right doc.
-    if link.exists():
-        link.unlink()
-    link.symlink_to(directory)
-    run(["chown", "-h", ":" + group, str(link)])
+
+    link_exists = link.exists()
+    if not link_exists or readlink(link) != directory:
+        # Link does not exist or points to the wrong target.
+        if link_exists:
+            link.unlink()
+        link.symlink_to(directory)
+        run(["chown", "-h", f":{group}", str(link)])
     if not skip_cache_invalidation:
         surrogate_key = f"{language.tag}/{name}"
         purge_surrogate_key(http, surrogate_key)
