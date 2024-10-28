@@ -13,16 +13,6 @@ const _CURRENT_PREFIX = (() => {
   return window.location.pathname.split('/', _NUM_PREFIX_PARTS).join('/') + '/';
 })();
 
-// Parses versions in URL segments like:
-const _VERSION_PATTERN = (
-  '((?:'
-  + '(?:\\d)'                        // e.g. "3"
-  +'|(?:\\d\\.\\d[\\w\\d\\.]*)'      // e.g. "3.6rc2"
-  +'|(?:dev)'                        // e.g. "dev"
-  +'|(?:release/\\d.\\d[\\x\\d\\.]*)'// e.g. "release/2.7"
-  + ')/)'
-);
-
 const all_versions = $VERSIONS;
 const all_languages = $LANGUAGES;
 
@@ -120,26 +110,6 @@ const _on_language_switch = () => {
   }
 };
 
-// Returns the path segment of the language as a string, like 'fr/'
-// or '' if not found.
-function language_segment_from_url() {
-  const path = window.location.pathname;
-  const language_regexp =
-    '/((?:' + Object.keys(all_languages).join('|') + ')/)';
-  const match = path.match(language_regexp);
-  if (match !== null) return match[1];
-  return '';
-}
-
-// Returns the path segment of the version as a string, like '3.6/'
-// or '' if not found.
-function version_segment_from_url() {
-  const path = window.location.pathname;
-  const version_regexp = language_segment_from_url() + _VERSION_PATTERN;
-  const match = path.match(version_regexp);
-  if (match !== null) return match[1];
-  return '';
-}
 const _initialise_switchers = () => {
   const version_select = _create_version_select(_CURRENT_VERSION);
   document
