@@ -130,8 +130,7 @@ function version_segment_from_url() {
     return match[1];
   return ''
 }
-
-document.addEventListener('DOMContentLoaded', function() {
+const _initialise_switchers = () => {
   const language_segment = language_segment_from_url();
   const current_language = language_segment.replace(/\/+$/g, '') || 'en';
 
@@ -150,4 +149,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let selectElement = placeholder.querySelector('select');
     selectElement.addEventListener('change', on_language_switch);
   });
-});
+};
+
+if (document.readyState !== 'loading') {
+  _initialise_switchers();
+} else {
+  document.addEventListener('DOMContentLoaded', _initialise_switchers);
+}
