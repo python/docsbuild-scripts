@@ -22,6 +22,11 @@ const _CURRENT_PREFIX = (() => {
 const _ALL_VERSIONS = new Map(Object.entries($VERSIONS));
 const _ALL_LANGUAGES = new Map(Object.entries($LANGUAGES));
 
+/**
+ * @param {Map<string, string>} versions
+ * @returns {HTMLSelectElement}
+ * @private
+ */
 const _create_version_select = (versions) => {
   const select = document.createElement('select');
   select.className = 'version-select';
@@ -45,6 +50,11 @@ const _create_version_select = (versions) => {
   return select;
 };
 
+/**
+ * @param {Map<string, string>} languages
+ * @returns {HTMLSelectElement}
+ * @private
+ */
 const _create_language_select = (languages) => {
   if (!languages.has(_CURRENT_LANGUAGE)) {
     // In case we are browsing a language that is not yet in languages.
@@ -69,6 +79,11 @@ const _create_language_select = (languages) => {
   return select;
 };
 
+/**
+ * Change the current page to the first existing URL in the list.
+ * @param {Array<string>} urls
+ * @private
+ */
 const _navigate_to_first_existing = (urls) => {
   // Navigate to the first existing URL in urls.
   for (const url of urls) {
@@ -90,6 +105,12 @@ const _navigate_to_first_existing = (urls) => {
   return '/';
 };
 
+/**
+ * Callback for the version switcher.
+ * @param {Event} event
+ * @returns {void}
+ * @private
+ */
 const _on_version_switch = (event) => {
   if (_IS_LOCAL) return;
 
@@ -115,6 +136,12 @@ const _on_version_switch = (event) => {
   }
 };
 
+/**
+ * Callback for the language switcher.
+ * @param {Event} event
+ * @returns {void}
+ * @private
+ */
 const _on_language_switch = (event) => {
   if (_IS_LOCAL) return;
 
@@ -135,6 +162,11 @@ const _on_language_switch = (event) => {
   }
 };
 
+/**
+ * Initialisation function for the version and language switchers.
+ * @returns {void}
+ * @private
+ */
 const _initialise_switchers = () => {
   const versions = _ALL_VERSIONS;
   const languages = _ALL_LANGUAGES;
