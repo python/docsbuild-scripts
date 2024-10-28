@@ -19,10 +19,10 @@ const _CURRENT_PREFIX = (() => {
   return window.location.pathname.split('/', _NUM_PREFIX_PARTS).join('/') + '/';
 })();
 
-const all_versions = $VERSIONS;
-const all_languages = $LANGUAGES;
+const _ALL_VERSIONS = new Map(Object.entries($VERSIONS));
+const _ALL_LANGUAGES = new Map(Object.entries($LANGUAGES));
 
-const _create_version_select = () => {
+const _create_version_select = (versions) => {
   const select = document.createElement('select');
   select.className = 'version-select';
   if (_IS_LOCAL) {
@@ -30,7 +30,7 @@ const _create_version_select = () => {
     select.title = 'Version switching is disabled in local builds';
   }
 
-  for (const [version, title] of Object.entries(all_versions)) {
+  for (const [version, title] of versions) {
     const option = document.createElement('option');
     option.value = version;
     if (version === _CURRENT_VERSION) {
@@ -45,10 +45,10 @@ const _create_version_select = () => {
   return select;
 };
 
-const _create_language_select = () => {
-  if (!(_CURRENT_LANGUAGE in all_languages)) {
-    // In case we are browsing a language that is not yet in all_languages.
-    all_languages[_CURRENT_LANGUAGE] = _CURRENT_LANGUAGE;
+const _create_language_select = (languages) => {
+  if (!languages.has(_CURRENT_LANGUAGE)) {
+    // In case we are browsing a language that is not yet in languages.
+    languages.set(_CURRENT_LANGUAGE, _CURRENT_LANGUAGE);
   }
 
   const select = document.createElement('select');
@@ -58,7 +58,7 @@ const _create_language_select = () => {
     select.title = 'Language switching is disabled in local builds';
   }
 
-  for (const [language, title] of Object.entries(all_languages)) {
+  for (const [language, title] of languages) {
     const option = document.createElement('option');
     option.value = language;
     option.text = title;
@@ -136,7 +136,10 @@ const _on_language_switch = (event) => {
 };
 
 const _initialise_switchers = () => {
-  const version_select = _create_version_select();
+  const versions = _ALL_VERSIONS;
+  const languages = _ALL_LANGUAGES;
+
+  const version_select = _create_version_select(versions);
   document
     .querySelectorAll('.version_switcher_placeholder')
     .forEach((placeholder) => {
@@ -146,7 +149,7 @@ const _initialise_switchers = () => {
       placeholder.classList.remove('version_switcher_placeholder');
     });
 
-  const language_select = _create_language_select();
+  const language_select = _create_language_select(languages);
   document
     .querySelectorAll('.language_switcher_placeholder')
     .forEach((placeholder) => {
