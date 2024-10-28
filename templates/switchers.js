@@ -77,8 +77,8 @@ const _navigate_to_first_existing = (urls) => {
     });
 };
 
-const _on_version_switch = () => {
-  const selected_version = this.options[this.selectedIndex].value + '/';
+const _on_version_switch = (event) => {
+  const selected_version = event.target.value + '/';
   const url = window.location.href;
   const new_url = url.replace(
     _CURRENT_PREFIX,
@@ -95,8 +95,8 @@ const _on_version_switch = () => {
   }
 };
 
-const _on_language_switch = () => {
-  let selected_language = this.options[this.selectedIndex].value + '/';
+const _on_language_switch = (event) => {
+  let selected_language = event.target.value + '/';
   const url = window.location.href;
   if (selected_language === 'en/')
     // Special 'default' case for English.
