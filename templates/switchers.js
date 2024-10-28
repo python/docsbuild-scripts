@@ -1,6 +1,7 @@
 'use strict';
 
-const _CURRENT_VERSION = DOCUMENTATION_OPTIONS.VERSION;
+const _CURRENT_RELEASE = DOCUMENTATION_OPTIONS.VERSION || '';
+const _CURRENT_VERSION = _CURRENT_RELEASE.split('.', 2).join('.');
 const _CURRENT_LANGUAGE = DOCUMENTATION_OPTIONS.LANGUAGE?.toLowerCase() || 'en';
 const _CURRENT_PREFIX = (() => {
   // Sphinx 7.2+ defines the content root data attribute in the HTML element.
