@@ -143,6 +143,7 @@ const _initialise_switchers = () => {
       const s = version_select.cloneNode(true);
       s.addEventListener('change', _on_version_switch);
       placeholder.append(s);
+      placeholder.classList.remove('version_switcher_placeholder');
     });
 
   const language_select = _create_language_select();
@@ -152,6 +153,7 @@ const _initialise_switchers = () => {
       const s = language_select.cloneNode(true);
       s.addEventListener('change', _on_language_switch);
       placeholder.append(s);
+      placeholder.classList.remove('language_switcher_placeholder');
     });
 };
 
