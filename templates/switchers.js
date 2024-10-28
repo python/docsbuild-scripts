@@ -17,16 +17,15 @@ const _CURRENT_PREFIX = (() => {
 const all_versions = $VERSIONS;
 const all_languages = $LANGUAGES;
 
-const _create_version_select = (release) => {
-  const major_minor = release.split('.').slice(0, 2).join('.');
+const _create_version_select = () => {
   const select = document.createElement('select');
   select.className = 'version-select';
 
   for (const [version, title] of Object.entries(all_versions)) {
     const option = document.createElement('option');
     option.value = version;
-    if (version === major_minor) {
-      option.text = release;
+    if (version === _CURRENT_VERSION) {
+      option.text = _CURRENT_RELEASE;
       option.selected = true;
     } else {
       option.text = title;
@@ -124,7 +123,7 @@ const _on_language_switch = (event) => {
 };
 
 const _initialise_switchers = () => {
-  const version_select = _create_version_select(_CURRENT_VERSION);
+  const version_select = _create_version_select();
   document
     .querySelectorAll('.version_switcher_placeholder')
     .forEach((placeholder) => {
