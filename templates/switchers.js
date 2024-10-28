@@ -26,7 +26,7 @@
   }
 
   function build_version_select(release) {
-    let buf = ['<select id="version_select">'];
+    let buf = ['<select id="version_select" aria-label="Python version">'];
     const major_minor = release.split(".").slice(0, 2).join(".");
 
     Object.entries(all_versions).forEach(function([version, title]) {
@@ -42,7 +42,7 @@
   }
 
   function build_language_select(current_language) {
-    let buf = ['<select id="language_select">'];
+    let buf = ['<select id="language_select" aria-label="Language">'];
 
     Object.entries(all_languages).forEach(function([language, title]) {
       if (language === current_language) {
