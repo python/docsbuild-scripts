@@ -21,7 +21,7 @@ const _create_version_select = (release) => {
   const select = document.createElement('select');
   select.className = 'version-select';
 
-  for (const [version, title] in all_versions) {
+  for (const [version, title] of Object.entries(all_versions)) {
     const option = document.createElement('option');
     option.value = version;
     if (version === major_minor) {
@@ -45,7 +45,7 @@ const _create_language_select = (current_language) => {
   const select = document.createElement('select');
   select.className = 'language-select';
 
-  for (const [language, title] in all_languages) {
+  for (const [language, title] of Object.entries(all_languages)) {
     const option = document.createElement('option');
     option.value = language;
     option.text = title;
