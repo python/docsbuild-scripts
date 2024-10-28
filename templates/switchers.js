@@ -1,5 +1,18 @@
 'use strict';
 
+const _CURRENT_VERSION = DOCUMENTATION_OPTIONS.VERSION;
+const _CURRENT_LANGUAGE = DOCUMENTATION_OPTIONS.LANGUAGE?.toLowerCase() || 'en';
+const _CURRENT_PREFIX = (() => {
+  // Sphinx 7.2+ defines the content root data attribute in the HTML element.
+  const _CONTENT_ROOT = document.documentElement.dataset.content_root;
+  if (_CONTENT_ROOT !== undefined) {
+    return new URL(_CONTENT_ROOT, window.location).pathname;
+  }
+  // Fallback for older versions of Sphinx (used in Python 3.10 and older).
+  const _NUM_PREFIX_PARTS = _CURRENT_LANGUAGE === 'en' ? 2 : 3;
+  return window.location.pathname.split('/', _NUM_PREFIX_PARTS).join('/') + '/';
+})();
+
 // Parses versions in URL segments like:
 const _VERSION_PATTERN = (
   '((?:'
@@ -77,20 +90,15 @@ const _navigate_to_first_existing = (urls) => {
 const _on_version_switch = () => {
   const selected_version = this.options[this.selectedIndex].value + '/';
   const url = window.location.href;
-  const current_language = language_segment_from_url();
-  const current_version = version_segment_from_url();
   const new_url = url.replace(
-    '/' + current_language + current_version,
-    '/' + current_language + selected_version,
+    _CURRENT_PREFIX,
+    '/' + _CURRENT_LANGUAGE + selected_version,
   );
   if (new_url !== url) {
     _navigate_to_first_existing([
       new_url,
-      url.replace(
-        '/' + current_language + current_version,
-        '/' + selected_version,
-      ),
-      '/' + current_language + selected_version,
+      url.replace(_CURRENT_PREFIX, '/' + selected_version),
+      '/' + _CURRENT_LANGUAGE + selected_version,
       '/' + selected_version,
       '/',
     ]);
@@ -100,14 +108,12 @@ const _on_version_switch = () => {
 const _on_language_switch = () => {
   let selected_language = this.options[this.selectedIndex].value + '/';
   const url = window.location.href;
-  const current_language = language_segment_from_url();
-  const current_version = version_segment_from_url();
   if (selected_language === 'en/')
     // Special 'default' case for English.
     selected_language = '';
   let new_url = url.replace(
-    '/' + current_language + current_version,
-    '/' + selected_language + current_version,
+    _CURRENT_PREFIX,
+    '/' + selected_language + _CURRENT_VERSION,
   );
   if (new_url !== url) {
     _navigate_to_first_existing([new_url, '/']);
@@ -135,10 +141,7 @@ function version_segment_from_url() {
   return '';
 }
 const _initialise_switchers = () => {
-  const language_segment = language_segment_from_url();
-  const current_language = language_segment.replace(/\/+$/g, '') || 'en';
-
-  const version_select = _create_version_select(DOCUMENTATION_OPTIONS.VERSION);
+  const version_select = _create_version_select(_CURRENT_VERSION);
   document
     .querySelectorAll('.version_switcher_placeholder')
     .forEach((placeholder) => {
@@ -147,7 +150,7 @@ const _initialise_switchers = () => {
       placeholder.append(s);
     });
 
-  const language_select = _create_language_select(current_language);
+  const language_select = _create_language_select(_CURRENT_LANGUAGE);
   document
     .querySelectorAll('.language_switcher_placeholder')
     .forEach((placeholder) => {
