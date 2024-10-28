@@ -1,13 +1,14 @@
 'use strict';
 
 // Parses versions in URL segments like:
-// "3", "dev", "release/2.7" or "3.6rc2"
-const version_regexs = [
-  '(?:\\d)',
-  '(?:\\d\\.\\d[\\w\\d\\.]*)',
-  '(?:dev)',
-  '(?:release/\\d.\\d[\\x\\d\\.]*)',
-];
+const _VERSION_PATTERN = (
+  '((?:'
+  + '(?:\\d)'                        // e.g. "3"
+  +'|(?:\\d\\.\\d[\\w\\d\\.]*)'      // e.g. "3.6rc2"
+  +'|(?:dev)'                        // e.g. "dev"
+  +'|(?:release/\\d.\\d[\\x\\d\\.]*)'// e.g. "release/2.7"
+  + ')/)'
+);
 
 const all_versions = $VERSIONS;
 const all_languages = $LANGUAGES;
@@ -128,9 +129,7 @@ function language_segment_from_url() {
 // or '' if not found.
 function version_segment_from_url() {
   const path = window.location.pathname;
-  const language_segment = language_segment_from_url();
-  const version_segment = '(?:(?:' + version_regexs.join('|') + ')/)';
-  const version_regexp = language_segment + '(' + version_segment + ')';
+  const version_regexp = language_segment_from_url() + _VERSION_PATTERN;
   const match = path.match(version_regexp);
   if (match !== null) return match[1];
   return '';
