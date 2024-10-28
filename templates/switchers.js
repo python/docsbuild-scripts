@@ -55,7 +55,7 @@ const _create_language_select = (current_language) => {
   return select;
 };
 
-function navigate_to_first_existing(urls) {
+const _navigate_to_first_existing = (urls) => {
   // Navigate to the first existing URL in urls.
   const url = urls.shift();
   if (urls.length === 0 || url.startsWith("file:///")) {
@@ -63,19 +63,20 @@ function navigate_to_first_existing(urls) {
     return;
   }
   fetch(url)
-    .then(function(response) {
+    .then((response) => {
       if (response.ok) {
         window.location.href = url;
       } else {
         navigate_to_first_existing(urls);
       }
     })
-    .catch(function(error) {
+    .catch((err) => {
+      void err;
       navigate_to_first_existing(urls);
     });
-}
+};
 
-function on_version_switch() {
+const _on_version_switch = () => {
   const selected_version = this.options[this.selectedIndex].value + '/';
   const url = window.location.href;
   const current_language = language_segment_from_url();
@@ -83,7 +84,7 @@ function on_version_switch() {
   const new_url = url.replace('/' + current_language + current_version,
                               '/' + current_language + selected_version);
   if (new_url !== url) {
-    navigate_to_first_existing([
+    _navigate_to_first_existing([
       new_url,
       url.replace('/' + current_language + current_version,
                   '/' + selected_version),
@@ -92,9 +93,9 @@ function on_version_switch() {
       '/'
     ]);
   }
-}
+};
 
-function on_language_switch() {
+const _on_language_switch = () => {
   let selected_language = this.options[this.selectedIndex].value + '/';
   const url = window.location.href;
   const current_language = language_segment_from_url();
@@ -104,12 +105,12 @@ function on_language_switch() {
   let new_url = url.replace('/' + current_language + current_version,
                             '/' + selected_language + current_version);
   if (new_url !== url) {
-    navigate_to_first_existing([
+    _navigate_to_first_existing([
       new_url,
       '/'
     ]);
   }
-}
+};
 
 // Returns the path segment of the language as a string, like 'fr/'
 // or '' if not found.
@@ -143,7 +144,7 @@ const _initialise_switchers = () => {
     .querySelectorAll('.version_switcher_placeholder')
     .forEach((placeholder) => {
       const s = version_select.cloneNode(true);
-      s.addEventListener('change', on_version_switch);
+      s.addEventListener('change', _on_version_switch);
       placeholder.append(s);
     });
 
@@ -152,7 +153,7 @@ const _initialise_switchers = () => {
     .querySelectorAll('.language_switcher_placeholder')
     .forEach((placeholder) => {
       const s = language_select.cloneNode(true);
-      s.addEventListener('change', on_language_switch);
+      s.addEventListener('change', _on_language_switch);
       placeholder.append(s);
     });
 };
