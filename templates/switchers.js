@@ -135,10 +135,9 @@
   document.addEventListener('DOMContentLoaded', function() {
     const language_segment = language_segment_from_url();
     const current_language = language_segment.replace(/\/+$/g, '') || 'en';
-    const version_select = build_version_select(DOCUMENTATION_OPTIONS.VERSION);
 
-    let placeholders = document.querySelectorAll('.version_switcher_placeholder');
-    placeholders.forEach(function(placeholder) {
+    const version_select = build_version_select(DOCUMENTATION_OPTIONS.VERSION);
+    document.querySelectorAll('.version_switcher_placeholder').forEach((placeholder) => {
       placeholder.innerHTML = version_select;
 
       let selectElement = placeholder.querySelector('select');
@@ -146,9 +145,7 @@
     });
 
     const language_select = build_language_select(current_language);
-
-    placeholders = document.querySelectorAll('.language_switcher_placeholder');
-    placeholders.forEach(function(placeholder) {
+    document.querySelectorAll('.language_switcher_placeholder').forEach((placeholder) => {
       placeholder.innerHTML = language_select;
 
       let selectElement = placeholder.querySelector('select');
