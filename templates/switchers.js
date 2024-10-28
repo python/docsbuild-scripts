@@ -58,55 +58,67 @@ const _create_language_select = (current_language) => {
 
 const _navigate_to_first_existing = (urls) => {
   // Navigate to the first existing URL in urls.
-  const url = urls.shift();
-  if (urls.length === 0 || url.startsWith('file:///')) {
-    window.location.href = url;
-    return;
+  for (const url of urls) {
+    if (url.startsWith('file:///')) {
+      window.location.href = url;
+      return;
+    }
+    fetch(url)
+      .then((response) => {
+        if (response.ok) {
+          window.location.href = url;
+          return url;
+        }
+      })
+      .catch((err) => {
+        console.error(`Error when fetching '${url}'!`);
+        console.error(err);
+      });
   }
-  fetch(url)
-    .then((response) => {
-      if (response.ok) {
-        window.location.href = url;
-      } else {
-        navigate_to_first_existing(urls);
-      }
-    })
-    .catch((err) => {
-      void err;
-      navigate_to_first_existing(urls);
-    });
+
+  // if all else fails, redirect to the d.p.o root
+  window.location.href = '/';
+  return '/';
 };
 
 const _on_version_switch = (event) => {
-  const selected_version = event.target.value + '/';
-  const url = window.location.href;
-  const new_url = url.replace(
-    _CURRENT_PREFIX,
-    '/' + _CURRENT_LANGUAGE + selected_version,
-  );
-  if (new_url !== url) {
+  const selected_version = event.target.value;
+  // English has no language prefix.
+  const new_prefix_en = `/${selected_version}/`;
+  const new_prefix =
+    _CURRENT_LANGUAGE === 'en'
+      ? new_prefix_en
+      : `/${_CURRENT_LANGUAGE}/${selected_version}/`;
+  if (_CURRENT_PREFIX !== new_prefix) {
+    // Try the following pages in order:
+    // 1. The current page in the current language with the new version
+    // 2. The current page in English with the new version
+    // 3. The documentation home in the current language with the new version
+    // 4. The documentation home in English with the new version
     _navigate_to_first_existing([
-      new_url,
-      url.replace(_CURRENT_PREFIX, '/' + selected_version),
-      '/' + _CURRENT_LANGUAGE + selected_version,
-      '/' + selected_version,
-      '/',
+      window.location.href.replace(_CURRENT_PREFIX, new_prefix),
+      window.location.href.replace(_CURRENT_PREFIX, new_prefix_en),
+      new_prefix,
+      new_prefix_en,
     ]);
   }
 };
 
 const _on_language_switch = (event) => {
-  let selected_language = event.target.value + '/';
-  const url = window.location.href;
-  if (selected_language === 'en/')
-    // Special 'default' case for English.
-    selected_language = '';
-  let new_url = url.replace(
-    _CURRENT_PREFIX,
-    '/' + selected_language + _CURRENT_VERSION,
-  );
-  if (new_url !== url) {
-    _navigate_to_first_existing([new_url, '/']);
+  const selected_language = event.target.value;
+  // English has no language prefix.
+  const new_prefix =
+    selected_language === 'en'
+      ? `/${_CURRENT_VERSION}/`
+      : `/${selected_language}/${_CURRENT_VERSION}/`;
+  if (_CURRENT_PREFIX !== new_prefix) {
+    // Try the following pages in order:
+    // 1. The current page in the new language with the current version
+    // 2. The documentation home in the new language with the current version
+    _navigate_to_first_existing([
+      window.location.href.replace(_CURRENT_PREFIX, new_prefix),
+      new_prefix,
+    ]);
   }
 };
 
