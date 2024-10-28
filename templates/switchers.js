@@ -11,10 +11,6 @@ const version_regexs = [
 const all_versions = $VERSIONS;
 const all_languages = $LANGUAGES;
 
-function quote_attr(str) {
-    return '"' + str.replace('"', '\\"') + '"';
-}
-
 const _create_version_select = (release) => {
   const major_minor = release.split('.').slice(0, 2).join('.');
   const select = document.createElement('select');
