@@ -132,40 +132,10 @@
     return ''
   }
 
-  function create_placeholders_if_missing() {
-    const version_segment = version_segment_from_url();
-    const language_segment = language_segment_from_url();
-    const index = "/" + language_segment + version_segment;
-
-    if (document.querySelectorAll('.version_switcher_placeholder').length > 0) {
-      return;
-    }
-
-    const html = '<span class="language_switcher_placeholder"></span> \
-<span class="version_switcher_placeholder"></span> \
-<a href="/" id="indexlink">Documentation</a> &#187;';
-
-    const probable_places = [
-      "body>div.related>ul>li:not(.right):contains('Documentation'):first",
-      "body>div.related>ul>li:not(.right):contains('documentation'):first",
-    ];
-
-    for (let i = 0; i < probable_places.length; i++) {
-      let probable_place = $(probable_places[i]);
-      if (probable_place.length == 1) {
-        probable_place.html(html);
-        document.getElementById('indexlink').href = index;
-        return;
-      }
-    }
-  }
-
   document.addEventListener('DOMContentLoaded', function() {
     const language_segment = language_segment_from_url();
     const current_language = language_segment.replace(/\/+$/g, '') || 'en';
     const version_select = build_version_select(DOCUMENTATION_OPTIONS.VERSION);
-
-    create_placeholders_if_missing();
 
     let placeholders = document.querySelectorAll('.version_switcher_placeholder');
     placeholders.forEach(function(placeholder) {
