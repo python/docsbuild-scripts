@@ -1,9 +1,14 @@
 'use strict';
 
+// File URIs must begin with either one or three forward slashes
+const _is_file_uri = (uri) => uri.startsWith('file:/');
+
+const _IS_LOCAL = _is_file_uri(window.location.href);
 const _CURRENT_RELEASE = DOCUMENTATION_OPTIONS.VERSION || '';
 const _CURRENT_VERSION = _CURRENT_RELEASE.split('.', 2).join('.');
 const _CURRENT_LANGUAGE = DOCUMENTATION_OPTIONS.LANGUAGE?.toLowerCase() || 'en';
 const _CURRENT_PREFIX = (() => {
+  if (_IS_LOCAL) return null;
   // Sphinx 7.2+ defines the content root data attribute in the HTML element.
   const _CONTENT_ROOT = document.documentElement.dataset.content_root;
   if (_CONTENT_ROOT !== undefined) {
@@ -20,6 +25,10 @@ const all_languages = $LANGUAGES;
 const _create_version_select = () => {
   const select = document.createElement('select');
   select.className = 'version-select';
+  if (_IS_LOCAL) {
+    select.disabled = true;
+    select.title = 'Version switching is disabled in local builds';
+  }
 
   for (const [version, title] of Object.entries(all_versions)) {
     const option = document.createElement('option');
@@ -44,6 +53,10 @@ const _create_language_select = () => {
 
   const select = document.createElement('select');
   select.className = 'language-select';
+  if (_IS_LOCAL) {
+    select.disabled = true;
+    select.title = 'Language switching is disabled in local builds';
+  }
 
   for (const [language, title] of Object.entries(all_languages)) {
     const option = document.createElement('option');
@@ -59,10 +72,6 @@ const _create_language_select = () => {
 const _navigate_to_first_existing = (urls) => {
   // Navigate to the first existing URL in urls.
   for (const url of urls) {
-    if (url.startsWith('file:///')) {
-      window.location.href = url;
-      return;
-    }
     fetch(url)
       .then((response) => {
         if (response.ok) {
@@ -82,6 +91,8 @@ const _navigate_to_first_existing = (urls) => {
 };
 
 const _on_version_switch = (event) => {
+  if (_IS_LOCAL) return;
+
   const selected_version = event.target.value;
   // English has no language prefix.
   const new_prefix_en = `/${selected_version}/`;
@@ -105,6 +116,8 @@ const _on_version_switch = (event) => {
 };
 
 const _on_language_switch = (event) => {
+  if (_IS_LOCAL) return;
+
   const selected_language = event.target.value;
   // English has no language prefix.
   const new_prefix =
