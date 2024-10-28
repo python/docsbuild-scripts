@@ -998,8 +998,7 @@ def symlink(
 
     if not link.exists() or readlink(link) != directory:
         # Link does not exist or points to the wrong target.
-        if link.exists():
-            link.unlink()
+        link.unlink(missing_ok=True)
         link.symlink_to(directory)
         run(["chown", "-h", f":{group}", str(link)])
     if not skip_cache_invalidation:
