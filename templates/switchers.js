@@ -6,7 +6,8 @@ const version_regexs = [
   '(?:\\d)',
   '(?:\\d\\.\\d[\\w\\d\\.]*)',
   '(?:dev)',
-  '(?:release/\\d.\\d[\\x\\d\\.]*)'];
+  '(?:release/\\d.\\d[\\x\\d\\.]*)',
+];
 
 const all_versions = $VERSIONS;
 const all_languages = $LANGUAGES;
@@ -54,7 +55,7 @@ const _create_language_select = (current_language) => {
 const _navigate_to_first_existing = (urls) => {
   // Navigate to the first existing URL in urls.
   const url = urls.shift();
-  if (urls.length === 0 || url.startsWith("file:///")) {
+  if (urls.length === 0 || url.startsWith('file:///')) {
     window.location.href = url;
     return;
   }
@@ -77,16 +78,20 @@ const _on_version_switch = () => {
   const url = window.location.href;
   const current_language = language_segment_from_url();
   const current_version = version_segment_from_url();
-  const new_url = url.replace('/' + current_language + current_version,
-                              '/' + current_language + selected_version);
+  const new_url = url.replace(
+    '/' + current_language + current_version,
+    '/' + current_language + selected_version,
+  );
   if (new_url !== url) {
     _navigate_to_first_existing([
       new_url,
-      url.replace('/' + current_language + current_version,
-                  '/' + selected_version),
+      url.replace(
+        '/' + current_language + current_version,
+        '/' + selected_version,
+      ),
       '/' + current_language + selected_version,
       '/' + selected_version,
-      '/'
+      '/',
     ]);
   }
 };
@@ -96,15 +101,15 @@ const _on_language_switch = () => {
   const url = window.location.href;
   const current_language = language_segment_from_url();
   const current_version = version_segment_from_url();
-  if (selected_language === 'en/') // Special 'default' case for English.
+  if (selected_language === 'en/')
+    // Special 'default' case for English.
     selected_language = '';
-  let new_url = url.replace('/' + current_language + current_version,
-                            '/' + selected_language + current_version);
+  let new_url = url.replace(
+    '/' + current_language + current_version,
+    '/' + selected_language + current_version,
+  );
   if (new_url !== url) {
-    _navigate_to_first_existing([
-      new_url,
-      '/'
-    ]);
+    _navigate_to_first_existing([new_url, '/']);
   }
 };
 
@@ -112,10 +117,10 @@ const _on_language_switch = () => {
 // or '' if not found.
 function language_segment_from_url() {
   const path = window.location.pathname;
-  const language_regexp = '/((?:' + Object.keys(all_languages).join("|") + ')/)'
+  const language_regexp =
+    '/((?:' + Object.keys(all_languages).join('|') + ')/)';
   const match = path.match(language_regexp);
-  if (match !== null)
-    return match[1];
+  if (match !== null) return match[1];
   return '';
 }
 
@@ -127,9 +132,8 @@ function version_segment_from_url() {
   const version_segment = '(?:(?:' + version_regexs.join('|') + ')/)';
   const version_regexp = language_segment + '(' + version_segment + ')';
   const match = path.match(version_regexp);
-  if (match !== null)
-    return match[1];
-  return ''
+  if (match !== null) return match[1];
+  return '';
 }
 const _initialise_switchers = () => {
   const language_segment = language_segment_from_url();
