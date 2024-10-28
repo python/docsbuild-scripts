@@ -36,10 +36,10 @@ const _create_version_select = () => {
   return select;
 };
 
-const _create_language_select = (current_language) => {
-  if (!(current_language in all_languages)) {
+const _create_language_select = () => {
+  if (!(_CURRENT_LANGUAGE in all_languages)) {
     // In case we are browsing a language that is not yet in all_languages.
-    all_languages[current_language] = current_language;
+    all_languages[_CURRENT_LANGUAGE] = _CURRENT_LANGUAGE;
   }
 
   const select = document.createElement('select');
@@ -49,7 +49,7 @@ const _create_language_select = (current_language) => {
     const option = document.createElement('option');
     option.value = language;
     option.text = title;
-    if (language === current_language) option.selected = true;
+    if (language === _CURRENT_LANGUAGE) option.selected = true;
     select.add(option);
   }
 
@@ -132,7 +132,7 @@ const _initialise_switchers = () => {
       placeholder.append(s);
     });
 
-  const language_select = _create_language_select(_CURRENT_LANGUAGE);
+  const language_select = _create_language_select();
   document
     .querySelectorAll('.language_switcher_placeholder')
     .forEach((placeholder) => {
