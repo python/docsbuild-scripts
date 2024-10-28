@@ -15,41 +15,45 @@ function quote_attr(str) {
     return '"' + str.replace('"', '\\"') + '"';
 }
 
-function build_version_select(release) {
-  let buf = ['<select id="version_select">'];
-  const major_minor = release.split(".").slice(0, 2).join(".");
+const _create_version_select = (release) => {
+  const major_minor = release.split('.').slice(0, 2).join('.');
+  const select = document.createElement('select');
+  select.className = 'version-select';
 
-  Object.entries(all_versions).forEach(function([version, title]) {
+  for (const [version, title] in all_versions) {
+    const option = document.createElement('option');
+    option.value = version;
     if (version === major_minor) {
-      buf.push('<option value=' + quote_attr(version) + ' selected="selected">' + release + '</option>');
+      option.text = release;
+      option.selected = true;
     } else {
-      buf.push('<option value=' + quote_attr(version) + '>' + title + '</option>');
+      option.text = title;
     }
-  });
-
-  buf.push('</select>');
-  return buf.join('');
-}
-
-function build_language_select(current_language) {
-  let buf = ['<select id="language_select">'];
-
-  Object.entries(all_languages).forEach(function([language, title]) {
-    if (language === current_language) {
-      buf.push('<option value="' + language + '" selected="selected">' + title + '</option>');
-    } else {
-      buf.push('<option value="' + language + '">' + title + '</option>');
-    }
-  });
-  if (!(current_language in all_languages)) {
-      // In case we're browsing a language that is not yet in all_languages.
-      buf.push('<option value="' + current_language + '" selected="selected">' +
-               current_language + '</option>');
-      all_languages[current_language] = current_language;
+    select.add(option);
   }
-  buf.push('</select>');
-  return buf.join('');
-}
+
+  return select;
+};
+
+const _create_language_select = (current_language) => {
+  if (!(current_language in all_languages)) {
+    // In case we are browsing a language that is not yet in all_languages.
+    all_languages[current_language] = current_language;
+  }
+
+  const select = document.createElement('select');
+  select.className = 'language-select';
+
+  for (const [language, title] in all_languages) {
+    const option = document.createElement('option');
+    option.value = language;
+    option.text = title;
+    if (language === current_language) option.selected = true;
+    select.add(option);
+  }
+
+  return select;
+};
 
 function navigate_to_first_existing(urls) {
   // Navigate to the first existing URL in urls.
@@ -134,21 +138,23 @@ const _initialise_switchers = () => {
   const language_segment = language_segment_from_url();
   const current_language = language_segment.replace(/\/+$/g, '') || 'en';
 
-  const version_select = build_version_select(DOCUMENTATION_OPTIONS.VERSION);
-  document.querySelectorAll('.version_switcher_placeholder').forEach((placeholder) => {
-    placeholder.innerHTML = version_select;
+  const version_select = _create_version_select(DOCUMENTATION_OPTIONS.VERSION);
+  document
+    .querySelectorAll('.version_switcher_placeholder')
+    .forEach((placeholder) => {
+      const s = version_select.cloneNode(true);
+      s.addEventListener('change', on_version_switch);
+      placeholder.append(s);
+    });
 
-    let selectElement = placeholder.querySelector('select');
-    selectElement.addEventListener('change', on_version_switch);
-  });
-
-  const language_select = build_language_select(current_language);
-  document.querySelectorAll('.language_switcher_placeholder').forEach((placeholder) => {
-    placeholder.innerHTML = language_select;
-
-    let selectElement = placeholder.querySelector('select');
-    selectElement.addEventListener('change', on_language_switch);
-  });
+  const language_select = _create_language_select(current_language);
+  document
+    .querySelectorAll('.language_switcher_placeholder')
+    .forEach((placeholder) => {
+      const s = language_select.cloneNode(true);
+      s.addEventListener('change', on_language_switch);
+      placeholder.append(s);
+    });
 };
 
 if (document.readyState !== 'loading') {
