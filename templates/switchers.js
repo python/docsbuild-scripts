@@ -169,21 +169,19 @@ const _initialise_switchers = () => {
   const versions = _ALL_VERSIONS;
   const languages = _ALL_LANGUAGES;
 
-  const version_select = _create_version_select(versions);
   document
     .querySelectorAll('.version_switcher_placeholder')
     .forEach((placeholder) => {
-      const s = version_select.cloneNode(true);
+      const s = _create_version_select(versions);
       s.addEventListener('change', _on_version_switch);
       placeholder.append(s);
       placeholder.classList.remove('version_switcher_placeholder');
     });
 
-  const language_select = _create_language_select(languages);
   document
     .querySelectorAll('.language_switcher_placeholder')
     .forEach((placeholder) => {
-      const s = language_select.cloneNode(true);
+      const s = _create_language_select(languages);
       s.addEventListener('change', _on_language_switch);
       placeholder.append(s);
       placeholder.classList.remove('language_switcher_placeholder');
