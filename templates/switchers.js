@@ -84,20 +84,18 @@ const _create_language_select = (languages) => {
  * @param {Array<string>} urls
  * @private
  */
-const _navigate_to_first_existing = (urls) => {
+const _navigate_to_first_existing = async (urls) => {
   // Navigate to the first existing URL in urls.
   for (const url of urls) {
-    fetch(url)
-      .then((response) => {
-        if (response.ok) {
-          window.location.href = url;
-          return url;
-        }
-      })
-      .catch((err) => {
-        console.error(`Error when fetching '${url}'!`);
-        console.error(err);
-      });
+    try {
+      const response = await fetch(url, { method: 'HEAD' });
+      if (response.ok) {
+        window.location.href = url;
+        return url;
+      }
+    } catch (err) {
+      console.error(`Error when fetching '${url}': ${err}`);
+    }
   }
 
   // if all else fails, redirect to the d.p.o root
@@ -111,7 +109,7 @@ const _navigate_to_first_existing = (urls) => {
  * @returns {void}
  * @private
  */
-const _on_version_switch = (event) => {
+const _on_version_switch = async (event) => {
   if (_IS_LOCAL) return;
 
   const selected_version = event.target.value;
@@ -127,7 +125,7 @@ const _on_version_switch = (event) => {
     // 2. The current page in English with the new version
     // 3. The documentation home in the current language with the new version
     // 4. The documentation home in English with the new version
-    _navigate_to_first_existing([
+    await _navigate_to_first_existing([
       window.location.href.replace(_CURRENT_PREFIX, new_prefix),
       window.location.href.replace(_CURRENT_PREFIX, new_prefix_en),
       new_prefix,
@@ -142,7 +140,7 @@ const _on_version_switch = (event) => {
  * @returns {void}
  * @private
  */
-const _on_language_switch = (event) => {
+const _on_language_switch = async (event) => {
   if (_IS_LOCAL) return;
 
   const selected_language = event.target.value;
@@ -155,7 +153,7 @@ const _on_language_switch = (event) => {
     // Try the following pages in order:
     // 1. The current page in the new language with the current version
     // 2. The documentation home in the new language with the current version
-    _navigate_to_first_existing([
+    await _navigate_to_first_existing([
       window.location.href.replace(_CURRENT_PREFIX, new_prefix),
       new_prefix,
     ]);
