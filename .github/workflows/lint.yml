@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  lint:
+  pre-commit:
     runs-on: ubuntu-latest
 
     steps:
@@ -20,3 +20,14 @@ jobs:
           python-version: "3.x"
           cache: pip
       - uses: pre-commit/action@v3.0.1
+
+  prettier:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Lint with Prettier
+        run: npx prettier templates/switchers.js
