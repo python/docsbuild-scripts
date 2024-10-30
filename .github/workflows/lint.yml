@@ -30,4 +30,4 @@ jobs:
         with:
           node-version: "22"
       - name: Lint with Prettier
-        run: npx prettier templates/switchers.js
+        run: npx prettier templates/switchers.js --check --single-quote
