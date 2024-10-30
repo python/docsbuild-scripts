@@ -175,7 +175,6 @@ const _initialise_switchers = () => {
       const s = _create_version_select(versions);
       s.addEventListener('change', _on_version_switch);
       placeholder.append(s);
-      placeholder.classList.remove('version_switcher_placeholder');
     });
 
   document
@@ -184,7 +183,6 @@ const _initialise_switchers = () => {
       const s = _create_language_select(languages);
       s.addEventListener('change', _on_language_switch);
       placeholder.append(s);
-      placeholder.classList.remove('language_switcher_placeholder');
     });
 };
 
