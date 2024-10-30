@@ -19,8 +19,8 @@ const _CURRENT_PREFIX = (() => {
   return window.location.pathname.split('/', _NUM_PREFIX_PARTS).join('/') + '/';
 })();
 
-const _ALL_VERSIONS = new Map(Object.entries($VERSIONS));
-const _ALL_LANGUAGES = new Map(Object.entries($LANGUAGES));
+const _ALL_VERSIONS = new Map($VERSIONS);
+const _ALL_LANGUAGES = new Map($LANGUAGES);
 
 /**
  * @param {Map<string, string>} versions

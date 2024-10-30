@@ -388,16 +388,16 @@ def setup_switchers(
     - Cross-link various languages in a language switcher
     - Cross-link various versions in a version switcher
     """
-    languages_map = dict(sorted((l.tag, l.name) for l in languages if l.in_prod))
-    versions_map = {v.name: v.picker_label for v in reversed(versions)}
+    language_pairs = sorted((l.tag, l.name) for l in languages if l.in_prod)
+    version_pairs = [(v.name, v.picker_label) for v in reversed(versions)]
 
     switchers_template_file = HERE / "templates" / "switchers.js"
     switchers_path = html_root / "_static" / "switchers.js"
 
     template = Template(switchers_template_file.read_text(encoding="UTF-8"))
     rendered_template = template.safe_substitute(
-        LANGUAGES=json.dumps(languages_map),
-        VERSIONS=json.dumps(versions_map),
+        LANGUAGES=json.dumps(language_pairs),
+        VERSIONS=json.dumps(version_pairs),
     )
     switchers_path.write_text(rendered_template, encoding="UTF-8")
 
