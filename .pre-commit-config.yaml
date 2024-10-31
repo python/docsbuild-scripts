@@ -48,7 +48,6 @@ repos:
     hooks:
       - id: prettier
         files: templates/switchers.js
-        args: [--single-quote]
 
   - repo: meta
     hooks:

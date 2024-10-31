@@ -1,12 +1,12 @@
-'use strict';
+"use strict";
 
 // File URIs must begin with either one or three forward slashes
-const _is_file_uri = (uri) => uri.startsWith('file:/');
+const _is_file_uri = (uri) => uri.startsWith("file:/");
 
 const _IS_LOCAL = _is_file_uri(window.location.href);
-const _CURRENT_RELEASE = DOCUMENTATION_OPTIONS.VERSION || '';
-const _CURRENT_VERSION = _CURRENT_RELEASE.split('.', 2).join('.');
-const _CURRENT_LANGUAGE = DOCUMENTATION_OPTIONS.LANGUAGE?.toLowerCase() || 'en';
+const _CURRENT_RELEASE = DOCUMENTATION_OPTIONS.VERSION || "";
+const _CURRENT_VERSION = _CURRENT_RELEASE.split(".", 2).join(".");
+const _CURRENT_LANGUAGE = DOCUMENTATION_OPTIONS.LANGUAGE?.toLowerCase() || "en";
 const _CURRENT_PREFIX = (() => {
   if (_IS_LOCAL) return null;
   // Sphinx 7.2+ defines the content root data attribute in the HTML element.
@@ -15,8 +15,8 @@ const _CURRENT_PREFIX = (() => {
     return new URL(_CONTENT_ROOT, window.location).pathname;
   }
   // Fallback for older versions of Sphinx (used in Python 3.10 and older).
-  const _NUM_PREFIX_PARTS = _CURRENT_LANGUAGE === 'en' ? 2 : 3;
-  return window.location.pathname.split('/', _NUM_PREFIX_PARTS).join('/') + '/';
+  const _NUM_PREFIX_PARTS = _CURRENT_LANGUAGE === "en" ? 2 : 3;
+  return window.location.pathname.split("/", _NUM_PREFIX_PARTS).join("/") + "/";
 })();
 
 const _ALL_VERSIONS = new Map($VERSIONS);
@@ -28,15 +28,15 @@ const _ALL_LANGUAGES = new Map($LANGUAGES);
  * @private
  */
 const _create_version_select = (versions) => {
-  const select = document.createElement('select');
-  select.className = 'version-select';
+  const select = document.createElement("select");
+  select.className = "version-select";
   if (_IS_LOCAL) {
     select.disabled = true;
-    select.title = 'Version switching is disabled in local builds';
+    select.title = "Version switching is disabled in local builds";
   }
 
   for (const [version, title] of versions) {
-    const option = document.createElement('option');
+    const option = document.createElement("option");
     option.value = version;
     if (version === _CURRENT_VERSION) {
       option.text = _CURRENT_RELEASE;
@@ -61,15 +61,15 @@ const _create_language_select = (languages) => {
     languages.set(_CURRENT_LANGUAGE, _CURRENT_LANGUAGE);
   }
 
-  const select = document.createElement('select');
-  select.className = 'language-select';
+  const select = document.createElement("select");
+  select.className = "language-select";
   if (_IS_LOCAL) {
     select.disabled = true;
-    select.title = 'Language switching is disabled in local builds';
+    select.title = "Language switching is disabled in local builds";
   }
 
   for (const [language, title] of languages) {
-    const option = document.createElement('option');
+    const option = document.createElement("option");
     option.value = language;
     option.text = title;
     if (language === _CURRENT_LANGUAGE) option.selected = true;
@@ -88,7 +88,7 @@ const _navigate_to_first_existing = async (urls) => {
   // Navigate to the first existing URL in urls.
   for (const url of urls) {
     try {
-      const response = await fetch(url, { method: 'HEAD' });
+      const response = await fetch(url, { method: "HEAD" });
       if (response.ok) {
         window.location.href = url;
         return url;
@@ -99,8 +99,8 @@ const _navigate_to_first_existing = async (urls) => {
   }
 
   // if all else fails, redirect to the d.p.o root
-  window.location.href = '/';
-  return '/';
+  window.location.href = "/";
+  return "/";
 };
 
 /**
@@ -116,7 +116,7 @@ const _on_version_switch = async (event) => {
   // English has no language prefix.
   const new_prefix_en = `/${selected_version}/`;
   const new_prefix =
-    _CURRENT_LANGUAGE === 'en'
+    _CURRENT_LANGUAGE === "en"
       ? new_prefix_en
       : `/${_CURRENT_LANGUAGE}/${selected_version}/`;
   if (_CURRENT_PREFIX !== new_prefix) {
@@ -146,7 +146,7 @@ const _on_language_switch = async (event) => {
   const selected_language = event.target.value;
   // English has no language prefix.
   const new_prefix =
-    selected_language === 'en'
+    selected_language === "en"
       ? `/${_CURRENT_VERSION}/`
       : `/${selected_language}/${_CURRENT_VERSION}/`;
   if (_CURRENT_PREFIX !== new_prefix) {
@@ -170,24 +170,24 @@ const _initialise_switchers = () => {
   const languages = _ALL_LANGUAGES;
 
   document
-    .querySelectorAll('.version_switcher_placeholder')
+    .querySelectorAll(".version_switcher_placeholder")
     .forEach((placeholder) => {
       const s = _create_version_select(versions);
-      s.addEventListener('change', _on_version_switch);
+      s.addEventListener("change", _on_version_switch);
       placeholder.append(s);
     });
 
   document
-    .querySelectorAll('.language_switcher_placeholder')
+    .querySelectorAll(".language_switcher_placeholder")
     .forEach((placeholder) => {
       const s = _create_language_select(languages);
-      s.addEventListener('change', _on_language_switch);
+      s.addEventListener("change", _on_language_switch);
       placeholder.append(s);
     });
 };
 
-if (document.readyState !== 'loading') {
+if (document.readyState !== "loading") {
   _initialise_switchers();
 } else {
-  document.addEventListener('DOMContentLoaded', _initialise_switchers);
+  document.addEventListener("DOMContentLoaded", _initialise_switchers);
 }
