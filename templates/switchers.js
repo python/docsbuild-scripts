@@ -104,7 +104,7 @@ const _navigate_to_first_existing = async (urls) => {
 };
 
 /**
- * Callback for the version switcher.
+ * Navigate to the selected version.
  * @param {Event} event
  * @returns {void}
  * @private
@@ -135,7 +135,7 @@ const _on_version_switch = async (event) => {
 };
 
 /**
- * Callback for the language switcher.
+ * Navigate to the selected language.
  * @param {Event} event
  * @returns {void}
  * @private
@@ -161,7 +161,7 @@ const _on_language_switch = async (event) => {
 };
 
 /**
- * Initialisation function for the version and language switchers.
+ * Set up the version and language switchers.
  * @returns {void}
  * @private
  */
