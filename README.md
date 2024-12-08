@@ -1,3 +1,8 @@
+# docsbuild-scripts
+
+[![GitHub Actions status](https://github.com/python/docsbuild-scripts/actions/workflows/test.yml/badge.svg)](https://github.com/python/docsbuild-scripts/actions/workflows/test.yml)
+[![Codecov](https://codecov.io/gh/python/docsbuild-scripts/branch/main/graph/badge.svg)](https://codecov.io/gh/python/docsbuild-scripts)
+
 This repository contains scripts for automatically building the Python
 documentation on [docs.python.org](https://docs.python.org).
 
