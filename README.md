@@ -17,7 +17,7 @@ python3 ./build_docs.py --quick --build-root ./build_root --www-root ./www --log
 ```
 
 If you don't need to build all translations of all branches, add
-`--language en --branch main`.
+`--language en --branches main`.
 
 
 ## Check current version
