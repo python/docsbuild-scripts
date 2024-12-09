@@ -2,7 +2,7 @@ This repository contains scripts for automatically building the Python
 documentation on [docs.python.org](https://docs.python.org).
 
 
-# How to test it?
+## How to test it?
 
 The following command should build all maintained versions and
 translations in `./www`, beware it can take a few hours:
@@ -15,7 +15,7 @@ If you don't need to build all translations of all branches, add
 `--language en --branch main`.
 
 
-# Check current version
+## Check current version
 
 Install `tools_requirements.txt` then run `python check_versions.py
 ../cpython/` (pointing to a real CPython clone) to see which version
