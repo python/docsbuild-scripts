@@ -139,16 +139,19 @@ class Version:
         return f"Python {self.name} ({self.status})"
 
     @staticmethod
-    def filter(versions, branch=None):
+    def filter(versions, branches=None):
         """Filter the given versions.
 
-        If *branch* is given, only *versions* matching *branch* are returned.
+        If *branches* is given, only *versions* matching *branches* are returned.
 
         Else all live versions are returned (this means no EOL and no
         security-fixes branches).
         """
-        if branch:
-            return [v for v in versions if branch in (v.name, v.branch_or_tag)]
+        if branches:
+            return [
+                v for v in versions if v.name in branches or v.branch_or_tag in branches
+            ]
+
         return [v for v in versions if v.status not in ("EOL", "security-fixes")]
 
     @staticmethod
@@ -518,9 +521,11 @@ def parse_args():
     )
     parser.add_argument(
         "-b",
-        "--branch",
+        "--branch",  # Deprecated
+        "--branches",
+        nargs="*",
         metavar="3.12",
-        help="Version to build (defaults to all maintained branches).",
+        help="Versions to build (defaults to all maintained branches).",
     )
     parser.add_argument(
         "-r",
