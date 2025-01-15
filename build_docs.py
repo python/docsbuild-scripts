@@ -192,7 +192,7 @@ class Version:
         return self.as_tuple() > other.as_tuple()
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(order=True, frozen=True, kw_only=True)
 class Language:
     iso639_tag: str
     name: str
@@ -710,6 +710,7 @@ class DocBuilder:
                     f"-D locale_dirs={locale_dirs}",
                     f"-D language={self.language.iso639_tag}",
                     "-D gettext_compact=0",
+                    "-D translation_progress_classes=1",
                 )
             )
         if self.language.tag == "ja":
@@ -1141,19 +1142,20 @@ def parse_versions_from_devguide(http: urllib3.PoolManager) -> list[Version]:
 def parse_languages_from_config() -> list[Language]:
     """Read config.toml to discover languages to build."""
     config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
-    languages = []
     defaults = config["defaults"]
-    for iso639_tag, section in config["languages"].items():
-        languages.append(
-            Language(
-                iso639_tag,
-                section["name"],
-                section.get("in_prod", defaults["in_prod"]),
-                sphinxopts=section.get("sphinxopts", defaults["sphinxopts"]),
-                html_only=section.get("html_only", defaults["html_only"]),
-            )
+    default_in_prod = defaults.get("in_prod", True)
+    default_sphinxopts = defaults.get("sphinxopts", [])
+    default_html_only = defaults.get("html_only", False)
+    return [
+        Language(
+            iso639_tag=iso639_tag,
+            name=section["name"],
+            in_prod=section.get("in_prod", default_in_prod),
+            sphinxopts=section.get("sphinxopts", default_sphinxopts),
+            html_only=section.get("html_only", default_html_only),
         )
-    return languages
+        for iso639_tag, section in config["languages"].items()
+    ]
 
 
 def format_seconds(seconds: float) -> str:
