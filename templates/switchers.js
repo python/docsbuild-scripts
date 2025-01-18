@@ -6,7 +6,13 @@ const _is_file_uri = (uri) => uri.startsWith("file:/");
 const _IS_LOCAL = _is_file_uri(window.location.href);
 const _CURRENT_RELEASE = DOCUMENTATION_OPTIONS.VERSION || "";
 const _CURRENT_VERSION = _CURRENT_RELEASE.split(".", 2).join(".");
-const _CURRENT_LANGUAGE = DOCUMENTATION_OPTIONS.LANGUAGE?.toLowerCase() || "en";
+const _CURRENT_LANGUAGE = (() => {
+  const _LANGUAGE = DOCUMENTATION_OPTIONS.LANGUAGE?.toLowerCase() || "en";
+  // Python 2.7 and 3.5--3.10 use ``LANGUAGE: 'None'`` for English
+  // in ``documentation_options.js``.
+  if (_LANGUAGE === "none") return "en";
+  return _LANGUAGE;
+})();
 const _CURRENT_PREFIX = (() => {
   if (_IS_LOCAL) return null;
   // Sphinx 7.2+ defines the content root data attribute in the HTML element.
