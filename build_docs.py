@@ -789,6 +789,7 @@ class DocBuilder:
             [venv_path / "bin" / "python", "-m", "pip", "install", "--upgrade"]
             + ["--upgrade-strategy=eager"]
             + [self.theme]
+            + ["matplotlib>=3"] if self.includes_html else []  # opengraph previews
             + self.version.requirements,
             cwd=self.checkout / "Doc",
         )
