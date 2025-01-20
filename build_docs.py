@@ -745,7 +745,8 @@ class DocBuilder:
         blurb = self.venv / "bin" / "blurb"
 
         if self.includes_html:
-            # For opengraph previews (requires matplotlib)
+            # Define a tag to enable opengraph socialcards previews
+            # (used in Doc/conf.py and requires matplotlib)
             sphinxopts.append("-t create-social-cards")
 
             # Disable CPython switchers, we handle them now:
