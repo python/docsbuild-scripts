@@ -786,14 +786,17 @@ class DocBuilder:
         So we can reuse them from builds to builds, while they contain
         different Sphinx versions.
         """
+        requirements = [self.theme] + self.version.requirements
+        if self.includes_html:
+            # opengraph previews
+            requirements.append("matplotlib>=3")
+
         venv_path = self.build_root / ("venv-" + self.version.name)
         run([sys.executable, "-m", "venv", venv_path])
         run(
             [venv_path / "bin" / "python", "-m", "pip", "install", "--upgrade"]
             + ["--upgrade-strategy=eager"]
-            + [self.theme]
-            + ["matplotlib>=3"] if self.includes_html else []  # opengraph previews
-            + self.version.requirements,
+            + requirements,
             cwd=self.checkout / "Doc",
         )
         run([venv_path / "bin" / "python", "-m", "pip", "freeze", "--all"])
