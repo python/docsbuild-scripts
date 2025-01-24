@@ -71,7 +71,7 @@ sphinxopts = [
 name = "polski (Polish)"
 
 [languages.pt_BR]
-name = "português brasileiro (Brazilian Portuguese)"
+name = "Português brasileiro (Brazilian Portuguese)"
 
 [languages.tr]
 name = "Türkçe (Turkish)"
