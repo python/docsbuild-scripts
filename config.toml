@@ -1,5 +1,6 @@
 [defaults]
 # name has no default, it is mandatory.
+# name is in the format: vernacularName (EnglishTranslation)
 in_prod = true
 html_only = false
 sphinxopts = [
@@ -12,7 +13,7 @@ sphinxopts = [
 name = "English"
 
 [languages.es]
-name = "Spanish"
+name = "español (Spanish)"
 sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',
@@ -20,7 +21,7 @@ sphinxopts = [
 ]
 
 [languages.fr]
-name = "French"
+name = "français (French)"
 sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',
@@ -28,14 +29,14 @@ sphinxopts = [
 ]
 
 [languages.id]
-name = "Indonesian"
+name = "Indonesia (Indonesian)"
 in_prod = false
 
 [languages.it]
-name = "Italian"
+name = "italiano (Italian)"
 
 [languages.ja]
-name = "Japanese"
+name = "日本語 (Japanese)"
 sphinxopts = [
     '-D latex_engine=lualatex',
     '-D latex_elements.inputenc=',
@@ -58,7 +59,7 @@ sphinxopts = [
 ]
 
 [languages.ko]
-name = "Korean"
+name = "한국어 (Korean)"
 sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',
@@ -67,21 +68,21 @@ sphinxopts = [
 ]
 
 [languages.pl]
-name = "Polish"
+name = "polski (Polish)"
 
 [languages.pt_BR]
-name = "Brazilian Portuguese"
+name = "português brasileiro (Brazilian Portuguese)"
 
 [languages.tr]
-name = "Turkish"
+name = "Türkçe (Turkish)"
 
 [languages.uk]
-name = "Ukrainian"
+name = "українська (Ukrainian)"
 in_prod = false
 html_only = true
 
 [languages.zh_CN]
-name = "Simplified Chinese"
+name = "简化字 (Simplified Chinese)"
 sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',
@@ -89,7 +90,7 @@ sphinxopts = [
 ]
 
 [languages.zh_TW]
-name = "Traditional Chinese"
+name = "簡化字 (Traditional Chinese)"
 sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',
