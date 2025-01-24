@@ -196,6 +196,7 @@ class Version:
 class Language:
     iso639_tag: str
     name: str
+    translated_name: str
     in_prod: bool
     sphinxopts: tuple
     html_only: bool = False
@@ -203,6 +204,12 @@ class Language:
     @property
     def tag(self):
         return self.iso639_tag.replace("_", "-").lower()
+
+    @property
+    def switcher_label(self):
+        if self.translated_name:
+            return f"{self.name} | {self.translated_name}"
+        return self.name
 
     @staticmethod
     def filter(languages, language_tags=None):
@@ -388,7 +395,7 @@ def setup_switchers(
     - Cross-link various languages in a language switcher
     - Cross-link various versions in a version switcher
     """
-    language_pairs = sorted((l.tag, l.name) for l in languages if l.in_prod)
+    language_pairs = sorted((l.tag, l.switcher_label) for l in languages if l.in_prod)
     version_pairs = [(v.name, v.picker_label) for v in reversed(versions)]
 
     switchers_template_file = HERE / "templates" / "switchers.js"
@@ -1151,6 +1158,7 @@ def parse_languages_from_config() -> list[Language]:
     """Read config.toml to discover languages to build."""
     config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
     defaults = config["defaults"]
+    default_translated_name = defaults.get("translated_name", "")
     default_in_prod = defaults.get("in_prod", True)
     default_sphinxopts = defaults.get("sphinxopts", [])
     default_html_only = defaults.get("html_only", False)
@@ -1158,6 +1166,7 @@ def parse_languages_from_config() -> list[Language]:
         Language(
             iso639_tag=iso639_tag,
             name=section["name"],
+            translated_name=section.get("translated_name", default_translated_name),
             in_prod=section.get("in_prod", default_in_prod),
             sphinxopts=section.get("sphinxopts", default_sphinxopts),
             html_only=section.get("html_only", default_html_only),
