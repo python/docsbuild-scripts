@@ -20,7 +20,7 @@ name = "English"
 
 [languages.es]
 name = "Spanish"
-translated_name = "Español"
+translated_name = "español"
 sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',
@@ -29,7 +29,7 @@ sphinxopts = [
 
 [languages.fr]
 name = "French"
-translated_name = "Français"
+translated_name = "français"
 sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',
@@ -43,7 +43,7 @@ in_prod = false
 
 [languages.it]
 name = "Italian"
-translated_name = "Italiano"
+translated_name = "italiano"
 
 [languages.ja]
 name = "Japanese"
@@ -81,7 +81,7 @@ sphinxopts = [
 
 [languages.pl]
 name = "Polish"
-translated_name = "Polski"
+translated_name = "polski"
 
 [languages.pt_BR]
 name = "Brazilian Portuguese"
@@ -93,7 +93,7 @@ translated_name = "Türkçe"
 
 [languages.uk]
 name = "Ukrainian"
-translated_name = "Українська"
+translated_name = "українська"
 in_prod = false
 html_only = true
 
