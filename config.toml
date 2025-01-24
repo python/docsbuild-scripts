@@ -108,7 +108,7 @@ sphinxopts = [
 
 [languages.zh_TW]
 name = "Traditional Chinese"
-translated_name = "簡化字"
+translated_name = "繁體字"
 sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',
