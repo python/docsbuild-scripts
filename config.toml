@@ -99,7 +99,7 @@ html_only = true
 
 [languages.zh_CN]
 name = "Simplified Chinese"
-translated_name = "简化字"
+translated_name = "简体中文"
 sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',
@@ -108,7 +108,7 @@ sphinxopts = [
 
 [languages.zh_TW]
 name = "Traditional Chinese"
-translated_name = "繁體字"
+translated_name = "繁體中文"
 sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',
