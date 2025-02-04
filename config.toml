@@ -77,7 +77,6 @@ name = "Turkish"
 
 [languages.uk]
 name = "Ukrainian"
-in_prod = false
 html_only = true
 
 [languages.zh_CN]
