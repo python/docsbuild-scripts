@@ -199,10 +199,20 @@ class Language:
     in_prod: bool
     sphinxopts: tuple
     html_only: bool = False
+    repo_name: str = None
 
     @property
     def tag(self):
         return self.iso639_tag.replace("_", "-").lower()
+
+    @property
+    def repo_url(self):
+        repo_name = (
+            self.repo_name
+            if self.repo_name is not None
+            else f"python-docs-{self.iso639_tag}"
+        )
+        return f"https://github.com/python/{repo_name}.git"
 
     @staticmethod
     def filter(languages, language_tags=None):
@@ -674,7 +684,6 @@ class DocBuilder:
     def translation_repo(self):
         """See PEP 545 for translations repository naming convention."""
 
-        locale_repo = f"https://github.com/python/python-docs-{self.language.tag}.git"
         locale_clone_dir = (
             self.build_root
             / self.version.name
@@ -682,7 +691,7 @@ class DocBuilder:
             / self.language.iso639_tag
             / "LC_MESSAGES"
         )
-        return Repository(locale_repo, locale_clone_dir)
+        return Repository(self.language.repo_url, locale_clone_dir)
 
     @property
     def translation_branch(self):
@@ -1161,6 +1170,7 @@ def parse_languages_from_config() -> list[Language]:
             in_prod=section.get("in_prod", default_in_prod),
             sphinxopts=section.get("sphinxopts", default_sphinxopts),
             html_only=section.get("html_only", default_html_only),
+            repo_name=section.get("repo_name"),
         )
         for iso639_tag, section in config["languages"].items()
     ]

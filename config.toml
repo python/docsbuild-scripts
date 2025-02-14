@@ -95,3 +95,7 @@ sphinxopts = [
     '-D latex_elements.inputenc=',
     '-D latex_elements.fontenc=\\usepackage{xeCJK}',
 ]
+
+[languages.el]
+name = "Greek"
+repo_name = "python-docs-gr"
