@@ -23,7 +23,7 @@ Modified by Julien Palard to build translations.
 from __future__ import annotations
 
 from argparse import ArgumentParser, Namespace
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from contextlib import suppress, contextmanager
 from dataclasses import dataclass
 import filecmp
@@ -42,7 +42,7 @@ from datetime import datetime as dt, timezone
 from pathlib import Path
 from string import Template
 from time import perf_counter, sleep
-from typing import Iterable, Literal
+from typing import Literal
 from urllib.parse import urljoin
 
 import jinja2
@@ -479,7 +479,7 @@ def version_info():
     """Handler for --version."""
     try:
         platex_version = head(
-            subprocess.check_output(["platex", "--version"], universal_newlines=True),
+            subprocess.check_output(["platex", "--version"], text=True),
             lines=3,
         )
     except FileNotFoundError:
@@ -487,7 +487,7 @@ def version_info():
 
     try:
         xelatex_version = head(
-            subprocess.check_output(["xelatex", "--version"], universal_newlines=True),
+            subprocess.check_output(["xelatex", "--version"], text=True),
             lines=2,
         )
     except FileNotFoundError:
