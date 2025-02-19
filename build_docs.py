@@ -717,7 +717,7 @@ class DocBuilder:
                     f"-D locale_dirs={locale_dirs}",
                     f"-D language={self.language.iso639_tag}",
                     "-D gettext_compact=0",
-                    # "-D translation_progress_classes=1",
+                    "-D translation_progress_classes=1",
                 )
             )
         if self.language.tag == "ja":
