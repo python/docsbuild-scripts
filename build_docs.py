@@ -86,7 +86,7 @@ class Version:
         if status not in self.STATUSES:
             raise ValueError(
                 "Version status expected to be one of: "
-                f"{', '.join(self.STATUSES|set(self.SYNONYMS.keys()))}, got {status!r}."
+                f"{', '.join(self.STATUSES | set(self.SYNONYMS.keys()))}, got {status!r}."
             )
         self.name = name
         self.branch_or_tag = branch_or_tag
@@ -732,8 +732,7 @@ class DocBuilder:
                 shell=True,
             )
             subprocess.check_output(
-                "sed -i s/\N{REPLACEMENT CHARACTER}/?/g "
-                f"{self.checkout}/Doc/**/*.rst",
+                f"sed -i s/\N{REPLACEMENT CHARACTER}/?/g {self.checkout}/Doc/**/*.rst",
                 shell=True,
             )
 

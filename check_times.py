@@ -50,7 +50,7 @@ def calc_time(lines: list[str]) -> None:
             fmt_duration = format_seconds(state_data["last_build_duration"])
             reason = state_data["triggered_by"]
             print(
-                f"{start:%Y-%m-%d %H:%M UTC} | {version: <7} | {language: <8} | {fmt_duration :<14} | {reason}"
+                f"{start:%Y-%m-%d %H:%M UTC} | {version: <7} | {language: <8} | {fmt_duration:<14} | {reason}"
             )
 
         if line.endswith("Build start."):
@@ -64,7 +64,7 @@ def calc_time(lines: list[str]) -> None:
             timestamp = f"{line[:16]} UTC"
             _, fmt_duration = line.removesuffix(").").split("(")
             print(
-                f"{timestamp: <20} | --FULL- | -BUILD-- | {fmt_duration :<14} | -----------"
+                f"{timestamp: <20} | --FULL- | -BUILD-- | {fmt_duration:<14} | -----------"
             )
 
     if in_progress:
