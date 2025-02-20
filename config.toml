@@ -1,5 +1,12 @@
+# name:            the English name for the language.
+# translated_name: the 'local' name for the language.
+# in_prod:         If true, include in the language switcher.
+# html_only:       If true, only create HTML files.
+# sphinxopts:      Extra options to pass to SPHINXOPTS in the Makefile.
+
 [defaults]
 # name has no default, it is mandatory.
+translated_name = ""
 in_prod = true
 html_only = false
 sphinxopts = [
@@ -13,6 +20,7 @@ name = "English"
 
 [languages.es]
 name = "Spanish"
+translated_name = "español"
 sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',
@@ -21,6 +29,7 @@ sphinxopts = [
 
 [languages.fr]
 name = "French"
+translated_name = "français"
 sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',
@@ -29,13 +38,16 @@ sphinxopts = [
 
 [languages.id]
 name = "Indonesian"
+translated_name = "Indonesia"
 in_prod = false
 
 [languages.it]
 name = "Italian"
+translated_name = "italiano"
 
 [languages.ja]
 name = "Japanese"
+translated_name = "日本語"
 sphinxopts = [
     '-D latex_engine=lualatex',
     '-D latex_elements.inputenc=',
@@ -59,6 +71,7 @@ sphinxopts = [
 
 [languages.ko]
 name = "Korean"
+translated_name = "한국어"
 sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',
@@ -68,20 +81,25 @@ sphinxopts = [
 
 [languages.pl]
 name = "Polish"
+translated_name = "polski"
 
 [languages.pt_BR]
 name = "Brazilian Portuguese"
+translated_name = "Português brasileiro"
 
 [languages.tr]
 name = "Turkish"
+translated_name = "Türkçe"
 
 [languages.uk]
 name = "Ukrainian"
+translated_name = "українська"
 in_prod = false
 html_only = true
 
 [languages.zh_CN]
 name = "Simplified Chinese"
+translated_name = "简体中文"
 sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',
@@ -90,6 +108,7 @@ sphinxopts = [
 
 [languages.zh_TW]
 name = "Traditional Chinese"
+translated_name = "繁體中文"
 sphinxopts = [
     '-D latex_engine=xelatex',
     '-D latex_elements.inputenc=',

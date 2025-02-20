@@ -23,7 +23,7 @@ Modified by Julien Palard to build translations.
 from __future__ import annotations
 
 from argparse import ArgumentParser, Namespace
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from contextlib import suppress, contextmanager
 from dataclasses import dataclass
 import filecmp
@@ -42,7 +42,7 @@ from datetime import datetime as dt, timezone
 from pathlib import Path
 from string import Template
 from time import perf_counter, sleep
-from typing import Iterable, Literal
+from typing import Literal
 from urllib.parse import urljoin
 
 import jinja2
@@ -196,6 +196,7 @@ class Version:
 class Language:
     iso639_tag: str
     name: str
+    translated_name: str
     in_prod: bool
     sphinxopts: tuple
     html_only: bool = False
@@ -213,6 +214,12 @@ class Language:
             else f"python-docs-{self.iso639_tag}"
         )
         return f"https://github.com/python/{repo_name}.git"
+
+    @property
+    def switcher_label(self):
+        if self.translated_name:
+            return f"{self.name} | {self.translated_name}"
+        return self.name
 
     @staticmethod
     def filter(languages, language_tags=None):
@@ -398,7 +405,7 @@ def setup_switchers(
     - Cross-link various languages in a language switcher
     - Cross-link various versions in a version switcher
     """
-    language_pairs = sorted((l.tag, l.name) for l in languages if l.in_prod)
+    language_pairs = sorted((l.tag, l.switcher_label) for l in languages if l.in_prod)
     version_pairs = [(v.name, v.picker_label) for v in reversed(versions)]
 
     switchers_template_file = HERE / "templates" / "switchers.js"
@@ -482,7 +489,7 @@ def version_info():
     """Handler for --version."""
     try:
         platex_version = head(
-            subprocess.check_output(["platex", "--version"], universal_newlines=True),
+            subprocess.check_output(["platex", "--version"], text=True),
             lines=3,
         )
     except FileNotFoundError:
@@ -490,7 +497,7 @@ def version_info():
 
     try:
         xelatex_version = head(
-            subprocess.check_output(["xelatex", "--version"], universal_newlines=True),
+            subprocess.check_output(["xelatex", "--version"], text=True),
             lines=2,
         )
     except FileNotFoundError:
@@ -719,7 +726,7 @@ class DocBuilder:
                     f"-D locale_dirs={locale_dirs}",
                     f"-D language={self.language.iso639_tag}",
                     "-D gettext_compact=0",
-                    # "-D translation_progress_classes=1",
+                    "-D translation_progress_classes=1",
                 )
             )
         if self.language.tag == "ja":
@@ -1160,6 +1167,7 @@ def parse_languages_from_config() -> list[Language]:
     """Read config.toml to discover languages to build."""
     config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
     defaults = config["defaults"]
+    default_translated_name = defaults.get("translated_name", "")
     default_in_prod = defaults.get("in_prod", True)
     default_sphinxopts = defaults.get("sphinxopts", [])
     default_html_only = defaults.get("html_only", False)
@@ -1167,6 +1175,7 @@ def parse_languages_from_config() -> list[Language]:
         Language(
             iso639_tag=iso639_tag,
             name=section["name"],
+            translated_name=section.get("translated_name", default_translated_name),
             in_prod=section.get("in_prod", default_in_prod),
             sphinxopts=section.get("sphinxopts", default_sphinxopts),
             html_only=section.get("html_only", default_html_only),
