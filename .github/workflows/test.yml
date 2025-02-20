@@ -2,8 +2,7 @@ name: Test
 
 on: [push, pull_request, workflow_dispatch]
 
-permissions:
-  contents: read
+permissions: {}
 
 env:
   FORCE_COLOR: 1
@@ -19,6 +18,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
