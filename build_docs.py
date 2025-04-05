@@ -756,10 +756,10 @@ class DocBuilder:
                 site_url += f"{self.language.tag}/"
             # Define a tag to enable opengraph socialcards previews
             # (used in Doc/conf.py and requires matplotlib)
-            sphinxopts.extend((
+            sphinxopts += (
                 "-t create-social-cards",
                 f"-D ogp_site_url={site_url}",
-            ))
+            )
 
             # Disable CPython switchers, we handle them now:
             run(
