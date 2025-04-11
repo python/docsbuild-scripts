@@ -1229,7 +1229,7 @@ def symlink(
     http: urllib3.PoolManager,
 ) -> None:
     """Used by major_symlinks and dev_symlink to maintain symlinks."""
-    msg = "Creating symlink from %s to %s"
+    msg = "Creating symlink from /%s/ to /%s/"
     if language_tag == "en":  # English is rooted on /, no /en/
         path = www_root
         logging.debug(msg, name, directory)
