@@ -1300,8 +1300,13 @@ def purge_surrogate_key(http: urllib3.PoolManager, surrogate_key: str) -> None:
 
     https://www.fastly.com/documentation/reference/api/purging/#purge-tag
     """
-    service_id = os.environ.get("FASTLY_SERVICE_ID", "__UNSET__")
-    fastly_key = os.environ.get("FASTLY_TOKEN", "__UNSET__")
+    unset = "__UNSET__"
+    service_id = os.environ.get("FASTLY_SERVICE_ID", unset)
+    fastly_key = os.environ.get("FASTLY_TOKEN", unset)
+
+    if service_id == unset or fastly_key == unset:
+        logging.info("CDN secrets not set, skipping Surrogate-Key purge")
+        return
 
     logging.info("Purging Surrogate-Key '%s' from CDN", surrogate_key)
     http.request(
