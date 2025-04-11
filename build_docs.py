@@ -196,23 +196,30 @@ class Version:
         See https://github.com/python/cpython/issues/91483
 
         """
-        if self.name == "3.5":
-            return ["jieba", "blurb", "sphinx==1.8.4", "jinja2<3.1", "docutils<=0.17.1"]
-        if self.name in {"3.7", "3.6", "2.7"}:
-            return ["jieba", "blurb", "sphinx==2.3.1", "jinja2<3.1", "docutils<=0.17.1"]
-
-        return [
+        dependencies = [
             "jieba",  # To improve zh search.
             "PyStemmer~=2.2.0",  # To improve performance for word stemming.
             "-rrequirements.txt",
         ]
+        if self.as_tuple() >= (3, 11):
+            return dependencies
+        if self.as_tuple() >= (3, 8):
+            # Restore the imghdr module for Python 3.8-3.10.
+            return dependencies + ["standard-imghdr"]
+
+        # Requirements/constraints for Python 3.7 and older, pre-requirements.txt
+        reqs = ["jieba", "blurb", "jinja2<3.1", "docutils<=0.17.1", "standard-imghdr"]
+        if self.name in {"3.7", "3.6", "2.7"}:
+            return reqs + ["sphinx==2.3.1"]
+        if self.name == "3.5":
+            return reqs + ["sphinx==1.8.4"]
 
     @property
     def changefreq(self):
         """Estimate this version change frequency, for the sitemap."""
         return {"EOL": "never", "security-fixes": "yearly"}.get(self.status, "daily")
 
-    def as_tuple(self):
+    def as_tuple(self) -> tuple[int, ...]:
         """This version name as tuple, for easy comparisons."""
         return version_to_tuple(self.name)
 
@@ -407,7 +414,7 @@ class Repository:
         self.clone() or self.fetch()
 
 
-def version_to_tuple(version):
+def version_to_tuple(version) -> tuple[int, ...]:
     """Transform a version string to a tuple, for easy comparisons."""
     return tuple(int(part) for part in version.split("."))
 
