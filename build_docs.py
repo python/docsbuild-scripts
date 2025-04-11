@@ -22,23 +22,23 @@ Modified by Julien Palard to build translations.
 
 from __future__ import annotations
 
-from argparse import ArgumentParser, Namespace
-from collections.abc import Iterable, Sequence
-from contextlib import suppress, contextmanager
-from dataclasses import dataclass
 import filecmp
 import json
 import logging
 import logging.handlers
-from functools import total_ordering
-from os import getenv, readlink
 import re
 import shlex
 import shutil
 import subprocess
 import sys
+from argparse import ArgumentParser, Namespace
 from bisect import bisect_left as bisect
+from collections.abc import Iterable, Sequence
+from contextlib import contextmanager, suppress
+from dataclasses import dataclass
 from datetime import datetime as dt, timezone
+from functools import total_ordering
+from os import getenv, readlink
 from pathlib import Path
 from string import Template
 from time import perf_counter, sleep
