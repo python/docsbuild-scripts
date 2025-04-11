@@ -984,7 +984,7 @@ def parse_args():
         default=Path("/var/log/docsbuild/"),
     )
     parser.add_argument(
-        "--languages",
+        "--languages", "--language",
         nargs="*",
         help="Language translation, as a PEP 545 language tag like"
         " 'fr' or 'pt-br'. "
