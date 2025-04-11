@@ -610,14 +610,12 @@ class DocBuilder:
         sphinxopts = list(self.language.sphinxopts)
         if self.language.tag != "en":
             locale_dirs = self.build_root / self.version.name / "locale"
-            sphinxopts.extend(
-                (
-                    f"-D locale_dirs={locale_dirs}",
-                    f"-D language={self.language.iso639_tag}",
-                    "-D gettext_compact=0",
-                    "-D translation_progress_classes=1",
-                )
-            )
+            sphinxopts.extend((
+                f"-D locale_dirs={locale_dirs}",
+                f"-D language={self.language.iso639_tag}",
+                "-D gettext_compact=0",
+                "-D translation_progress_classes=1",
+            ))
         if self.language.tag == "ja":
             # Since luatex doesn't support \ufffd, replace \ufffd with '?'.
             # https://gist.github.com/zr-tex8r/e0931df922f38fbb67634f05dfdaf66b
@@ -669,20 +667,18 @@ class DocBuilder:
                 self.version,
                 self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html",
             )
-        run_with_logging(
-            [
-                "make",
-                "-C",
-                self.checkout / "Doc",
-                "PYTHON=" + str(python),
-                "SPHINXBUILD=" + str(sphinxbuild),
-                "BLURB=" + str(blurb),
-                "VENVDIR=" + str(self.venv),
-                "SPHINXOPTS=" + " ".join(sphinxopts),
-                "SPHINXERRORHANDLING=",
-                maketarget,
-            ]
-        )
+        run_with_logging([
+            "make",
+            "-C",
+            self.checkout / "Doc",
+            "PYTHON=" + str(python),
+            "SPHINXBUILD=" + str(sphinxbuild),
+            "BLURB=" + str(blurb),
+            "VENVDIR=" + str(self.venv),
+            "SPHINXOPTS=" + " ".join(sphinxopts),
+            "SPHINXERRORHANDLING=",
+            maketarget,
+        ])
         run(["mkdir", "-p", self.log_directory])
         run(["chgrp", "-R", self.group, self.log_directory])
         if self.includes_html:
@@ -745,69 +741,57 @@ class DocBuilder:
             # Copy built HTML files to webroot (default /srv/docs.python.org)
             changed = changed_files(self.checkout / "Doc" / "build" / "html", target)
             logging.info("Copying HTML files to %s", target)
-            run(
-                [
-                    "chown",
-                    "-R",
-                    ":" + self.group,
-                    self.checkout / "Doc" / "build" / "html/",
-                ]
-            )
+            run([
+                "chown",
+                "-R",
+                ":" + self.group,
+                self.checkout / "Doc" / "build" / "html/",
+            ])
             run(["chmod", "-R", "o+r", self.checkout / "Doc" / "build" / "html"])
-            run(
-                [
-                    "find",
-                    self.checkout / "Doc" / "build" / "html",
-                    "-type",
-                    "d",
-                    "-exec",
-                    "chmod",
-                    "o+x",
-                    "{}",
-                    ";",
-                ]
-            )
-            run(
-                [
-                    "rsync",
-                    "-a",
-                    "--delete-delay",
-                    "--filter",
-                    "P archives/",
-                    str(self.checkout / "Doc" / "build" / "html") + "/",
-                    target,
-                ]
-            )
+            run([
+                "find",
+                self.checkout / "Doc" / "build" / "html",
+                "-type",
+                "d",
+                "-exec",
+                "chmod",
+                "o+x",
+                "{}",
+                ";",
+            ])
+            run([
+                "rsync",
+                "-a",
+                "--delete-delay",
+                "--filter",
+                "P archives/",
+                str(self.checkout / "Doc" / "build" / "html") + "/",
+                target,
+            ])
 
         if not self.quick:
             # Copy archive files to /archives/
             logging.debug("Copying dist files.")
-            run(
-                [
-                    "chown",
-                    "-R",
-                    ":" + self.group,
-                    self.checkout / "Doc" / "dist",
-                ]
-            )
-            run(
-                [
-                    "chmod",
-                    "-R",
-                    "o+r",
-                    self.checkout / "Doc" / "dist",
-                ]
-            )
+            run([
+                "chown",
+                "-R",
+                ":" + self.group,
+                self.checkout / "Doc" / "dist",
+            ])
+            run([
+                "chmod",
+                "-R",
+                "o+r",
+                self.checkout / "Doc" / "dist",
+            ])
             run(["mkdir", "-m", "o+rx", "-p", target / "archives"])
             run(["chown", ":" + self.group, target / "archives"])
-            run(
-                [
-                    "cp",
-                    "-a",
-                    *(self.checkout / "Doc" / "dist").glob("*"),
-                    target / "archives",
-                ]
-            )
+            run([
+                "cp",
+                "-a",
+                *(self.checkout / "Doc" / "dist").glob("*"),
+                target / "archives",
+            ])
             changed.append("archives/")
             for file in (target / "archives").iterdir():
                 changed.append("archives/" + file.name)
@@ -986,7 +970,8 @@ def parse_args():
         default=Path("/var/log/docsbuild/"),
     )
     parser.add_argument(
-        "--languages", "--language",
+        "--languages",
+        "--language",
         nargs="*",
         help="Language translation, as a PEP 545 language tag like"
         " 'fr' or 'pt-br'. "
