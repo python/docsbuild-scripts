@@ -96,9 +96,7 @@ class Versions:
         """
         if branches:
             branches = frozenset(branches)
-            return [
-                v for v in self if {v.name, v.branch_or_tag} & branches
-            ]
+            return [v for v in self if {v.name, v.branch_or_tag} & branches]
         return [v for v in self if v.status not in {"EOL", "security-fixes"}]
 
     @property
