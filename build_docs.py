@@ -566,7 +566,7 @@ class DocBuilder:
         """Does the build we are running include HTML output?"""
         return self.select_output != "no-html"
 
-    def run(self, http: urllib3.PoolManager) -> bool | None:
+    def run(self, http: urllib3.PoolManager, force_build: bool) -> bool | None:
         """Build and publish a Python doc, for a language, and a version."""
         start_time = perf_counter()
         start_timestamp = dt.datetime.now(tz=dt.UTC).replace(microsecond=0)
@@ -578,7 +578,7 @@ class DocBuilder:
             self.cpython_repo.switch(self.version.branch_or_tag)
             if self.language.tag != "en":
                 self.clone_translation()
-            if trigger_reason := self.should_rebuild():
+            if trigger_reason := self.should_rebuild(force_build):
                 self.build_venv()
                 self.build()
                 self.copy_build_to_webroot(http)
@@ -834,7 +834,7 @@ class DocBuilder:
             "Publishing done (%s).", format_seconds(perf_counter() - start_time)
         )
 
-    def should_rebuild(self):
+    def should_rebuild(self, force: bool):
         state = self.load_state()
         if not state:
             logging.info("Should rebuild: no previous state found.")
@@ -862,6 +862,9 @@ class DocBuilder:
                     cpython_sha,
                 )
                 return "Doc/ has changed"
+        if force:
+            logging.info("Should rebuild: forced.")
+            return "forced"
         logging.info("Nothing changed, no rebuild needed.")
         return False
 
@@ -984,6 +987,12 @@ def parse_args():
         type=Path,
         help="Path where generated files will be copied.",
         default=Path("/srv/docs.python.org"),
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Always build the chosen languages and versions, "
+        "regardless of existing state.",
     )
     parser.add_argument(
         "--skip-cache-invalidation",
@@ -1128,7 +1137,7 @@ def build_docs(args: argparse.Namespace) -> bool:
         builder = DocBuilder(
             version, versions, language, languages, cpython_repo, **vars(args)
         )
-        built_successfully = builder.run(http)
+        built_successfully = builder.run(http, force_build=args.force)
         if built_successfully:
             build_succeeded.add((version.name, language.tag))
         elif built_successfully is not None:
