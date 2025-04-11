@@ -536,7 +536,7 @@ class DocBuilder:
         """Does the build we are running include HTML output?"""
         return self.select_output != "no-html"
 
-    def run(self, http: urllib3.PoolManager) -> bool:
+    def run(self, http: urllib3.PoolManager) -> bool | None:
         """Build and publish a Python doc, for a language, and a version."""
         start_time = perf_counter()
         start_timestamp = dt.datetime.now(tz=dt.UTC).replace(microsecond=0)
@@ -544,7 +544,7 @@ class DocBuilder:
         try:
             if self.language.html_only and not self.includes_html:
                 logging.info("Skipping non-HTML build (language is HTML-only).")
-                return True
+                return None  # skipped
             self.cpython_repo.switch(self.version.branch_or_tag)
             if self.language.tag != "en":
                 self.clone_translation()
@@ -557,6 +557,8 @@ class DocBuilder:
                     build_duration=perf_counter() - start_time,
                     trigger=trigger_reason,
                 )
+            else:
+                return None  # skipped
         except Exception as err:
             logging.exception("Badly handled exception, human, please help.")
             if sentry_sdk:
@@ -1073,7 +1075,7 @@ def build_docs(args: argparse.Namespace) -> bool:
         built_successfully = builder.run(http)
         if built_successfully:
             build_succeeded.add((version.name, language.tag))
-        else:
+        elif built_successfully is not None:
             build_failed.add((version.name, language.tag))
 
     logging.root.handlers[0].setFormatter(
