@@ -806,7 +806,7 @@ class DocBuilder:
             "Publishing done (%s).", format_seconds(perf_counter() - start_time)
         )
 
-    def should_rebuild(self, force_build: bool):
+    def should_rebuild(self, force: bool):
         state = self.load_state()
         if not state:
             logging.info("Should rebuild: no previous state found.")
@@ -834,7 +834,7 @@ class DocBuilder:
                     cpython_sha,
                 )
                 return "Doc/ has changed"
-        if force_build:
+        if force:
             logging.info("Should rebuild: forced.")
             return "forced"
         logging.info("Nothing changed, no rebuild needed.")
@@ -960,7 +960,7 @@ def parse_args():
         default=Path("/srv/docs.python.org"),
     )
     parser.add_argument(
-        "--force-build",
+        "--force",
         action="store_true",
         help="Always build the chosen languages and versions, "
         "regardless of existing state.",
@@ -1083,7 +1083,7 @@ def build_docs(args: argparse.Namespace) -> bool:
         builder = DocBuilder(
             version, versions, language, languages, cpython_repo, **vars(args)
         )
-        built_successfully = builder.run(http, force_build=args.force_build)
+        built_successfully = builder.run(http, force_build=args.force)
         if built_successfully:
             build_succeeded.add((version.name, language.tag))
         elif built_successfully is not None:
