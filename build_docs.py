@@ -6,20 +6,24 @@ Without any arguments builds docs for all active versions and
 languages.
 
 Environment variables for:
-  - SENTRY_DSN (Error reporting)
-  - FASTLY_SERVICE_ID/FASTLY_TOKEN (CDN purges)
-  - PYTHON_DOCS_ENABLE_ANALYTICS (enable plausible for online docs)
+
+- `SENTRY_DSN` (Error reporting)
+- `FASTLY_SERVICE_ID` / `FASTLY_TOKEN` (CDN purges)
+- `PYTHON_DOCS_ENABLE_ANALYTICS` (Enable Plausible for online docs)
+
 are read from the site configuration path for your platform
 (/etc/xdg/docsbuild-scripts on linux) if available,
 and can be overriden by writing a file to the user config dir
 for your platform ($HOME/.config/docsbuild-scripts on linux).
 The contents of the file is parsed as toml:
 
+```toml
 [env]
 SENTRY_DSN = "https://0a0a0a0a0a0a0a0a0a0a0a@sentry.io/69420"
 FASTLY_SERVICE_ID = "deadbeefdeadbeefdead"
 FASTLY_TOKEN = "secureme!"
 PYTHON_DOCS_ENABLE_ANALYTICS = "1"
+```
 
 Languages are stored in `config.toml` while versions are discovered
 from the devguide.
