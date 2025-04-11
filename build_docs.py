@@ -53,8 +53,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Literal, TypeAlias
 
-    Versions: TypeAlias = Sequence['Version']
-    Languages: TypeAlias = Sequence['Language']
+    Versions: TypeAlias = Sequence["Version"]
+    Languages: TypeAlias = Sequence["Language"]
 
 try:
     from os import EX_OK, EX_SOFTWARE as EX_FAILURE
@@ -394,9 +394,7 @@ def edit(file: Path):
     temporary.rename(file)
 
 
-def setup_switchers(
-    versions: Versions, languages: Languages, html_root: Path
-):
+def setup_switchers(versions: Versions, languages: Languages, html_root: Path):
     """Setup cross-links between CPython versions:
     - Cross-link various languages in a language switcher
     - Cross-link various versions in a version switcher
@@ -1109,9 +1107,7 @@ def parse_languages_from_config() -> Languages:
     ]
 
 
-def build_sitemap(
-    versions: Versions, languages: Languages, www_root: Path, group
-):
+def build_sitemap(versions: Versions, languages: Languages, www_root: Path, group):
     """Build a sitemap with all live versions and translations."""
     if not www_root.exists():
         logging.info("Skipping sitemap generation (www root does not even exist).")
@@ -1164,7 +1160,7 @@ def major_symlinks(
     versions: Versions,
     languages: Languages,
     skip_cache_invalidation: bool,
-    http: urllib3.PoolManager
+    http: urllib3.PoolManager,
 ) -> None:
     """Maintains the /2/ and /3/ symlinks for each language.
 
