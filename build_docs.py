@@ -421,55 +421,6 @@ def setup_switchers(
                 ofile.write(line)
 
 
-def copy_robots_txt(
-    www_root: Path,
-    group,
-    skip_cache_invalidation,
-    http: urllib3.PoolManager,
-) -> None:
-    """Copy robots.txt to www_root."""
-    if not www_root.exists():
-        logging.info("Skipping copying robots.txt (www root does not even exist).")
-        return
-    logging.info("Copying robots.txt...")
-    template_path = HERE / "templates" / "robots.txt"
-    robots_path = www_root / "robots.txt"
-    shutil.copyfile(template_path, robots_path)
-    robots_path.chmod(0o775)
-    run(["chgrp", group, robots_path])
-    if not skip_cache_invalidation:
-        purge(http, "robots.txt")
-
-
-def build_sitemap(
-    versions: Iterable[Version], languages: Iterable[Language], www_root: Path, group
-):
-    """Build a sitemap with all live versions and translations."""
-    if not www_root.exists():
-        logging.info("Skipping sitemap generation (www root does not even exist).")
-        return
-    logging.info("Starting sitemap generation...")
-    template_path = HERE / "templates" / "sitemap.xml"
-    template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
-    rendered_template = template.render(languages=languages, versions=versions)
-    sitemap_path = www_root / "sitemap.xml"
-    sitemap_path.write_text(rendered_template + "\n", encoding="UTF-8")
-    sitemap_path.chmod(0o664)
-    run(["chgrp", group, sitemap_path])
-
-
-def build_404(www_root: Path, group):
-    """Build a nice 404 error page to display in case PDFs are not built yet."""
-    if not www_root.exists():
-        logging.info("Skipping 404 page generation (www root does not even exist).")
-        return
-    logging.info("Copying 404 page...")
-    not_found_file = www_root / "404.html"
-    shutil.copyfile(HERE / "templates" / "404.html", not_found_file)
-    not_found_file.chmod(0o664)
-    run(["chgrp", group, not_found_file])
-
-
 def head(text, lines=10):
     """Return the first *lines* lines from the given text."""
     return "\n".join(text.split("\n")[:lines])
@@ -895,188 +846,6 @@ class DocBuilder:
         logging.info("Saved new rebuild state for %s: %s", key, table.as_string())
 
 
-def symlink(
-    www_root: Path,
-    language: Language,
-    directory: str,
-    name: str,
-    group: str,
-    skip_cache_invalidation: bool,
-    http: urllib3.PoolManager,
-) -> None:
-    """Used by major_symlinks and dev_symlink to maintain symlinks."""
-    if language.tag == "en":  # English is rooted on /, no /en/
-        path = www_root
-    else:
-        path = www_root / language.tag
-    link = path / name
-    directory_path = path / directory
-    if not directory_path.exists():
-        return  # No touching link, dest doc not built yet.
-
-    if not link.exists() or readlink(link) != directory:
-        # Link does not exist or points to the wrong target.
-        link.unlink(missing_ok=True)
-        link.symlink_to(directory)
-        run(["chown", "-h", f":{group}", str(link)])
-    if not skip_cache_invalidation:
-        surrogate_key = f"{language.tag}/{name}"
-        purge_surrogate_key(http, surrogate_key)
-
-
-def major_symlinks(
-    www_root: Path,
-    group: str,
-    versions: Iterable[Version],
-    languages: Iterable[Language],
-    skip_cache_invalidation: bool,
-    http: urllib3.PoolManager,
-) -> None:
-    """Maintains the /2/ and /3/ symlinks for each language.
-
-    Like:
-    - /3/ → /3.9/
-    - /fr/3/ → /fr/3.9/
-    - /es/3/ → /es/3.9/
-    """
-    logging.info("Creating major version symlinks...")
-    current_stable = Version.current_stable(versions).name
-    for language in languages:
-        symlink(
-            www_root,
-            language,
-            current_stable,
-            "3",
-            group,
-            skip_cache_invalidation,
-            http,
-        )
-        symlink(www_root, language, "2.7", "2", group, skip_cache_invalidation, http)
-
-
-def dev_symlink(
-    www_root: Path,
-    group,
-    versions,
-    languages,
-    skip_cache_invalidation: bool,
-    http: urllib3.PoolManager,
-) -> None:
-    """Maintains the /dev/ symlinks for each language.
-
-    Like:
-    - /dev/ → /3.11/
-    - /fr/dev/ → /fr/3.11/
-    - /es/dev/ → /es/3.11/
-    """
-    logging.info("Creating development version symlinks...")
-    current_dev = Version.current_dev(versions).name
-    for language in languages:
-        symlink(
-            www_root,
-            language,
-            current_dev,
-            "dev",
-            group,
-            skip_cache_invalidation,
-            http,
-        )
-
-
-def purge(http: urllib3.PoolManager, *paths: Path | str) -> None:
-    """Remove one or many paths from docs.python.org's CDN.
-
-    To be used when a file changes, so the CDN fetches the new one.
-    """
-    base = "https://docs.python.org/"
-    for path in paths:
-        url = urljoin(base, str(path))
-        logging.debug("Purging %s from CDN", url)
-        http.request("PURGE", url, timeout=30)
-
-
-def purge_surrogate_key(http: urllib3.PoolManager, surrogate_key: str) -> None:
-    """Remove paths from docs.python.org's CDN.
-
-    All paths matching the given 'Surrogate-Key' will be removed.
-    This is set by the Nginx server for every language-version pair.
-    To be used when a directory changes, so the CDN fetches the new one.
-
-    https://www.fastly.com/documentation/reference/api/purging/#purge-tag
-    """
-    service_id = getenv("FASTLY_SERVICE_ID", "__UNSET__")
-    fastly_key = getenv("FASTLY_TOKEN", "__UNSET__")
-
-    logging.info("Purging Surrogate-Key '%s' from CDN", surrogate_key)
-    http.request(
-        "POST",
-        f"https://api.fastly.com/service/{service_id}/purge/{surrogate_key}",
-        headers={"Fastly-Key": fastly_key},
-        timeout=30,
-    )
-
-
-def proofread_canonicals(
-    www_root: Path, skip_cache_invalidation: bool, http: urllib3.PoolManager
-) -> None:
-    """In www_root we check that all canonical links point to existing contents.
-
-    It can happen that a canonical is "broken":
-
-    - /3.11/whatsnew/3.11.html typically would link to
-    /3/whatsnew/3.11.html, which may not exist yet.
-    """
-    logging.info("Checking canonical links...")
-    canonical_re = re.compile(
-        """<link rel="canonical" href="https://docs.python.org/([^"]*)" />"""
-    )
-    for file in www_root.glob("**/*.html"):
-        html = file.read_text(encoding="UTF-8", errors="surrogateescape")
-        canonical = canonical_re.search(html)
-        if not canonical:
-            continue
-        target = canonical.group(1)
-        if not (www_root / target).exists():
-            logging.info("Removing broken canonical from %s to %s", file, target)
-            html = html.replace(canonical.group(0), "")
-            file.write_text(html, encoding="UTF-8", errors="surrogateescape")
-            if not skip_cache_invalidation:
-                purge(http, str(file).replace("/srv/docs.python.org/", ""))
-
-
-def parse_versions_from_devguide(http: urllib3.PoolManager) -> list[Version]:
-    releases = http.request(
-        "GET",
-        "https://raw.githubusercontent.com/"
-        "python/devguide/main/include/release-cycle.json",
-        timeout=30,
-    ).json()
-    versions = [Version.from_json(name, release) for name, release in releases.items()]
-    versions.sort(key=Version.as_tuple)
-    return versions
-
-
-def parse_languages_from_config() -> list[Language]:
-    """Read config.toml to discover languages to build."""
-    config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
-    defaults = config["defaults"]
-    default_translated_name = defaults.get("translated_name", "")
-    default_in_prod = defaults.get("in_prod", True)
-    default_sphinxopts = defaults.get("sphinxopts", [])
-    default_html_only = defaults.get("html_only", False)
-    return [
-        Language(
-            iso639_tag=iso639_tag,
-            name=section["name"],
-            translated_name=section.get("translated_name", default_translated_name),
-            in_prod=section.get("in_prod", default_in_prod),
-            sphinxopts=section.get("sphinxopts", default_sphinxopts),
-            html_only=section.get("html_only", default_html_only),
-        )
-        for iso639_tag, section in config["languages"].items()
-    ]
-
-
 def format_seconds(seconds: float) -> str:
     hours, remainder = divmod(seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
@@ -1089,79 +858,6 @@ def format_seconds(seconds: float) -> str:
             return f"{m}m {s}s"
         case h, m, s:
             return f"{h}h {m}m {s}s"
-
-
-def build_docs(args) -> bool:
-    """Build all docs (each language and each version)."""
-    logging.info("Full build start.")
-    start_time = perf_counter()
-    http = urllib3.PoolManager()
-    versions = parse_versions_from_devguide(http)
-    languages = parse_languages_from_config()
-    # Reverse languages but not versions, because we take version-language
-    # pairs from the end of the list, effectively reversing it.
-    # This runs languages in config.toml order and versions newest first.
-    todo = [
-        (version, language)
-        for version in Version.filter(versions, args.branch)
-        for language in reversed(Language.filter(languages, args.languages))
-    ]
-    del args.branch
-    del args.languages
-    all_built_successfully = True
-    cpython_repo = Repository(
-        "https://github.com/python/cpython.git",
-        args.build_root / _checkout_name(args.select_output),
-    )
-    while todo:
-        version, language = todo.pop()
-        logging.root.handlers[0].setFormatter(
-            logging.Formatter(
-                f"%(asctime)s %(levelname)s {language.tag}/{version.name}: %(message)s"
-            )
-        )
-        if sentry_sdk:
-            scope = sentry_sdk.get_isolation_scope()
-            scope.set_tag("version", version.name)
-            scope.set_tag("language", language.tag)
-            cpython_repo.update()
-        builder = DocBuilder(
-            version, versions, language, languages, cpython_repo, **vars(args)
-        )
-        all_built_successfully &= builder.run(http)
-    logging.root.handlers[0].setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
-    )
-
-    build_sitemap(versions, languages, args.www_root, args.group)
-    build_404(args.www_root, args.group)
-    copy_robots_txt(
-        args.www_root,
-        args.group,
-        args.skip_cache_invalidation,
-        http,
-    )
-    major_symlinks(
-        args.www_root,
-        args.group,
-        versions,
-        languages,
-        args.skip_cache_invalidation,
-        http,
-    )
-    dev_symlink(
-        args.www_root,
-        args.group,
-        versions,
-        languages,
-        args.skip_cache_invalidation,
-        http,
-    )
-    proofread_canonicals(args.www_root, args.skip_cache_invalidation, http)
-
-    logging.info("Full build done (%s).", format_seconds(perf_counter() - start_time))
-
-    return all_built_successfully
 
 
 def _checkout_name(select_output: str | None) -> str:
@@ -1299,6 +995,310 @@ def build_docs_with_lock(args: Namespace, lockfile_name: str) -> int:
         return EX_OK if build_docs(args) else EX_FAILURE
     finally:
         lock.close()
+
+
+def build_docs(args) -> bool:
+    """Build all docs (each language and each version)."""
+    logging.info("Full build start.")
+    start_time = perf_counter()
+    http = urllib3.PoolManager()
+    versions = parse_versions_from_devguide(http)
+    languages = parse_languages_from_config()
+    # Reverse languages but not versions, because we take version-language
+    # pairs from the end of the list, effectively reversing it.
+    # This runs languages in config.toml order and versions newest first.
+    todo = [
+        (version, language)
+        for version in Version.filter(versions, args.branch)
+        for language in reversed(Language.filter(languages, args.languages))
+    ]
+    del args.branch
+    del args.languages
+    all_built_successfully = True
+    cpython_repo = Repository(
+        "https://github.com/python/cpython.git",
+        args.build_root / _checkout_name(args.select_output),
+    )
+    while todo:
+        version, language = todo.pop()
+        logging.root.handlers[0].setFormatter(
+            logging.Formatter(
+                f"%(asctime)s %(levelname)s {language.tag}/{version.name}: %(message)s"
+            )
+        )
+        if sentry_sdk:
+            scope = sentry_sdk.get_isolation_scope()
+            scope.set_tag("version", version.name)
+            scope.set_tag("language", language.tag)
+            cpython_repo.update()
+        builder = DocBuilder(
+            version, versions, language, languages, cpython_repo, **vars(args)
+        )
+        all_built_successfully &= builder.run(http)
+    logging.root.handlers[0].setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
+    )
+
+    build_sitemap(versions, languages, args.www_root, args.group)
+    build_404(args.www_root, args.group)
+    copy_robots_txt(
+        args.www_root,
+        args.group,
+        args.skip_cache_invalidation,
+        http,
+    )
+    major_symlinks(
+        args.www_root,
+        args.group,
+        versions,
+        languages,
+        args.skip_cache_invalidation,
+        http,
+    )
+    dev_symlink(
+        args.www_root,
+        args.group,
+        versions,
+        languages,
+        args.skip_cache_invalidation,
+        http,
+    )
+    proofread_canonicals(args.www_root, args.skip_cache_invalidation, http)
+
+    logging.info("Full build done (%s).", format_seconds(perf_counter() - start_time))
+
+    return all_built_successfully
+
+
+def parse_versions_from_devguide(http: urllib3.PoolManager) -> list[Version]:
+    releases = http.request(
+        "GET",
+        "https://raw.githubusercontent.com/"
+        "python/devguide/main/include/release-cycle.json",
+        timeout=30,
+    ).json()
+    versions = [Version.from_json(name, release) for name, release in releases.items()]
+    versions.sort(key=Version.as_tuple)
+    return versions
+
+
+def parse_languages_from_config() -> list[Language]:
+    """Read config.toml to discover languages to build."""
+    config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
+    defaults = config["defaults"]
+    default_translated_name = defaults.get("translated_name", "")
+    default_in_prod = defaults.get("in_prod", True)
+    default_sphinxopts = defaults.get("sphinxopts", [])
+    default_html_only = defaults.get("html_only", False)
+    return [
+        Language(
+            iso639_tag=iso639_tag,
+            name=section["name"],
+            translated_name=section.get("translated_name", default_translated_name),
+            in_prod=section.get("in_prod", default_in_prod),
+            sphinxopts=section.get("sphinxopts", default_sphinxopts),
+            html_only=section.get("html_only", default_html_only),
+        )
+        for iso639_tag, section in config["languages"].items()
+    ]
+
+
+def build_sitemap(
+    versions: Iterable[Version], languages: Iterable[Language], www_root: Path, group
+):
+    """Build a sitemap with all live versions and translations."""
+    if not www_root.exists():
+        logging.info("Skipping sitemap generation (www root does not even exist).")
+        return
+    logging.info("Starting sitemap generation...")
+    template_path = HERE / "templates" / "sitemap.xml"
+    template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
+    rendered_template = template.render(languages=languages, versions=versions)
+    sitemap_path = www_root / "sitemap.xml"
+    sitemap_path.write_text(rendered_template + "\n", encoding="UTF-8")
+    sitemap_path.chmod(0o664)
+    run(["chgrp", group, sitemap_path])
+
+
+def build_404(www_root: Path, group):
+    """Build a nice 404 error page to display in case PDFs are not built yet."""
+    if not www_root.exists():
+        logging.info("Skipping 404 page generation (www root does not even exist).")
+        return
+    logging.info("Copying 404 page...")
+    not_found_file = www_root / "404.html"
+    shutil.copyfile(HERE / "templates" / "404.html", not_found_file)
+    not_found_file.chmod(0o664)
+    run(["chgrp", group, not_found_file])
+
+
+def copy_robots_txt(
+    www_root: Path,
+    group,
+    skip_cache_invalidation,
+    http: urllib3.PoolManager,
+) -> None:
+    """Copy robots.txt to www_root."""
+    if not www_root.exists():
+        logging.info("Skipping copying robots.txt (www root does not even exist).")
+        return
+    logging.info("Copying robots.txt...")
+    template_path = HERE / "templates" / "robots.txt"
+    robots_path = www_root / "robots.txt"
+    shutil.copyfile(template_path, robots_path)
+    robots_path.chmod(0o775)
+    run(["chgrp", group, robots_path])
+    if not skip_cache_invalidation:
+        purge(http, "robots.txt")
+
+
+def major_symlinks(
+    www_root: Path,
+    group: str,
+    versions: Iterable[Version],
+    languages: Iterable[Language],
+    skip_cache_invalidation: bool,
+    http: urllib3.PoolManager,
+) -> None:
+    """Maintains the /2/ and /3/ symlinks for each language.
+
+    Like:
+    - /3/ → /3.9/
+    - /fr/3/ → /fr/3.9/
+    - /es/3/ → /es/3.9/
+    """
+    logging.info("Creating major version symlinks...")
+    current_stable = Version.current_stable(versions).name
+    for language in languages:
+        symlink(
+            www_root,
+            language,
+            current_stable,
+            "3",
+            group,
+            skip_cache_invalidation,
+            http,
+        )
+        symlink(www_root, language, "2.7", "2", group, skip_cache_invalidation, http)
+
+
+def dev_symlink(
+    www_root: Path,
+    group,
+    versions,
+    languages,
+    skip_cache_invalidation: bool,
+    http: urllib3.PoolManager,
+) -> None:
+    """Maintains the /dev/ symlinks for each language.
+
+    Like:
+    - /dev/ → /3.11/
+    - /fr/dev/ → /fr/3.11/
+    - /es/dev/ → /es/3.11/
+    """
+    logging.info("Creating development version symlinks...")
+    current_dev = Version.current_dev(versions).name
+    for language in languages:
+        symlink(
+            www_root,
+            language,
+            current_dev,
+            "dev",
+            group,
+            skip_cache_invalidation,
+            http,
+        )
+
+
+def symlink(
+    www_root: Path,
+    language: Language,
+    directory: str,
+    name: str,
+    group: str,
+    skip_cache_invalidation: bool,
+    http: urllib3.PoolManager,
+) -> None:
+    """Used by major_symlinks and dev_symlink to maintain symlinks."""
+    if language.tag == "en":  # English is rooted on /, no /en/
+        path = www_root
+    else:
+        path = www_root / language.tag
+    link = path / name
+    directory_path = path / directory
+    if not directory_path.exists():
+        return  # No touching link, dest doc not built yet.
+
+    if not link.exists() or readlink(link) != directory:
+        # Link does not exist or points to the wrong target.
+        link.unlink(missing_ok=True)
+        link.symlink_to(directory)
+        run(["chown", "-h", f":{group}", str(link)])
+    if not skip_cache_invalidation:
+        surrogate_key = f"{language.tag}/{name}"
+        purge_surrogate_key(http, surrogate_key)
+
+
+def proofread_canonicals(
+    www_root: Path, skip_cache_invalidation: bool, http: urllib3.PoolManager
+) -> None:
+    """In www_root we check that all canonical links point to existing contents.
+
+    It can happen that a canonical is "broken":
+
+    - /3.11/whatsnew/3.11.html typically would link to
+    /3/whatsnew/3.11.html, which may not exist yet.
+    """
+    logging.info("Checking canonical links...")
+    canonical_re = re.compile(
+        """<link rel="canonical" href="https://docs.python.org/([^"]*)" />"""
+    )
+    for file in www_root.glob("**/*.html"):
+        html = file.read_text(encoding="UTF-8", errors="surrogateescape")
+        canonical = canonical_re.search(html)
+        if not canonical:
+            continue
+        target = canonical.group(1)
+        if not (www_root / target).exists():
+            logging.info("Removing broken canonical from %s to %s", file, target)
+            html = html.replace(canonical.group(0), "")
+            file.write_text(html, encoding="UTF-8", errors="surrogateescape")
+            if not skip_cache_invalidation:
+                purge(http, str(file).replace("/srv/docs.python.org/", ""))
+
+
+def purge(http: urllib3.PoolManager, *paths: Path | str) -> None:
+    """Remove one or many paths from docs.python.org's CDN.
+
+    To be used when a file changes, so the CDN fetches the new one.
+    """
+    base = "https://docs.python.org/"
+    for path in paths:
+        url = urljoin(base, str(path))
+        logging.debug("Purging %s from CDN", url)
+        http.request("PURGE", url, timeout=30)
+
+
+def purge_surrogate_key(http: urllib3.PoolManager, surrogate_key: str) -> None:
+    """Remove paths from docs.python.org's CDN.
+
+    All paths matching the given 'Surrogate-Key' will be removed.
+    This is set by the Nginx server for every language-version pair.
+    To be used when a directory changes, so the CDN fetches the new one.
+
+    https://www.fastly.com/documentation/reference/api/purging/#purge-tag
+    """
+    service_id = getenv("FASTLY_SERVICE_ID", "__UNSET__")
+    fastly_key = getenv("FASTLY_TOKEN", "__UNSET__")
+
+    logging.info("Purging Surrogate-Key '%s' from CDN", surrogate_key)
+    http.request(
+        "POST",
+        f"https://api.fastly.com/service/{service_id}/purge/{surrogate_key}",
+        headers={"Fastly-Key": fastly_key},
+        timeout=30,
+    )
 
 
 if __name__ == "__main__":
