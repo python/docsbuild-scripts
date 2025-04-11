@@ -1,4 +1,5 @@
 jinja2
+platformdirs
 sentry-sdk>=2
 tomlkit>=0.13
 urllib3>=2
