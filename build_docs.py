@@ -5,6 +5,22 @@
 Without any arguments builds docs for all active versions and
 languages.
 
+Environment variables for:
+  - SENTRY_DSN (Error reporting)
+  - FASTLY_SERVICE_ID/FASTLY_TOKEN (CDN purges)
+  - PYTHON_DOCS_ENABLE_ANALYTICS (enable plausible for online docs)
+are read from the site configuration path for your platform
+(/etc/xdg/docsbuild-scripts on linux) if available,
+and can be overriden by writing a file to the user config dir
+for your platform ($HOME/.config/docsbuild-scripts on linux).
+The contents of the file is parsed as toml:
+
+[env]
+SENTRY_DSN = "https://0a0a0a0a0a0a0a0a0a0a0a@sentry.io/69420"
+FASTLY_SERVICE_ID = "deadbeefdeadbeefdead"
+FASTLY_TOKEN = "secureme!"
+PYTHON_DOCS_ENABLE_ANALYTICS = "1"
+
 Languages are stored in `config.toml` while versions are discovered
 from the devguide.
 
@@ -48,6 +64,31 @@ import jinja2
 import tomlkit
 import urllib3
 import zc.lockfile
+from platformdirs import user_config_path, site_config_path
+
+ENV_CONF_FILE = None
+_user_config_path = user_config_path("docsbuild-scripts")
+_site_config_path = site_config_path("docsbuild-scripts")
+if _user_config_path.is_file():
+    ENV_CONF_FILE = _user_config_path
+elif _site_config_path.is_file():
+    ENV_CONF_FILE = _site_config_path
+
+if ENV_CONF_FILE:
+    print(f"Reading environment variables from {ENV_CONF_FILE}")
+    if ENV_CONF_FILE == _site_config_path:
+        print(f"You can override settings in {_user_config_path}")
+    elif _site_config_path.is_file():
+        print(f"Overriding {_site_config_path}")
+    with open(ENV_CONF_FILE, "r") as f:
+        for key, value in tomlkit.parse(f.read()).get("env", {}).items():
+            print(f"Setting {key} in environment")
+            os.environ[key] = value
+else:
+    print(
+        "No environment variables configured. "
+        f"Configure in {_site_config_path} or {_user_config_path}"
+    )
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
