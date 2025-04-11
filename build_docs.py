@@ -1265,25 +1265,26 @@ def proofread_canonicals(
         purge(http, *paths_to_purge)
 
 
+# Python 3.12 onwards doesn't use self-closing tags for <link rel="canonical">
+_canonical_re = re.compile(
+    b"""<link rel="canonical" href="https://docs.python.org/([^"]*)"(?: /)?>"""
+)
+
+
 def _check_canonical_rel(file: Path, www_root: Path):
     # Check for a canonical relation link in the HTML.
     # If one exists, ensure that the target exists
     # or otherwise remove the canonical link element.
-    prefix = b'<link rel="canonical" href="https://docs.python.org/'
-    suffix = b'" />'
-    pfx_len = len(prefix)
-    sfx_len = len(suffix)
     html = file.read_bytes()
-    try:
-        start = html.index(prefix)
-        end = html.index(suffix, start + pfx_len)
-    except ValueError:
+    canonical = _canonical_re.search(html)
+    if canonical is None:
         return None
-    target = html[start + pfx_len : end].decode(errors="surrogateescape")
+    target = canonical[1].decode(encoding="UTF-8", errors="surrogateescape")
     if (www_root / target).exists():
         return None
     logging.info("Removing broken canonical from %s to %s", file, target)
-    file.write_bytes(html[:start] + html[end + sfx_len :])
+    start, end = canonical.span()
+    file.write_bytes(html[:start] + html[end:])
     return file
 
 
