@@ -86,7 +86,7 @@ class Versions:
         )
         return cls(versions)
 
-    def filter(self, branches: list[str] = None) -> Sequence[Version]:
+    def filter(self, branches: Sequence[str] = ()) -> Sequence[Version]:
         """Filter the given versions.
 
         If *branches* is given, only *versions* matching *branches* are returned.
@@ -95,8 +95,9 @@ class Versions:
         security-fixes branches).
         """
         if branches:
+            branches = frozenset(branches)
             return [
-                v for v in self if v.name in branches or v.branch_or_tag in branches
+                v for v in self if {v.name, v.branch_or_tag} & branches
             ]
         return [v for v in self if v.status not in {"EOL", "security-fixes"}]
 
@@ -996,9 +997,6 @@ def parse_args():
         version_info()
         sys.exit(0)
     del args.version
-    if args.branch and not args.branches:
-        args.branches = args.branch
-        del args.branch
     if args.log_directory:
         args.log_directory = args.log_directory.resolve()
     if args.build_root:
