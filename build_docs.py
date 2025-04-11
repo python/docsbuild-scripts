@@ -50,7 +50,7 @@ import zc.lockfile
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Iterator, Sequence, Set
     from typing import Literal
 
 try:
@@ -1063,7 +1063,9 @@ def build_docs(args: argparse.Namespace) -> bool:
     ]
     del args.branch
     del args.languages
-    all_built_successfully = True
+
+    build_succeeded = set()
+    build_failed = set()
     cpython_repo = Repository(
         "https://github.com/python/cpython.git",
         args.build_root / _checkout_name(args.select_output),
@@ -1083,7 +1085,12 @@ def build_docs(args: argparse.Namespace) -> bool:
         builder = DocBuilder(
             version, versions, language, languages, cpython_repo, **vars(args)
         )
-        all_built_successfully &= builder.run(http)
+        built_successfully = builder.run(http)
+        if built_successfully:
+            build_succeeded.add((version.name, language.tag))
+        else:
+            build_failed.add((version.name, language.tag))
+
     logging.root.handlers[0].setFormatter(
         logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
     )
@@ -1096,19 +1103,12 @@ def build_docs(args: argparse.Namespace) -> bool:
         args.skip_cache_invalidation,
         http,
     )
-    major_symlinks(
+    make_symlinks(
         args.www_root,
         args.group,
         versions,
         languages,
-        args.skip_cache_invalidation,
-        http,
-    )
-    dev_symlink(
-        args.www_root,
-        args.group,
-        versions,
-        languages,
+        build_succeeded,
         args.skip_cache_invalidation,
         http,
     )
@@ -1116,7 +1116,7 @@ def build_docs(args: argparse.Namespace) -> bool:
 
     logging.info("Full build done (%s).", format_seconds(perf_counter() - start_time))
 
-    return all_built_successfully
+    return len(build_failed) == 0
 
 
 def parse_versions_from_devguide(http: urllib3.PoolManager) -> Versions:
@@ -1182,68 +1182,46 @@ def copy_robots_txt(
         purge(http, "robots.txt")
 
 
-def major_symlinks(
+def make_symlinks(
     www_root: Path,
     group: str,
     versions: Versions,
     languages: Languages,
+    successful_builds: Set[tuple[str, str]],
     skip_cache_invalidation: bool,
     http: urllib3.PoolManager,
 ) -> None:
-    """Maintains the /2/ and /3/ symlinks for each language.
+    """Maintains the /2/, /3/, and /dev/ symlinks for each language.
 
     Like:
-    - /3/ → /3.9/
-    - /fr/3/ → /fr/3.9/
-    - /es/3/ → /es/3.9/
+    - /2/ → /2.7/
+    - /3/ → /3.12/
+    - /dev/ → /3.14/
+    - /fr/3/ → /fr/3.12/
+    - /es/dev/ → /es/3.14/
     """
-    logging.info("Creating major version symlinks...")
-    current_stable = versions.current_stable.name
-    for language in languages:
-        symlink(
-            www_root,
-            language,
-            current_stable,
-            "3",
-            group,
-            skip_cache_invalidation,
-            http,
-        )
-        symlink(www_root, language, "2.7", "2", group, skip_cache_invalidation, http)
-
-
-def dev_symlink(
-    www_root: Path,
-    group,
-    versions,
-    languages,
-    skip_cache_invalidation: bool,
-    http: urllib3.PoolManager,
-) -> None:
-    """Maintains the /dev/ symlinks for each language.
-
-    Like:
-    - /dev/ → /3.11/
-    - /fr/dev/ → /fr/3.11/
-    - /es/dev/ → /es/3.11/
-    """
-    logging.info("Creating development version symlinks...")
-    current_dev = versions.current_dev.name
-    for language in languages:
-        symlink(
-            www_root,
-            language,
-            current_dev,
-            "dev",
-            group,
-            skip_cache_invalidation,
-            http,
-        )
+    logging.info("Creating major and development version symlinks...")
+    for symlink_name, symlink_target in (
+        ("3", versions.current_stable.name),
+        ("2", "2.7"),
+        ("dev", versions.current_dev.name),
+    ):
+        for language in languages:
+            if (symlink_target, language.tag) in successful_builds:
+                symlink(
+                    www_root,
+                    language.tag,
+                    symlink_target,
+                    symlink_name,
+                    group,
+                    skip_cache_invalidation,
+                    http,
+                )
 
 
 def symlink(
     www_root: Path,
-    language: Language,
+    language_tag: str,
     directory: str,
     name: str,
     group: str,
@@ -1251,10 +1229,13 @@ def symlink(
     http: urllib3.PoolManager,
 ) -> None:
     """Used by major_symlinks and dev_symlink to maintain symlinks."""
-    if language.tag == "en":  # English is rooted on /, no /en/
+    msg = "Creating symlink from %s to %s"
+    if language_tag == "en":  # English is rooted on /, no /en/
         path = www_root
+        logging.debug(msg, name, directory)
     else:
-        path = www_root / language.tag
+        path = www_root / language_tag
+        logging.debug(msg, f"{language_tag}/{name}", f"{language_tag}/{directory}")
     link = path / name
     directory_path = path / directory
     if not directory_path.exists():
@@ -1266,7 +1247,7 @@ def symlink(
         link.symlink_to(directory)
         run(["chown", "-h", f":{group}", str(link)])
     if not skip_cache_invalidation:
-        surrogate_key = f"{language.tag}/{name}"
+        surrogate_key = f"{language_tag}/{name}"
         purge_surrogate_key(http, surrogate_key)
 
 
