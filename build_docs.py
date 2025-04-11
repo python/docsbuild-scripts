@@ -50,10 +50,9 @@ import zc.lockfile
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
     from typing import Literal, TypeAlias
 
-    Versions: TypeAlias = Sequence["Version"]
     Languages: TypeAlias = Sequence["Language"]
 
 try:
@@ -69,6 +68,57 @@ else:
     sentry_sdk.init()
 
 HERE = Path(__file__).resolve().parent
+
+
+@dataclass(frozen=True, slots=True)
+class Versions:
+    _seq: Sequence[Version]
+
+    def __iter__(self) -> Iterator[Version]:
+        return iter(self._seq)
+
+    def __reversed__(self) -> Iterator[Version]:
+        return reversed(self._seq)
+
+    @classmethod
+    def from_json(cls, data) -> Versions:
+        versions = sorted(
+            [Version.from_json(name, release) for name, release in data.items()],
+            key=Version.as_tuple,
+        )
+        return cls(versions)
+
+    def filter(self, branch: str = "") -> Sequence[Version]:
+        """Filter the given versions.
+
+        If *branch* is given, only *versions* matching *branch* are returned.
+
+        Else all live versions are returned (this means no EOL and no
+        security-fixes branches).
+        """
+        if branch:
+            return [v for v in self if branch in (v.name, v.branch_or_tag)]
+        return [v for v in self if v.status not in {"EOL", "security-fixes"}]
+
+    @property
+    def current_stable(self) -> Version:
+        """Find the current stable CPython version."""
+        return max((v for v in self if v.status == "stable"), key=Version.as_tuple)
+
+    @property
+    def current_dev(self) -> Version:
+        """Find the current CPython version in development."""
+        return max(self, key=Version.as_tuple)
+
+    def setup_indexsidebar(self, current: Version, dest_path: Path) -> None:
+        """Build indexsidebar.html for Sphinx."""
+        template_path = HERE / "templates" / "indexsidebar.html"
+        template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
+        rendered_template = template.render(
+            current_version=current,
+            versions=list(reversed(self)),
+        )
+        dest_path.write_text(rendered_template, encoding="UTF-8")
 
 
 @total_ordering
@@ -100,6 +150,17 @@ class Version:
 
     def __repr__(self):
         return f"Version({self.name})"
+
+    def __eq__(self, other):
+        return self.name == other.name
+
+    def __gt__(self, other):
+        return self.as_tuple() > other.as_tuple()
+
+    @classmethod
+    def from_json(cls, name, values):
+        """Loads a version from devguide's json representation."""
+        return cls(name, status=values["status"], branch_or_tag=values["branch"])
 
     @property
     def requirements(self):
@@ -144,29 +205,6 @@ class Version:
         """The title of this version's doc, for the sidebar."""
         return f"Python {self.name} ({self.status})"
 
-    @staticmethod
-    def filter(versions, branch=None):
-        """Filter the given versions.
-
-        If *branch* is given, only *versions* matching *branch* are returned.
-
-        Else all live versions are returned (this means no EOL and no
-        security-fixes branches).
-        """
-        if branch:
-            return [v for v in versions if branch in (v.name, v.branch_or_tag)]
-        return [v for v in versions if v.status not in ("EOL", "security-fixes")]
-
-    @staticmethod
-    def current_stable(versions):
-        """Find the current stable CPython version."""
-        return max((v for v in versions if v.status == "stable"), key=Version.as_tuple)
-
-    @staticmethod
-    def current_dev(versions):
-        """Find the current CPython version in development."""
-        return max(versions, key=Version.as_tuple)
-
     @property
     def picker_label(self):
         """Forge the label of a version picker."""
@@ -175,27 +213,6 @@ class Version:
         if self.status == "pre-release":
             return f"pre ({self.name})"
         return self.name
-
-    def setup_indexsidebar(self, versions: Versions, dest_path: Path):
-        """Build indexsidebar.html for Sphinx."""
-        template_path = HERE / "templates" / "indexsidebar.html"
-        template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
-        rendered_template = template.render(
-            current_version=self,
-            versions=versions[::-1],
-        )
-        dest_path.write_text(rendered_template, encoding="UTF-8")
-
-    @classmethod
-    def from_json(cls, name, values):
-        """Loads a version from devguide's json representation."""
-        return cls(name, status=values["status"], branch_or_tag=values["branch"])
-
-    def __eq__(self, other):
-        return self.name == other.name
-
-    def __gt__(self, other):
-        return self.as_tuple() > other.as_tuple()
 
 
 @dataclass(order=True, frozen=True, kw_only=True)
@@ -619,8 +636,8 @@ class DocBuilder:
                 + ([""] if sys.platform == "darwin" else [])
                 + ["s/ *-A switchers=1//", self.checkout / "Doc" / "Makefile"]
             )
-            self.version.setup_indexsidebar(
-                self.versions,
+            self.versions.setup_indexsidebar(
+                self.version,
                 self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html",
             )
         run_with_logging(
@@ -1013,7 +1030,7 @@ def build_docs(args) -> bool:
     # This runs languages in config.toml order and versions newest first.
     todo = [
         (version, language)
-        for version in Version.filter(versions, args.branch)
+        for version in versions.filter(args.branch)
         for language in reversed(Language.filter(languages, args.languages))
     ]
     del args.branch
@@ -1081,9 +1098,7 @@ def parse_versions_from_devguide(http: urllib3.PoolManager) -> Versions:
         "python/devguide/main/include/release-cycle.json",
         timeout=30,
     ).json()
-    versions = [Version.from_json(name, release) for name, release in releases.items()]
-    versions.sort(key=Version.as_tuple)
-    return versions
+    return Versions.from_json(releases)
 
 
 def parse_languages_from_config() -> Languages:
@@ -1170,7 +1185,7 @@ def major_symlinks(
     - /es/3/ → /es/3.9/
     """
     logging.info("Creating major version symlinks...")
-    current_stable = Version.current_stable(versions).name
+    current_stable = versions.current_stable.name
     for language in languages:
         symlink(
             www_root,
@@ -1200,7 +1215,7 @@ def dev_symlink(
     - /es/dev/ → /es/3.11/
     """
     logging.info("Creating development version symlinks...")
-    current_dev = Version.current_dev(versions).name
+    current_dev = versions.current_dev.name
     for language in languages:
         symlink(
             www_root,
