@@ -70,30 +70,6 @@ import urllib3
 import zc.lockfile
 from platformdirs import user_config_path, site_config_path
 
-ENV_CONF_FILE = None
-_user_config_path = user_config_path("docsbuild-scripts")
-_site_config_path = site_config_path("docsbuild-scripts")
-if _user_config_path.is_file():
-    ENV_CONF_FILE = _user_config_path
-elif _site_config_path.is_file():
-    ENV_CONF_FILE = _site_config_path
-
-if ENV_CONF_FILE:
-    print(f"Reading environment variables from {ENV_CONF_FILE}")
-    if ENV_CONF_FILE == _site_config_path:
-        print(f"You can override settings in {_user_config_path}")
-    elif _site_config_path.is_file():
-        print(f"Overriding {_site_config_path}")
-    with open(ENV_CONF_FILE, "r") as f:
-        for key, value in tomlkit.parse(f.read()).get("env", {}).items():
-            print(f"Setting {key} in environment")
-            os.environ[key] = value
-else:
-    print(
-        "No environment variables configured. "
-        f"Configure in {_site_config_path} or {_user_config_path}"
-    )
-
 TYPE_CHECKING = False
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence, Set
@@ -951,6 +927,30 @@ def main():
     """Script entry point."""
     args = parse_args()
     setup_logging(args.log_directory, args.select_output)
+
+    ENV_CONF_FILE = None
+    _user_config_path = user_config_path("docsbuild-scripts")
+    _site_config_path = site_config_path("docsbuild-scripts")
+    if _user_config_path.is_file():
+        ENV_CONF_FILE = _user_config_path
+    elif _site_config_path.is_file():
+        ENV_CONF_FILE = _site_config_path
+
+    if ENV_CONF_FILE:
+        logging.info(f"Reading environment variables from {ENV_CONF_FILE}")
+        if ENV_CONF_FILE == _site_config_path:
+            logging.info(f"You can override settings in {_user_config_path}")
+        elif _site_config_path.is_file():
+            logging.info(f"Overriding {_site_config_path}")
+        with open(ENV_CONF_FILE, "r") as f:
+            for key, value in tomlkit.parse(f.read()).get("env", {}).items():
+                logging.debug(f"Setting {key} in environment")
+                os.environ[key] = value
+    else:
+        logging.info(
+            "No environment variables configured. "
+            f"Configure in {_site_config_path} or {_user_config_path}"
+        )
 
     if args.select_output is None:
         build_docs_with_lock(args, "build_docs.lock")
