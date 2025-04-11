@@ -687,27 +687,12 @@ class DocBuilder:
                 f"-D ogp_site_url={site_url}",
             )
 
-            def is_gnu_sed() -> bool:
-                """Check if we are using GNU sed."""
-                try:
-                    subprocess.run(
-                        ["sed", "--version"],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        check=True,
-                    )
-                    return True
-                except subprocess.CalledProcessError:
-                    return False
-                except FileNotFoundError:
-                    return False
+            if self.version.as_tuple() < (3, 8):
+                # Disable CPython switchers, we handle them now:
+                text = (self.checkout / "Doc" / "Makefile").read_text(encoding="utf-8")
+                text = text.replace(" -A switchers=1", "")
+                (self.checkout / "Doc" / "Makefile").write_text(text, encoding="utf-8")
 
-            # Disable CPython switchers, we handle them now:
-            run(
-                ["sed", "-i"]
-                + ([] if is_gnu_sed() else [""])
-                + ["s/ *-A switchers=1//", self.checkout / "Doc" / "Makefile"]
-            )
             self.versions.setup_indexsidebar(
                 self.version,
                 self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html",
