@@ -936,13 +936,6 @@ def parse_args():
         help="Run a quick build (only HTML files).",
     )
     parser.add_argument(
-        "--branch",
-        nargs="*",
-        metavar="3.12",
-        deprecated=True,
-        help="Deprecated; use --branches instead.",
-    )
-    parser.add_argument(
         "-b",
         "--branches",
         nargs="*",
@@ -981,7 +974,6 @@ def parse_args():
     )
     parser.add_argument(
         "--languages",
-        "--language",
         nargs="*",
         help="Language translation, as a PEP 545 language tag like"
         " 'fr' or 'pt-br'. "
