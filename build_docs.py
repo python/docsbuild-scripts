@@ -802,6 +802,7 @@ class DocBuilder:
         if not self.quick:
             # Copy archive files to /archives/
             logging.debug("Copying dist files.")
+            (self.checkout / "Doc" / "dist").mkdir(exist_ok=True)
             run([
                 "chown",
                 "-R",
