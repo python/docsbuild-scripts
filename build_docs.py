@@ -22,22 +22,22 @@ Modified by Julien Palard to build translations.
 
 from __future__ import annotations
 
+import argparse
+import dataclasses
+import datetime as dt
 import filecmp
 import json
 import logging
 import logging.handlers
+import os
 import re
 import shlex
 import shutil
 import subprocess
 import sys
-from argparse import ArgumentParser, Namespace
 from bisect import bisect_left as bisect
 from contextlib import contextmanager, suppress
-from dataclasses import dataclass
-from datetime import datetime as dt, timezone
 from functools import total_ordering
-from os import getenv, readlink
 from pathlib import Path
 from string import Template
 from time import perf_counter, sleep
@@ -68,7 +68,7 @@ else:
 HERE = Path(__file__).resolve().parent
 
 
-@dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class Versions:
     _seq: Sequence[Version]
 
@@ -213,7 +213,7 @@ class Version:
         return self.name
 
 
-@dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class Languages:
     _seq: Sequence[Language]
 
@@ -250,7 +250,7 @@ class Languages:
         return list(self)
 
 
-@dataclass(order=True, frozen=True, kw_only=True)
+@dataclasses.dataclass(order=True, frozen=True, kw_only=True)
 class Language:
     iso639_tag: str
     name: str
@@ -337,7 +337,7 @@ def changed_files(left, right):
     return changed
 
 
-@dataclass
+@dataclasses.dataclass
 class Repository:
     """Git repository abstraction for our specific needs."""
 
@@ -505,7 +505,7 @@ def version_info():
     )
 
 
-@dataclass
+@dataclasses.dataclass
 class DocBuilder:
     """Builder for a CPython version and a language."""
 
@@ -539,7 +539,7 @@ class DocBuilder:
     def run(self, http: urllib3.PoolManager) -> bool:
         """Build and publish a Python doc, for a language, and a version."""
         start_time = perf_counter()
-        start_timestamp = dt.now(tz=timezone.utc).replace(microsecond=0)
+        start_timestamp = dt.datetime.now(tz=dt.UTC).replace(microsecond=0)
         logging.info("Running.")
         try:
             if self.language.html_only and not self.includes_html:
@@ -861,7 +861,7 @@ class DocBuilder:
         except (KeyError, FileNotFoundError):
             return {}
 
-    def save_state(self, build_start: dt, build_duration: float, trigger: str):
+    def save_state(self, build_start: dt.datetime, build_duration: float, trigger: str):
         """Save current CPython sha1 and current translation sha1.
 
         Using this we can deduce if a rebuild is needed or not.
@@ -932,8 +932,9 @@ def main():
 def parse_args():
     """Parse command-line arguments."""
 
-    parser = ArgumentParser(
-        description="Runs a build of the Python docs for various branches."
+    parser = argparse.ArgumentParser(
+        description="Runs a build of the Python docs for various branches.",
+        allow_abbrev=False,
     )
     parser.add_argument(
         "--select-output",
@@ -1032,7 +1033,7 @@ def setup_logging(log_directory: Path, select_output: str | None):
     logging.getLogger().setLevel(logging.DEBUG)
 
 
-def build_docs_with_lock(args: Namespace, lockfile_name: str) -> int:
+def build_docs_with_lock(args: argparse.Namespace, lockfile_name: str) -> int:
     try:
         lock = zc.lockfile.LockFile(HERE / lockfile_name)
     except zc.lockfile.LockError:
@@ -1045,7 +1046,7 @@ def build_docs_with_lock(args: Namespace, lockfile_name: str) -> int:
         lock.close()
 
 
-def build_docs(args) -> bool:
+def build_docs(args: argparse.Namespace) -> bool:
     """Build all docs (each language and each version)."""
     logging.info("Full build start.")
     start_time = perf_counter()
@@ -1259,7 +1260,7 @@ def symlink(
     if not directory_path.exists():
         return  # No touching link, dest doc not built yet.
 
-    if not link.exists() or readlink(link) != directory:
+    if not link.exists() or os.readlink(link) != directory:
         # Link does not exist or points to the wrong target.
         link.unlink(missing_ok=True)
         link.symlink_to(directory)
@@ -1318,8 +1319,8 @@ def purge_surrogate_key(http: urllib3.PoolManager, surrogate_key: str) -> None:
 
     https://www.fastly.com/documentation/reference/api/purging/#purge-tag
     """
-    service_id = getenv("FASTLY_SERVICE_ID", "__UNSET__")
-    fastly_key = getenv("FASTLY_TOKEN", "__UNSET__")
+    service_id = os.environ.get("FASTLY_SERVICE_ID", "__UNSET__")
+    fastly_key = os.environ.get("FASTLY_TOKEN", "__UNSET__")
 
     logging.info("Purging Surrogate-Key '%s' from CDN", surrogate_key)
     http.request(
