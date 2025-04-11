@@ -506,109 +506,6 @@ def version_info():
     )
 
 
-def parse_args():
-    """Parse command-line arguments."""
-
-    parser = ArgumentParser(
-        description="Runs a build of the Python docs for various branches."
-    )
-    parser.add_argument(
-        "--select-output",
-        choices=("no-html", "only-html", "only-html-en"),
-        help="Choose what outputs to build.",
-    )
-    parser.add_argument(
-        "-q",
-        "--quick",
-        action="store_true",
-        help="Run a quick build (only HTML files).",
-    )
-    parser.add_argument(
-        "-b",
-        "--branch",
-        metavar="3.12",
-        help="Version to build (defaults to all maintained branches).",
-    )
-    parser.add_argument(
-        "-r",
-        "--build-root",
-        type=Path,
-        help="Path to a directory containing a checkout per branch.",
-        default=Path("/srv/docsbuild"),
-    )
-    parser.add_argument(
-        "-w",
-        "--www-root",
-        type=Path,
-        help="Path where generated files will be copied.",
-        default=Path("/srv/docs.python.org"),
-    )
-    parser.add_argument(
-        "--skip-cache-invalidation",
-        help="Skip Fastly cache invalidation.",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--group",
-        help="Group files on targets and www-root file should get.",
-        default="docs",
-    )
-    parser.add_argument(
-        "--log-directory",
-        type=Path,
-        help="Directory used to store logs.",
-        default=Path("/var/log/docsbuild/"),
-    )
-    parser.add_argument(
-        "--languages",
-        nargs="*",
-        help="Language translation, as a PEP 545 language tag like"
-        " 'fr' or 'pt-br'. "
-        "Builds all available languages by default.",
-        metavar="fr",
-    )
-    parser.add_argument(
-        "--version",
-        action="store_true",
-        help="Get build_docs and dependencies version info",
-    )
-    parser.add_argument(
-        "--theme",
-        default="python-docs-theme",
-        help="Python package to use for python-docs-theme: Useful to test branches:"
-        " --theme git+https://github.com/obulat/python-docs-theme@master",
-    )
-    args = parser.parse_args()
-    if args.version:
-        version_info()
-        sys.exit(0)
-    del args.version
-    if args.log_directory:
-        args.log_directory = args.log_directory.resolve()
-    if args.build_root:
-        args.build_root = args.build_root.resolve()
-    if args.www_root:
-        args.www_root = args.www_root.resolve()
-    return args
-
-
-def setup_logging(log_directory: Path, select_output: str | None):
-    """Setup logging to stderr if run by a human, or to a file if run from a cron."""
-    log_format = "%(asctime)s %(levelname)s: %(message)s"
-    if sys.stderr.isatty():
-        logging.basicConfig(format=log_format, stream=sys.stderr)
-    else:
-        log_directory.mkdir(parents=True, exist_ok=True)
-        if select_output is None:
-            filename = log_directory / "docsbuild.log"
-        else:
-            filename = log_directory / f"docsbuild-{select_output}.log"
-        handler = logging.handlers.WatchedFileHandler(filename)
-        handler.setFormatter(logging.Formatter(log_format))
-        logging.getLogger().addHandler(handler)
-    logging.getLogger().setLevel(logging.DEBUG)
-
-
 @dataclass
 class DocBuilder:
     """Builder for a CPython version and a language."""
@@ -1286,6 +1183,109 @@ def main():
         build_docs_with_lock(args, "build_docs_html.lock")
     elif args.select_output == "only-html-en":
         build_docs_with_lock(args, "build_docs_html_en.lock")
+
+
+def parse_args():
+    """Parse command-line arguments."""
+
+    parser = ArgumentParser(
+        description="Runs a build of the Python docs for various branches."
+    )
+    parser.add_argument(
+        "--select-output",
+        choices=("no-html", "only-html", "only-html-en"),
+        help="Choose what outputs to build.",
+    )
+    parser.add_argument(
+        "-q",
+        "--quick",
+        action="store_true",
+        help="Run a quick build (only HTML files).",
+    )
+    parser.add_argument(
+        "-b",
+        "--branch",
+        metavar="3.12",
+        help="Version to build (defaults to all maintained branches).",
+    )
+    parser.add_argument(
+        "-r",
+        "--build-root",
+        type=Path,
+        help="Path to a directory containing a checkout per branch.",
+        default=Path("/srv/docsbuild"),
+    )
+    parser.add_argument(
+        "-w",
+        "--www-root",
+        type=Path,
+        help="Path where generated files will be copied.",
+        default=Path("/srv/docs.python.org"),
+    )
+    parser.add_argument(
+        "--skip-cache-invalidation",
+        help="Skip Fastly cache invalidation.",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--group",
+        help="Group files on targets and www-root file should get.",
+        default="docs",
+    )
+    parser.add_argument(
+        "--log-directory",
+        type=Path,
+        help="Directory used to store logs.",
+        default=Path("/var/log/docsbuild/"),
+    )
+    parser.add_argument(
+        "--languages",
+        nargs="*",
+        help="Language translation, as a PEP 545 language tag like"
+        " 'fr' or 'pt-br'. "
+        "Builds all available languages by default.",
+        metavar="fr",
+    )
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        help="Get build_docs and dependencies version info",
+    )
+    parser.add_argument(
+        "--theme",
+        default="python-docs-theme",
+        help="Python package to use for python-docs-theme: Useful to test branches:"
+        " --theme git+https://github.com/obulat/python-docs-theme@master",
+    )
+    args = parser.parse_args()
+    if args.version:
+        version_info()
+        sys.exit(0)
+    del args.version
+    if args.log_directory:
+        args.log_directory = args.log_directory.resolve()
+    if args.build_root:
+        args.build_root = args.build_root.resolve()
+    if args.www_root:
+        args.www_root = args.www_root.resolve()
+    return args
+
+
+def setup_logging(log_directory: Path, select_output: str | None):
+    """Setup logging to stderr if run by a human, or to a file if run from a cron."""
+    log_format = "%(asctime)s %(levelname)s: %(message)s"
+    if sys.stderr.isatty():
+        logging.basicConfig(format=log_format, stream=sys.stderr)
+    else:
+        log_directory.mkdir(parents=True, exist_ok=True)
+        if select_output is None:
+            filename = log_directory / "docsbuild.log"
+        else:
+            filename = log_directory / f"docsbuild-{select_output}.log"
+        handler = logging.handlers.WatchedFileHandler(filename)
+        handler.setFormatter(logging.Formatter(log_format))
+        logging.getLogger().addHandler(handler)
+    logging.getLogger().setLevel(logging.DEBUG)
 
 
 def build_docs_with_lock(args: Namespace, lockfile_name: str) -> int:
