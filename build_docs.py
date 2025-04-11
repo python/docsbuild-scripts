@@ -51,9 +51,7 @@ import zc.lockfile
 TYPE_CHECKING = False
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
-    from typing import Literal, TypeAlias
-
-    Languages: TypeAlias = Sequence["Language"]
+    from typing import Literal
 
 try:
     from os import EX_OK, EX_SOFTWARE as EX_FAILURE
@@ -215,13 +213,50 @@ class Version:
         return self.name
 
 
+@dataclass(frozen=True, slots=True)
+class Languages:
+    _seq: Sequence[Language]
+
+    def __iter__(self) -> Iterator[Language]:
+        return iter(self._seq)
+
+    def __reversed__(self) -> Iterator[Language]:
+        return reversed(self._seq)
+
+    @classmethod
+    def from_json(cls, defaults, languages) -> Languages:
+        default_translated_name = defaults.get("translated_name", "")
+        default_in_prod = defaults.get("in_prod", True)
+        default_sphinxopts = defaults.get("sphinxopts", [])
+        default_html_only = defaults.get("html_only", False)
+        langs = [
+            Language(
+                iso639_tag=iso639_tag,
+                name=section["name"],
+                translated_name=section.get("translated_name", default_translated_name),
+                in_prod=section.get("in_prod", default_in_prod),
+                sphinxopts=section.get("sphinxopts", default_sphinxopts),
+                html_only=section.get("html_only", default_html_only),
+            )
+            for iso639_tag, section in languages.items()
+        ]
+        return cls(langs)
+
+    def filter(self, language_tags: Sequence[str] = ()) -> Sequence[Language]:
+        """Filter a sequence of languages according to --languages."""
+        if language_tags:
+            language_tags = frozenset(language_tags)
+            return [l for l in self if l.tag in language_tags]
+        return list(self)
+
+
 @dataclass(order=True, frozen=True, kw_only=True)
 class Language:
     iso639_tag: str
     name: str
     translated_name: str
     in_prod: bool
-    sphinxopts: tuple
+    sphinxopts: Sequence[str]
     html_only: bool = False
 
     @property
@@ -233,14 +268,6 @@ class Language:
         if self.translated_name:
             return f"{self.name} | {self.translated_name}"
         return self.name
-
-    @staticmethod
-    def filter(languages, language_tags=None):
-        """Filter a sequence of languages according to --languages."""
-        if language_tags:
-            languages_dict = {language.tag: language for language in languages}
-            return [languages_dict[tag] for tag in language_tags]
-        return languages
 
 
 def run(cmd, cwd=None) -> subprocess.CompletedProcess:
@@ -1031,7 +1058,7 @@ def build_docs(args) -> bool:
     todo = [
         (version, language)
         for version in versions.filter(args.branch)
-        for language in reversed(Language.filter(languages, args.languages))
+        for language in reversed(languages.filter(args.languages))
     ]
     del args.branch
     del args.languages
@@ -1104,22 +1131,7 @@ def parse_versions_from_devguide(http: urllib3.PoolManager) -> Versions:
 def parse_languages_from_config() -> Languages:
     """Read config.toml to discover languages to build."""
     config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
-    defaults = config["defaults"]
-    default_translated_name = defaults.get("translated_name", "")
-    default_in_prod = defaults.get("in_prod", True)
-    default_sphinxopts = defaults.get("sphinxopts", [])
-    default_html_only = defaults.get("html_only", False)
-    return [
-        Language(
-            iso639_tag=iso639_tag,
-            name=section["name"],
-            translated_name=section.get("translated_name", default_translated_name),
-            in_prod=section.get("in_prod", default_in_prod),
-            sphinxopts=section.get("sphinxopts", default_sphinxopts),
-            html_only=section.get("html_only", default_html_only),
-        )
-        for iso639_tag, section in config["languages"].items()
-    ]
+    return Languages.from_json(config["defaults"], config["languages"])
 
 
 def build_sitemap(versions: Versions, languages: Languages, www_root: Path, group):
