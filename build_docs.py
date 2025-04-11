@@ -1278,25 +1278,25 @@ def proofread_canonicals(
         purge(http, *paths_to_purge)
 
 
-_canonical_re = re.compile(
-    """<link rel="canonical" href="https://docs.python.org/([^"]*)" />"""
-)
-
-
 def _check_canonical_rel(file: Path, www_root: Path):
     # Check for a canonical relation link in the HTML.
     # If one exists, ensure that the target exists
     # or otherwise remove the canonical link element.
-    html = file.read_text(encoding="UTF-8", errors="surrogateescape")
-    canonical = _canonical_re.search(html)
-    if canonical is None:
+    prefix = b'<link rel="canonical" href="https://docs.python.org/'
+    suffix = b'" />'
+    pfx_len = len(prefix)
+    sfx_len = len(suffix)
+    html = file.read_bytes()
+    try:
+        start = html.index(prefix)
+        end = html.index(suffix, start + pfx_len)
+    except ValueError:
         return None
-    target = canonical.group(1)
+    target = html[start + pfx_len : end].decode(errors="surrogateescape")
     if (www_root / target).exists():
         return None
     logging.info("Removing broken canonical from %s to %s", file, target)
-    html = html.replace(canonical.group(0), "")
-    file.write_text(html, encoding="UTF-8", errors="surrogateescape")
+    file.write_bytes(html[:start] + html[end + sfx_len :])
     return file
 
 
