@@ -33,7 +33,6 @@ import subprocess
 import sys
 from argparse import ArgumentParser, Namespace
 from bisect import bisect_left as bisect
-from collections.abc import Iterable, Sequence
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime as dt, timezone
@@ -42,13 +41,20 @@ from os import getenv, readlink
 from pathlib import Path
 from string import Template
 from time import perf_counter, sleep
-from typing import Literal
 from urllib.parse import urljoin
 
 import jinja2
 import tomlkit
 import urllib3
 import zc.lockfile
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import Literal, TypeAlias
+
+    Versions: TypeAlias = Sequence['Version']
+    Languages: TypeAlias = Sequence['Language']
 
 try:
     from os import EX_OK, EX_SOFTWARE as EX_FAILURE
@@ -170,7 +176,7 @@ class Version:
             return f"pre ({self.name})"
         return self.name
 
-    def setup_indexsidebar(self, versions: Sequence[Version], dest_path: Path):
+    def setup_indexsidebar(self, versions: Versions, dest_path: Path):
         """Build indexsidebar.html for Sphinx."""
         template_path = HERE / "templates" / "indexsidebar.html"
         template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
@@ -389,7 +395,7 @@ def edit(file: Path):
 
 
 def setup_switchers(
-    versions: Sequence[Version], languages: Sequence[Language], html_root: Path
+    versions: Versions, languages: Languages, html_root: Path
 ):
     """Setup cross-links between CPython versions:
     - Cross-link various languages in a language switcher
@@ -462,9 +468,9 @@ class DocBuilder:
     """Builder for a CPython version and a language."""
 
     version: Version
-    versions: Sequence[Version]
+    versions: Versions
     language: Language
-    languages: Sequence[Language]
+    languages: Languages
     cpython_repo: Repository
     build_root: Path
     www_root: Path
@@ -1070,7 +1076,7 @@ def build_docs(args) -> bool:
     return all_built_successfully
 
 
-def parse_versions_from_devguide(http: urllib3.PoolManager) -> list[Version]:
+def parse_versions_from_devguide(http: urllib3.PoolManager) -> Versions:
     releases = http.request(
         "GET",
         "https://raw.githubusercontent.com/"
@@ -1082,7 +1088,7 @@ def parse_versions_from_devguide(http: urllib3.PoolManager) -> list[Version]:
     return versions
 
 
-def parse_languages_from_config() -> list[Language]:
+def parse_languages_from_config() -> Languages:
     """Read config.toml to discover languages to build."""
     config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
     defaults = config["defaults"]
@@ -1104,7 +1110,7 @@ def parse_languages_from_config() -> list[Language]:
 
 
 def build_sitemap(
-    versions: Iterable[Version], languages: Iterable[Language], www_root: Path, group
+    versions: Versions, languages: Languages, www_root: Path, group
 ):
     """Build a sitemap with all live versions and translations."""
     if not www_root.exists():
@@ -1155,10 +1161,10 @@ def copy_robots_txt(
 def major_symlinks(
     www_root: Path,
     group: str,
-    versions: Iterable[Version],
-    languages: Iterable[Language],
+    versions: Versions,
+    languages: Languages,
     skip_cache_invalidation: bool,
-    http: urllib3.PoolManager,
+    http: urllib3.PoolManager
 ) -> None:
     """Maintains the /2/ and /3/ symlinks for each language.
 
