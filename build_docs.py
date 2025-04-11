@@ -23,6 +23,7 @@ Modified by Julien Palard to build translations.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import dataclasses
 import datetime as dt
 import filecmp
@@ -1249,21 +1250,41 @@ def proofread_canonicals(
     /3/whatsnew/3.11.html, which may not exist yet.
     """
     logging.info("Checking canonical links...")
-    canonical_re = re.compile(
-        """<link rel="canonical" href="https://docs.python.org/([^"]*)" />"""
-    )
-    for file in www_root.glob("**/*.html"):
-        html = file.read_text(encoding="UTF-8", errors="surrogateescape")
-        canonical = canonical_re.search(html)
-        if not canonical:
-            continue
-        target = canonical.group(1)
-        if not (www_root / target).exists():
-            logging.info("Removing broken canonical from %s to %s", file, target)
-            html = html.replace(canonical.group(0), "")
-            file.write_text(html, encoding="UTF-8", errors="surrogateescape")
-            if not skip_cache_invalidation:
-                purge(http, str(file).replace("/srv/docs.python.org/", ""))
+    worker_count = (os.cpu_count() or 1) + 2
+    with concurrent.futures.ThreadPoolExecutor(worker_count) as executor:
+        futures = {
+            executor.submit(_check_canonical_rel, file, www_root)
+            for file in www_root.glob("**/*.html")
+        }
+        paths_to_purge = {
+            res.relative_to(www_root)  # strip the leading /srv/docs.python.org
+            for fut in concurrent.futures.as_completed(futures)
+            if (res := fut.result()) is not None
+        }
+    if not skip_cache_invalidation:
+        purge(http, *paths_to_purge)
+
+
+def _check_canonical_rel(file: Path, www_root: Path):
+    # Check for a canonical relation link in the HTML.
+    # If one exists, ensure that the target exists
+    # or otherwise remove the canonical link element.
+    prefix = b'<link rel="canonical" href="https://docs.python.org/'
+    suffix = b'" />'
+    pfx_len = len(prefix)
+    sfx_len = len(suffix)
+    html = file.read_bytes()
+    try:
+        start = html.index(prefix)
+        end = html.index(suffix, start + pfx_len)
+    except ValueError:
+        return None
+    target = html[start + pfx_len : end].decode(errors="surrogateescape")
+    if (www_root / target).exists():
+        return None
+    logging.info("Removing broken canonical from %s to %s", file, target)
+    file.write_bytes(html[:start] + html[end + sfx_len :])
+    return file
 
 
 def purge(http: urllib3.PoolManager, *paths: Path | str) -> None:
