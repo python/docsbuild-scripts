@@ -1,3 +1,8 @@
+# docsbuild-scripts
+
+[![GitHub Actions status](https://github.com/python/docsbuild-scripts/actions/workflows/test.yml/badge.svg)](https://github.com/python/docsbuild-scripts/actions/workflows/test.yml)
+[![Codecov](https://codecov.io/gh/python/docsbuild-scripts/branch/main/graph/badge.svg)](https://codecov.io/gh/python/docsbuild-scripts)
+
 This repository contains scripts for automatically building the Python
 documentation on [docs.python.org](https://docs.python.org).
 
@@ -12,7 +17,7 @@ python3 ./build_docs.py --quick --build-root ./build_root --www-root ./www --log
 ```
 
 If you don't need to build all translations of all branches, add
-`--language en --branch main`.
+`--languages en --branches main`.
 
 
 ## Check current version

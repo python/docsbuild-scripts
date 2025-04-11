@@ -87,16 +87,17 @@ class Versions:
         )
         return cls(versions)
 
-    def filter(self, branch: str = "") -> Sequence[Version]:
+    def filter(self, branches: Sequence[str] = ()) -> Sequence[Version]:
         """Filter the given versions.
 
-        If *branch* is given, only *versions* matching *branch* are returned.
+        If *branches* is given, only *versions* matching *branches* are returned.
 
         Else all live versions are returned (this means no EOL and no
         security-fixes branches).
         """
-        if branch:
-            return [v for v in self if branch in (v.name, v.branch_or_tag)]
+        if branches:
+            branches = frozenset(branches)
+            return [v for v in self if {v.name, v.branch_or_tag} & branches]
         return [v for v in self if v.status not in {"EOL", "security-fixes"}]
 
     @property
@@ -936,9 +937,10 @@ def parse_args():
     )
     parser.add_argument(
         "-b",
-        "--branch",
+        "--branches",
+        nargs="*",
         metavar="3.12",
-        help="Version to build (defaults to all maintained branches).",
+        help="Versions to build (defaults to all maintained branches).",
     )
     parser.add_argument(
         "-r",
@@ -972,7 +974,6 @@ def parse_args():
     )
     parser.add_argument(
         "--languages",
-        "--language",
         nargs="*",
         help="Language translation, as a PEP 545 language tag like"
         " 'fr' or 'pt-br'. "
@@ -1046,10 +1047,10 @@ def build_docs(args: argparse.Namespace) -> bool:
     # This runs languages in config.toml order and versions newest first.
     todo = [
         (version, language)
-        for version in versions.filter(args.branch)
+        for version in versions.filter(args.branches)
         for language in reversed(languages.filter(args.languages))
     ]
-    del args.branch
+    del args.branches
     del args.languages
 
     build_succeeded = set()
