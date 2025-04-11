@@ -936,8 +936,14 @@ def parse_args():
         help="Run a quick build (only HTML files).",
     )
     parser.add_argument(
+        "--branch",
+        nargs="*",
+        metavar="3.12",
+        deprecated=True,
+        help="Deprecated; use --branches instead.",
+    )
+    parser.add_argument(
         "-b",
-        "--branch",  # Deprecated
         "--branches",
         nargs="*",
         metavar="3.12",
@@ -998,6 +1004,9 @@ def parse_args():
         version_info()
         sys.exit(0)
     del args.version
+    if args.branch and not args.branches:
+        args.branches = args.branch
+        del args.branch
     if args.log_directory:
         args.log_directory = args.log_directory.resolve()
     if args.build_root:
@@ -1049,10 +1058,10 @@ def build_docs(args: argparse.Namespace) -> bool:
     # This runs languages in config.toml order and versions newest first.
     todo = [
         (version, language)
-        for version in versions.filter(args.branch)
+        for version in versions.filter(args.branches)
         for language in reversed(languages.filter(args.languages))
     ]
-    del args.branch
+    del args.branches
     del args.languages
 
     build_succeeded = set()
