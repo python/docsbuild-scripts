@@ -1115,6 +1115,8 @@ def build_docs(args: argparse.Namespace) -> bool:
     ]
     del args.branches
     del args.languages
+    force_build = args.force
+    del args.force
 
     build_succeeded = set()
     build_failed = set()
@@ -1137,7 +1139,7 @@ def build_docs(args: argparse.Namespace) -> bool:
         builder = DocBuilder(
             version, versions, language, languages, cpython_repo, **vars(args)
         )
-        built_successfully = builder.run(http, force_build=args.force)
+        built_successfully = builder.run(http, force_build=force_build)
         if built_successfully:
             build_succeeded.add((version.name, language.tag))
         elif built_successfully is not None:
