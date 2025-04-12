@@ -540,7 +540,7 @@ class DocBuilder:
     group: str
     log_directory: Path
     skip_cache_invalidation: bool
-    theme: Path
+    theme: str
 
     @property
     def html_only(self) -> bool:
