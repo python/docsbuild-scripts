@@ -1066,20 +1066,21 @@ def load_environment_variables() -> None:
         env_conf_file = dbs_site_config
     else:
         logging.info(
-            "No environment variables configured. "
-            f"Configure in {dbs_site_config} or {dbs_user_config}."
+            "No environment variables configured. Configure in %s or %s.",
+            dbs_site_config,
+            dbs_user_config,
         )
         return
 
-    logging.info(f"Reading environment variables from {env_conf_file}.")
+    logging.info("Reading environment variables from %s.", env_conf_file)
     if env_conf_file == dbs_site_config:
-        logging.info(f"You can override settings in {dbs_user_config}.")
+        logging.info("You can override settings in %s.", dbs_user_config)
     elif dbs_site_config.is_file():
-        logging.info(f"Overriding {dbs_site_config}.")
+        logging.info("Overriding %s.", dbs_site_config)
 
     env_config = env_conf_file.read_text(encoding="utf-8")
     for key, value in tomlkit.parse(env_config).get("env", {}).items():
-        logging.debug(f"Setting {key} in environment.")
+        logging.debug("Setting %s in environment.", key)
         os.environ[key] = value
 
 
