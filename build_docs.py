@@ -159,7 +159,7 @@ class Version:
     """Represents a CPython version and its documentation build dependencies."""
 
     name: str
-    status: str
+    status: Literal["EOL", "security-fixes", "stable", "pre-release", "in development"]
     branch_or_tag: str
 
     STATUSES = {"EOL", "security-fixes", "stable", "pre-release", "in development"}
