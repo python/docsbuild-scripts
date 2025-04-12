@@ -116,7 +116,7 @@ class Versions:
                     f"expected to be one of {permitted}."
                 )
                 raise ValueError(msg)
-            versions.append(Version(name=name, branch_or_tag=branch, status=status))
+            versions.append(Version(name=name, status=status, branch_or_tag=branch))
 
         return cls(sorted(versions, key=Version.as_tuple))
 
@@ -159,8 +159,8 @@ class Version:
     """Represents a CPython version and its documentation build dependencies."""
 
     name: str
-    branch_or_tag: str | None
     status: str
+    branch_or_tag: str
 
     STATUSES = {"EOL", "security-fixes", "stable", "pre-release", "in development"}
 
