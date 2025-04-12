@@ -39,10 +39,6 @@ jobs:
         --languages en
         --branches 3.14
 
-    - name: Display docsbuild.log
-      if: always()
-      run: cat ./logs/docsbuild.log
-
   unit:
     name: Unit tests
     runs-on: ubuntu-latest
