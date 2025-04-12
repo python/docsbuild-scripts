@@ -1043,7 +1043,7 @@ def parse_args() -> argparse.Namespace:
 def setup_logging(log_directory: Path, select_output: str | None) -> None:
     """Setup logging to stderr if run by a human, or to a file if run from a cron."""
     log_format = "%(asctime)s %(levelname)s: %(message)s"
-    if sys.stderr.isatty():
+    if sys.stderr.isatty() or "CI" in os.environ:
         logging.basicConfig(format=log_format, stream=sys.stderr)
     else:
         log_directory.mkdir(parents=True, exist_ok=True)
