@@ -467,23 +467,13 @@ def edit(file: Path):
     temporary.rename(file)
 
 
-def setup_switchers(versions: Versions, languages: Languages, html_root: Path) -> None:
+def setup_switchers(script_content: bytes, html_root: Path) -> None:
     """Setup cross-links between CPython versions:
     - Cross-link various languages in a language switcher
     - Cross-link various versions in a version switcher
     """
-    language_pairs = sorted((l.tag, l.switcher_label) for l in languages if l.in_prod)  # NoQA: E741
-    version_pairs = [(v.name, v.picker_label) for v in reversed(versions)]
-
-    switchers_template_file = HERE / "templates" / "switchers.js"
     switchers_path = html_root / "_static" / "switchers.js"
-
-    template = Template(switchers_template_file.read_text(encoding="UTF-8"))
-    rendered_template = template.safe_substitute(
-        LANGUAGES=json.dumps(language_pairs),
-        VERSIONS=json.dumps(version_pairs),
-    )
-    switchers_path.write_text(rendered_template, encoding="UTF-8")
+    switchers_path.write_text(script_content, encoding="UTF-8")
 
     for file in html_root.glob("**/*.html"):
         depth = len(file.relative_to(html_root).parts) - 1
@@ -541,8 +531,8 @@ class DocBuilder:
     version: Version
     versions: Versions
     language: Language
-    languages: Languages
     cpython_repo: Repository
+    switchers_content: bytes
     build_root: Path
     www_root: Path
     select_output: Literal["no-html", "only-html", "only-html-en"] | None
@@ -697,7 +687,7 @@ class DocBuilder:
         run(["chgrp", "-R", self.group, self.log_directory])
         if self.includes_html:
             setup_switchers(
-                self.versions, self.languages, self.checkout / "Doc" / "build" / "html"
+                self.switchers_content, self.checkout / "Doc" / "build" / "html"
             )
         logging.info("Build done (%s).", format_seconds(perf_counter() - start_time))
 
@@ -1108,6 +1098,8 @@ def build_docs(args: argparse.Namespace) -> bool:
     force_build = args.force
     del args.force
 
+    switchers_content = render_switchers(versions, languages)
+
     build_succeeded = set()
     build_failed = set()
     cpython_repo = Repository(
@@ -1127,7 +1119,12 @@ def build_docs(args: argparse.Namespace) -> bool:
             scope.set_tag("language", language.tag)
             cpython_repo.update()
         builder = DocBuilder(
-            version, versions, language, languages, cpython_repo, **vars(args)
+            version,
+            versions,
+            language,
+            cpython_repo,
+            switchers_content,
+            **vars(args),
         )
         built_successfully = builder.run(http, force_build=force_build)
         if built_successfully:
@@ -1177,6 +1174,19 @@ def parse_languages_from_config() -> Languages:
     """Read config.toml to discover languages to build."""
     config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
     return Languages.from_json(config["defaults"], config["languages"])
+
+
+def render_switchers(versions: Versions, languages: Languages) -> bytes:
+    language_pairs = sorted((l.tag, l.switcher_label) for l in languages if l.in_prod)  # NoQA: E741
+    version_pairs = [(v.name, v.picker_label) for v in reversed(versions)]
+
+    switchers_template_file = HERE / "templates" / "switchers.js"
+    template = Template(switchers_template_file.read_text(encoding="UTF-8"))
+    rendered_template = template.safe_substitute(
+        LANGUAGES=json.dumps(language_pairs),
+        VERSIONS=json.dumps(version_pairs),
+    )
+    return rendered_template.encode("UTF-8")
 
 
 def build_sitemap(
