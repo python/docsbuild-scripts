@@ -27,3 +27,7 @@ select = [
 ignore = [
     "E501",  # Ignore line length errors (we use auto-formatting)
 ]
+
+[lint.flake8-type-checking]
+exempt-modules = []
+strict = true
