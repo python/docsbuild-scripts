@@ -1101,7 +1101,7 @@ def build_docs(args: argparse.Namespace) -> bool:
     switchers_content = render_switchers(versions, languages)
 
     build_succeeded = set()
-    build_failed = set()
+    any_build_failed = False
     cpython_repo = Repository(
         "https://github.com/python/cpython.git",
         args.build_root / _checkout_name(args.select_output),
@@ -1130,7 +1130,7 @@ def build_docs(args: argparse.Namespace) -> bool:
         if built_successfully:
             build_succeeded.add((version.name, language.tag))
         elif built_successfully is not None:
-            build_failed.add((version.name, language.tag))
+            any_build_failed = True
 
     logging.root.handlers[0].setFormatter(
         logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
@@ -1153,11 +1153,13 @@ def build_docs(args: argparse.Namespace) -> bool:
         args.skip_cache_invalidation,
         http,
     )
-    proofread_canonicals(args.www_root, args.skip_cache_invalidation, http)
+    if build_succeeded:
+        # Only check canonicals if at least one version was built.
+        proofread_canonicals(args.www_root, args.skip_cache_invalidation, http)
 
     logging.info("Full build done (%s).", format_seconds(perf_counter() - start_time))
 
-    return len(build_failed) == 0
+    return any_build_failed
 
 
 def parse_versions_from_devguide(http: urllib3.PoolManager) -> Versions:
