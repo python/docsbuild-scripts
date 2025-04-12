@@ -177,9 +177,6 @@ class Version:
     def __eq__(self, other: Version) -> bool:
         return self.name == other.name
 
-    def __gt__(self, other: Version) -> bool:
-        return self.as_tuple() > other.as_tuple()
-
     @property
     def requirements(self) -> list[str]:
         """Generate the right requirements for this version.
