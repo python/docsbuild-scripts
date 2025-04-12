@@ -4,7 +4,7 @@ from build_docs import format_seconds
 
 
 @pytest.mark.parametrize(
-    "seconds, expected",
+    ("seconds", "expected"),
     [
         (0.4, "0s"),
         (0.5, "0s"),
