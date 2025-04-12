@@ -174,9 +174,6 @@ class Version:
         "prerelease": "pre-release",
     }
 
-    def __repr__(self) -> str:
-        return f"Version({self.name})"
-
     def __eq__(self, other: Version) -> bool:
         return self.name == other.name
 
