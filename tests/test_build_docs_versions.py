@@ -1,4 +1,4 @@
-from build_docs import Versions, Version
+from build_docs import Version, Versions
 
 
 def test_filter_default() -> None:

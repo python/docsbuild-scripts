@@ -65,10 +65,10 @@ from time import perf_counter, sleep
 from urllib.parse import urljoin
 
 import jinja2
+import platformdirs
 import tomlkit
 import urllib3
 import zc.lockfile
-from platformdirs import user_config_path, site_config_path
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
@@ -76,7 +76,8 @@ if TYPE_CHECKING:
     from typing import Literal
 
 try:
-    from os import EX_OK, EX_SOFTWARE as EX_FAILURE
+    from os import EX_OK
+    from os import EX_SOFTWARE as EX_FAILURE
 except ImportError:
     EX_OK, EX_FAILURE = 0, 1
 
@@ -279,7 +280,7 @@ class Languages:
         """Filter a sequence of languages according to --languages."""
         if language_tags:
             language_tags = frozenset(language_tags)
-            return [l for l in self if l.tag in language_tags]
+            return [l for l in self if l.tag in language_tags]  # NoQA: E741
         return list(self)
 
 
@@ -480,7 +481,7 @@ def setup_switchers(versions: Versions, languages: Languages, html_root: Path) -
     - Cross-link various languages in a language switcher
     - Cross-link various versions in a version switcher
     """
-    language_pairs = sorted((l.tag, l.switcher_label) for l in languages if l.in_prod)
+    language_pairs = sorted((l.tag, l.switcher_label) for l in languages if l.in_prod)  # NoQA: E741
     version_pairs = [(v.name, v.picker_label) for v in reversed(versions)]
 
     switchers_template_file = HERE / "templates" / "switchers.js"
@@ -1057,28 +1058,29 @@ def setup_logging(log_directory: Path, select_output: str | None) -> None:
 
 
 def load_environment_variables() -> None:
-    _user_config_path = user_config_path("docsbuild-scripts")
-    _site_config_path = site_config_path("docsbuild-scripts")
-    if _user_config_path.is_file():
-        ENV_CONF_FILE = _user_config_path
-    elif _site_config_path.is_file():
-        ENV_CONF_FILE = _site_config_path
+    dbs_user_config = platformdirs.user_config_path("docsbuild-scripts")
+    dbs_site_config = platformdirs.site_config_path("docsbuild-scripts")
+    if dbs_user_config.is_file():
+        env_conf_file = dbs_user_config
+    elif dbs_site_config.is_file():
+        env_conf_file = dbs_site_config
     else:
         logging.info(
             "No environment variables configured. "
-            f"Configure in {_site_config_path} or {_user_config_path}."
+            f"Configure in {dbs_site_config} or {dbs_user_config}."
         )
         return
 
-    logging.info(f"Reading environment variables from {ENV_CONF_FILE}.")
-    if ENV_CONF_FILE == _site_config_path:
-        logging.info(f"You can override settings in {_user_config_path}.")
-    elif _site_config_path.is_file():
-        logging.info(f"Overriding {_site_config_path}.")
-    with open(ENV_CONF_FILE, "r") as f:
-        for key, value in tomlkit.parse(f.read()).get("env", {}).items():
-            logging.debug(f"Setting {key} in environment.")
-            os.environ[key] = value
+    logging.info(f"Reading environment variables from {env_conf_file}.")
+    if env_conf_file == dbs_site_config:
+        logging.info(f"You can override settings in {dbs_user_config}.")
+    elif dbs_site_config.is_file():
+        logging.info(f"Overriding {dbs_site_config}.")
+
+    env_config = env_conf_file.read_text(encoding="utf-8")
+    for key, value in tomlkit.parse(env_config).get("env", {}).items():
+        logging.debug(f"Setting {key} in environment.")
+        os.environ[key] = value
 
 
 def build_docs_with_lock(args: argparse.Namespace, lockfile_name: str) -> int:
