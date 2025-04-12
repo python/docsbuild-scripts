@@ -784,10 +784,9 @@ class DocBuilder:
                 target,
             ])
 
-        if not self.quick:
+        if not self.quick and (self.checkout / "Doc" / "dist").is_dir():
             # Copy archive files to /archives/
             logging.debug("Copying dist files.")
-            (self.checkout / "Doc" / "dist").mkdir(exist_ok=True)
             run([
                 "chown",
                 "-R",
