@@ -646,21 +646,6 @@ class DocBuilder:
                 "-D gettext_compact=0",
                 "-D translation_progress_classes=1",
             ))
-        if self.language.tag == "ja":
-            # Since luatex doesn't support \ufffd, replace \ufffd with '?'.
-            # https://gist.github.com/zr-tex8r/e0931df922f38fbb67634f05dfdaf66b
-            # Luatex already fixed this issue, so we can remove this once Texlive
-            # is updated.
-            # (https://github.com/TeX-Live/luatex/commit/af5faf1)
-            subprocess.check_output(
-                "sed -i s/\N{REPLACEMENT CHARACTER}/?/g "
-                f"{locale_dirs}/ja/LC_MESSAGES/**/*.po",
-                shell=True,
-            )
-            subprocess.check_output(
-                f"sed -i s/\N{REPLACEMENT CHARACTER}/?/g {self.checkout}/Doc/**/*.rst",
-                shell=True,
-            )
 
         if self.version.status == "EOL":
             sphinxopts.append("-D html_context.outdated=1")
