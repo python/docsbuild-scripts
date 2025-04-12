@@ -58,7 +58,6 @@ import subprocess
 import sys
 from bisect import bisect_left as bisect
 from contextlib import contextmanager, suppress
-from functools import total_ordering
 from pathlib import Path
 from string import Template
 from time import perf_counter, sleep
@@ -103,11 +102,23 @@ class Versions:
 
     @classmethod
     def from_json(cls, data: dict) -> Versions:
-        versions = sorted(
-            [Version.from_json(name, release) for name, release in data.items()],
-            key=Version.as_tuple,
-        )
-        return cls(versions)
+        """Load versions from the devguide's JSON representation."""
+        permitted = ", ".join(sorted(Version.STATUSES | Version.SYNONYMS.keys()))
+
+        versions = []
+        for name, release in data.items():
+            branch = release["branch"]
+            status = release["status"]
+            status = Version.SYNONYMS.get(status, status)
+            if status not in Version.STATUSES:
+                msg = (
+                    f"Saw invalid version status {status!r}, "
+                    f"expected to be one of {permitted}."
+                )
+                raise ValueError(msg)
+            versions.append(Version(name=name, status=status, branch_or_tag=branch))
+
+        return cls(sorted(versions, key=Version.as_tuple))
 
     def filter(self, branches: Sequence[str] = ()) -> Sequence[Version]:
         """Filter the given versions.
@@ -143,9 +154,13 @@ class Versions:
         dest_path.write_text(rendered_template, encoding="UTF-8")
 
 
-@total_ordering
+@dataclasses.dataclass(frozen=True, kw_only=True, slots=True)
 class Version:
     """Represents a CPython version and its documentation build dependencies."""
+
+    name: str
+    status: Literal["EOL", "security-fixes", "stable", "pre-release", "in development"]
+    branch_or_tag: str
 
     STATUSES = {"EOL", "security-fixes", "stable", "pre-release", "in development"}
 
@@ -159,32 +174,8 @@ class Version:
         "prerelease": "pre-release",
     }
 
-    def __init__(
-        self, name: str, *, status: str, branch_or_tag: str | None = None
-    ) -> None:
-        status = self.SYNONYMS.get(status, status)
-        if status not in self.STATUSES:
-            raise ValueError(
-                "Version status expected to be one of: "
-                f"{', '.join(self.STATUSES | set(self.SYNONYMS.keys()))}, got {status!r}."
-            )
-        self.name = name
-        self.branch_or_tag = branch_or_tag
-        self.status = status
-
-    def __repr__(self) -> str:
-        return f"Version({self.name})"
-
     def __eq__(self, other: Version) -> bool:
         return self.name == other.name
-
-    def __gt__(self, other: Version) -> bool:
-        return self.as_tuple() > other.as_tuple()
-
-    @classmethod
-    def from_json(cls, name: str, values: dict) -> Version:
-        """Loads a version from devguide's json representation."""
-        return cls(name, status=values["status"], branch_or_tag=values["branch"])
 
     @property
     def requirements(self) -> list[str]:
