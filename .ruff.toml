@@ -15,6 +15,7 @@ select = [
     "F",     # pyflakes
     "FA",    # flake8-future-annotations
     "FLY",   # flynt
+    "G",     # flake8-logging-format
     "I",     # isort
     "N",     # pep8-naming
     "PERF",  # perflint
