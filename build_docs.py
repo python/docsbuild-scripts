@@ -72,7 +72,7 @@ from platformdirs import user_config_path, site_config_path
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence, Set
+    from collections.abc import Collection, Iterator, Sequence, Set
     from typing import Literal
 
 try:
@@ -101,7 +101,7 @@ class Versions:
         return reversed(self._seq)
 
     @classmethod
-    def from_json(cls, data) -> Versions:
+    def from_json(cls, data: dict) -> Versions:
         versions = sorted(
             [Version.from_json(name, release) for name, release in data.items()],
             key=Version.as_tuple,
@@ -158,7 +158,9 @@ class Version:
         "prerelease": "pre-release",
     }
 
-    def __init__(self, name, *, status, branch_or_tag=None):
+    def __init__(
+        self, name: str, *, status: str, branch_or_tag: str | None = None
+    ) -> None:
         status = self.SYNONYMS.get(status, status)
         if status not in self.STATUSES:
             raise ValueError(
@@ -169,22 +171,22 @@ class Version:
         self.branch_or_tag = branch_or_tag
         self.status = status
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Version({self.name})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: Version) -> bool:
         return self.name == other.name
 
-    def __gt__(self, other):
+    def __gt__(self, other: Version) -> bool:
         return self.as_tuple() > other.as_tuple()
 
     @classmethod
-    def from_json(cls, name, values):
+    def from_json(cls, name: str, values: dict) -> Version:
         """Loads a version from devguide's json representation."""
         return cls(name, status=values["status"], branch_or_tag=values["branch"])
 
     @property
-    def requirements(self):
+    def requirements(self) -> list[str]:
         """Generate the right requirements for this version.
 
         Since CPython 3.8 a Doc/requirements.txt file can be used.
@@ -213,9 +215,10 @@ class Version:
             return reqs + ["sphinx==2.3.1"]
         if self.name == "3.5":
             return reqs + ["sphinx==1.8.4"]
+        raise ValueError("unreachable")
 
     @property
-    def changefreq(self):
+    def changefreq(self) -> str:
         """Estimate this version change frequency, for the sitemap."""
         return {"EOL": "never", "security-fixes": "yearly"}.get(self.status, "daily")
 
@@ -224,17 +227,17 @@ class Version:
         return version_to_tuple(self.name)
 
     @property
-    def url(self):
+    def url(self) -> str:
         """The doc URL of this version in production."""
         return f"https://docs.python.org/{self.name}/"
 
     @property
-    def title(self):
+    def title(self) -> str:
         """The title of this version's doc, for the sidebar."""
         return f"Python {self.name} ({self.status})"
 
     @property
-    def picker_label(self):
+    def picker_label(self) -> str:
         """Forge the label of a version picker."""
         if self.status == "in development":
             return f"dev ({self.name})"
@@ -254,7 +257,7 @@ class Languages:
         return reversed(self._seq)
 
     @classmethod
-    def from_json(cls, defaults, languages) -> Languages:
+    def from_json(cls, defaults: dict, languages: dict) -> Languages:
         default_translated_name = defaults.get("translated_name", "")
         default_in_prod = defaults.get("in_prod", True)
         default_sphinxopts = defaults.get("sphinxopts", [])
@@ -290,17 +293,19 @@ class Language:
     html_only: bool = False
 
     @property
-    def tag(self):
+    def tag(self) -> str:
         return self.iso639_tag.replace("_", "-").lower()
 
     @property
-    def switcher_label(self):
+    def switcher_label(self) -> str:
         if self.translated_name:
             return f"{self.name} | {self.translated_name}"
         return self.name
 
 
-def run(cmd, cwd=None) -> subprocess.CompletedProcess:
+def run(
+    cmd: Sequence[str | Path], cwd: Path | None = None
+) -> subprocess.CompletedProcess:
     """Like subprocess.run, with logging before and after the command execution."""
     cmd = list(map(str, cmd))
     cmdstring = shlex.join(cmd)
@@ -326,7 +331,7 @@ def run(cmd, cwd=None) -> subprocess.CompletedProcess:
     return result
 
 
-def run_with_logging(cmd, cwd=None):
+def run_with_logging(cmd: Sequence[str | Path], cwd: Path | None = None) -> None:
     """Like subprocess.check_call, with logging before the command execution."""
     cmd = list(map(str, cmd))
     logging.debug("Run: '%s'", shlex.join(cmd))
@@ -348,13 +353,13 @@ def run_with_logging(cmd, cwd=None):
         raise subprocess.CalledProcessError(return_code, cmd[0])
 
 
-def changed_files(left, right):
+def changed_files(left: Path, right: Path) -> list[str]:
     """Compute a list of different files between left and right, recursively.
     Resulting paths are relative to left.
     """
     changed = []
 
-    def traverse(dircmp_result):
+    def traverse(dircmp_result: filecmp.dircmp) -> None:
         base = Path(dircmp_result.left).relative_to(left)
         for file in dircmp_result.diff_files:
             changed.append(str(base / file))
@@ -374,11 +379,11 @@ class Repository:
     remote: str
     directory: Path
 
-    def run(self, *args):
+    def run(self, *args: str) -> subprocess.CompletedProcess:
         """Run git command in the clone repository."""
         return run(("git", "-C", self.directory) + args)
 
-    def get_ref(self, pattern):
+    def get_ref(self, pattern: str) -> str:
         """Return the reference of a given tag or branch."""
         try:
             # Maybe it's a branch
@@ -387,7 +392,7 @@ class Repository:
             # Maybe it's a tag
             return self.run("show-ref", "-s", "tags/" + pattern).stdout.strip()
 
-    def fetch(self):
+    def fetch(self) -> subprocess.CompletedProcess:
         """Try (and retry) to run git fetch."""
         try:
             return self.run("fetch")
@@ -396,12 +401,12 @@ class Repository:
             sleep(5)
         return self.run("fetch")
 
-    def switch(self, branch_or_tag):
+    def switch(self, branch_or_tag: str) -> None:
         """Reset and cleans the repository to the given branch or tag."""
         self.run("reset", "--hard", self.get_ref(branch_or_tag), "--")
         self.run("clean", "-dfqx")
 
-    def clone(self):
+    def clone(self) -> bool:
         """Maybe clone the repository, if not already cloned."""
         if (self.directory / ".git").is_dir():
             return False  # Already cloned
@@ -410,21 +415,23 @@ class Repository:
         run(["git", "clone", self.remote, self.directory])
         return True
 
-    def update(self):
+    def update(self) -> None:
         self.clone() or self.fetch()
 
 
-def version_to_tuple(version) -> tuple[int, ...]:
+def version_to_tuple(version: str) -> tuple[int, ...]:
     """Transform a version string to a tuple, for easy comparisons."""
     return tuple(int(part) for part in version.split("."))
 
 
-def tuple_to_version(version_tuple):
+def tuple_to_version(version_tuple: tuple[int, ...]) -> str:
     """Reverse version_to_tuple."""
     return ".".join(str(part) for part in version_tuple)
 
 
-def locate_nearest_version(available_versions, target_version):
+def locate_nearest_version(
+    available_versions: Collection[str], target_version: str
+) -> str:
     """Look for the nearest version of target_version in available_versions.
     Versions are to be given as tuples, like (3, 7) for 3.7.
 
@@ -468,7 +475,7 @@ def edit(file: Path):
     temporary.rename(file)
 
 
-def setup_switchers(versions: Versions, languages: Languages, html_root: Path):
+def setup_switchers(versions: Versions, languages: Languages, html_root: Path) -> None:
     """Setup cross-links between CPython versions:
     - Cross-link various languages in a language switcher
     - Cross-link various versions in a version switcher
@@ -499,12 +506,12 @@ def setup_switchers(versions: Versions, languages: Languages, html_root: Path):
                 ofile.write(line)
 
 
-def head(text, lines=10):
+def head(text: str, lines: int = 10) -> str:
     """Return the first *lines* lines from the given text."""
     return "\n".join(text.split("\n")[:lines])
 
 
-def version_info():
+def version_info() -> None:
     """Handler for --version."""
     try:
         platex_version = head(
@@ -554,7 +561,7 @@ class DocBuilder:
     theme: Path
 
     @property
-    def html_only(self):
+    def html_only(self) -> bool:
         return (
             self.select_output in {"only-html", "only-html-en"}
             or self.quick
@@ -562,7 +569,7 @@ class DocBuilder:
         )
 
     @property
-    def includes_html(self):
+    def includes_html(self) -> bool:
         """Does the build we are running include HTML output?"""
         return self.select_output != "no-html"
 
@@ -601,12 +608,12 @@ class DocBuilder:
         """Path to CPython git clone."""
         return self.build_root / _checkout_name(self.select_output)
 
-    def clone_translation(self):
+    def clone_translation(self) -> None:
         self.translation_repo.update()
         self.translation_repo.switch(self.translation_branch)
 
     @property
-    def translation_repo(self):
+    def translation_repo(self) -> Repository:
         """See PEP 545 for translations repository naming convention."""
 
         locale_repo = f"https://github.com/python/python-docs-{self.language.tag}.git"
@@ -620,7 +627,7 @@ class DocBuilder:
         return Repository(locale_repo, locale_clone_dir)
 
     @property
-    def translation_branch(self):
+    def translation_branch(self) -> str:
         """Some CPython versions may be untranslated, being either too old or
         too new.
 
@@ -633,7 +640,7 @@ class DocBuilder:
         branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
         return locate_nearest_version(branches, self.version.name)
 
-    def build(self):
+    def build(self) -> None:
         """Build this version/language doc."""
         logging.info("Build start.")
         start_time = perf_counter()
@@ -702,7 +709,7 @@ class DocBuilder:
             )
         logging.info("Build done (%s).", format_seconds(perf_counter() - start_time))
 
-    def build_venv(self):
+    def build_venv(self) -> None:
         """Build a venv for the specific Python version.
 
         So we can reuse them from builds to builds, while they contain
@@ -819,7 +826,7 @@ class DocBuilder:
             "Publishing done (%s).", format_seconds(perf_counter() - start_time)
         )
 
-    def should_rebuild(self, force: bool):
+    def should_rebuild(self, force: bool) -> str | Literal[False]:
         state = self.load_state()
         if not state:
             logging.info("Should rebuild: no previous state found.")
@@ -865,7 +872,9 @@ class DocBuilder:
         except (KeyError, FileNotFoundError):
             return {}
 
-    def save_state(self, build_start: dt.datetime, build_duration: float, trigger: str):
+    def save_state(
+        self, build_start: dt.datetime, build_duration: float, trigger: str
+    ) -> None:
         """Save current CPython sha1 and current translation sha1.
 
         Using this we can deduce if a rebuild is needed or not.
@@ -911,6 +920,8 @@ def format_seconds(seconds: float) -> str:
         case h, m, s:
             return f"{h}h {m}m {s}s"
 
+    raise ValueError("unreachable")
+
 
 def _checkout_name(select_output: str | None) -> str:
     if select_output is not None:
@@ -918,7 +929,7 @@ def _checkout_name(select_output: str | None) -> str:
     return "cpython"
 
 
-def main():
+def main() -> None:
     """Script entry point."""
     args = parse_args()
     setup_logging(args.log_directory, args.select_output)
@@ -934,7 +945,7 @@ def main():
         build_docs_with_lock(args, "build_docs_html_en.lock")
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
 
     parser = argparse.ArgumentParser(
@@ -1028,7 +1039,7 @@ def parse_args():
     return args
 
 
-def setup_logging(log_directory: Path, select_output: str | None):
+def setup_logging(log_directory: Path, select_output: str | None) -> None:
     """Setup logging to stderr if run by a human, or to a file if run from a cron."""
     log_format = "%(asctime)s %(levelname)s: %(message)s"
     if sys.stderr.isatty():
@@ -1174,7 +1185,9 @@ def parse_languages_from_config() -> Languages:
     return Languages.from_json(config["defaults"], config["languages"])
 
 
-def build_sitemap(versions: Versions, languages: Languages, www_root: Path, group):
+def build_sitemap(
+    versions: Versions, languages: Languages, www_root: Path, group: str
+) -> None:
     """Build a sitemap with all live versions and translations."""
     if not www_root.exists():
         logging.info("Skipping sitemap generation (www root does not even exist).")
@@ -1189,7 +1202,7 @@ def build_sitemap(versions: Versions, languages: Languages, www_root: Path, grou
     run(["chgrp", group, sitemap_path])
 
 
-def build_404(www_root: Path, group):
+def build_404(www_root: Path, group: str) -> None:
     """Build a nice 404 error page to display in case PDFs are not built yet."""
     if not www_root.exists():
         logging.info("Skipping 404 page generation (www root does not even exist).")
@@ -1203,8 +1216,8 @@ def build_404(www_root: Path, group):
 
 def copy_robots_txt(
     www_root: Path,
-    group,
-    skip_cache_invalidation,
+    group: str,
+    skip_cache_invalidation: bool,
     http: urllib3.PoolManager,
 ) -> None:
     """Copy robots.txt to www_root."""
@@ -1322,7 +1335,7 @@ _canonical_re = re.compile(
 )
 
 
-def _check_canonical_rel(file: Path, www_root: Path):
+def _check_canonical_rel(file: Path, www_root: Path) -> Path | None:
     # Check for a canonical relation link in the HTML.
     # If one exists, ensure that the target exists
     # or otherwise remove the canonical link element.
