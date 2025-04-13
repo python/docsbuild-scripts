@@ -911,20 +911,21 @@ def _checkout_name(select_output: str | None) -> str:
     return "cpython"
 
 
-def main() -> None:
+def main() -> int:
     """Script entry point."""
     args = parse_args()
     setup_logging(args.log_directory, args.select_output)
     load_environment_variables()
 
     if args.select_output is None:
-        build_docs_with_lock(args, "build_docs.lock")
-    elif args.select_output == "no-html":
-        build_docs_with_lock(args, "build_docs_archives.lock")
-    elif args.select_output == "only-html":
-        build_docs_with_lock(args, "build_docs_html.lock")
-    elif args.select_output == "only-html-en":
-        build_docs_with_lock(args, "build_docs_html_en.lock")
+        return build_docs_with_lock(args, "build_docs.lock")
+    if args.select_output == "no-html":
+        return build_docs_with_lock(args, "build_docs_archives.lock")
+    if args.select_output == "only-html":
+        return build_docs_with_lock(args, "build_docs_html.lock")
+    if args.select_output == "only-html-en":
+        return build_docs_with_lock(args, "build_docs_html_en.lock")
+    return EX_FAILURE
 
 
 def parse_args() -> argparse.Namespace:
@@ -1073,12 +1074,12 @@ def build_docs_with_lock(args: argparse.Namespace, lockfile_name: str) -> int:
         return EX_FAILURE
 
     try:
-        return EX_OK if build_docs(args) else EX_FAILURE
+        return build_docs(args)
     finally:
         lock.close()
 
 
-def build_docs(args: argparse.Namespace) -> bool:
+def build_docs(args: argparse.Namespace) -> int:
     """Build all docs (each language and each version)."""
     logging.info("Full build start.")
     start_time = perf_counter()
@@ -1159,7 +1160,7 @@ def build_docs(args: argparse.Namespace) -> bool:
 
     logging.info("Full build done (%s).", format_seconds(perf_counter() - start_time))
 
-    return any_build_failed
+    return EX_FAILURE if any_build_failed else EX_OK
 
 
 def parse_versions_from_devguide(http: urllib3.PoolManager) -> Versions:
@@ -1397,4 +1398,4 @@ def purge_surrogate_key(http: urllib3.PoolManager, surrogate_key: str) -> None:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())
