@@ -925,7 +925,7 @@ def main() -> int:
         return build_docs_with_lock(args, "build_docs_html.lock")
     if args.select_output == "only-html-en":
         return build_docs_with_lock(args, "build_docs_html_en.lock")
-    return 2
+    return EX_FAILURE
 
 
 def parse_args() -> argparse.Namespace:
@@ -1074,12 +1074,12 @@ def build_docs_with_lock(args: argparse.Namespace, lockfile_name: str) -> int:
         return EX_FAILURE
 
     try:
-        return EX_OK if build_docs(args) else EX_FAILURE
+        return build_docs(args)
     finally:
         lock.close()
 
 
-def build_docs(args: argparse.Namespace) -> bool:
+def build_docs(args: argparse.Namespace) -> int:
     """Build all docs (each language and each version)."""
     logging.info("Full build start.")
     start_time = perf_counter()
@@ -1160,7 +1160,7 @@ def build_docs(args: argparse.Namespace) -> bool:
 
     logging.info("Full build done (%s).", format_seconds(perf_counter() - start_time))
 
-    return any_build_failed
+    return EX_FAILURE if any_build_failed else EX_OK
 
 
 def parse_versions_from_devguide(http: urllib3.PoolManager) -> Versions:
