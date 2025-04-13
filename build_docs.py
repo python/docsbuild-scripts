@@ -911,20 +911,21 @@ def _checkout_name(select_output: str | None) -> str:
     return "cpython"
 
 
-def main() -> None:
+def main() -> int:
     """Script entry point."""
     args = parse_args()
     setup_logging(args.log_directory, args.select_output)
     load_environment_variables()
 
     if args.select_output is None:
-        build_docs_with_lock(args, "build_docs.lock")
-    elif args.select_output == "no-html":
-        build_docs_with_lock(args, "build_docs_archives.lock")
-    elif args.select_output == "only-html":
-        build_docs_with_lock(args, "build_docs_html.lock")
-    elif args.select_output == "only-html-en":
-        build_docs_with_lock(args, "build_docs_html_en.lock")
+        return build_docs_with_lock(args, "build_docs.lock")
+    if args.select_output == "no-html":
+        return build_docs_with_lock(args, "build_docs_archives.lock")
+    if args.select_output == "only-html":
+        return build_docs_with_lock(args, "build_docs_html.lock")
+    if args.select_output == "only-html-en":
+        return build_docs_with_lock(args, "build_docs_html_en.lock")
+    return 2
 
 
 def parse_args() -> argparse.Namespace:
@@ -1397,4 +1398,4 @@ def purge_surrogate_key(http: urllib3.PoolManager, surrogate_key: str) -> None:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())
