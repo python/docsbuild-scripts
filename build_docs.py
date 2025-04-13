@@ -521,7 +521,7 @@ class DocBuilder:
     version: Version
     language: Language
     cpython_repo: Repository
-    indexsidebar_content: bytes
+    docs_by_version_content: bytes
     switchers_content: bytes
     build_root: Path
     www_root: Path
@@ -657,8 +657,7 @@ class DocBuilder:
                 text = text.replace(" -A switchers=1", "")
                 (self.checkout / "Doc" / "Makefile").write_text(text, encoding="utf-8")
 
-            indexsidebar_path = self.checkout / "Doc/tools/templates/indexsidebar.html"
-            indexsidebar_path.write_bytes(self.indexsidebar_content)
+            self.setup_indexsidebar()
         run_with_logging([
             "make",
             "-C",
@@ -700,6 +699,18 @@ class DocBuilder:
         )
         run([venv_path / "bin" / "python", "-m", "pip", "freeze", "--all"])
         self.venv = venv_path
+
+    def setup_indexsidebar(self) -> None:
+        """Copy indexsidebar.html for Sphinx."""
+        tmpl_src = HERE / "templates"
+        tmpl_dst = self.checkout / "Doc" / "tools" / "templates"
+        dbv_path = tmpl_dst / "_docs_by_version.html"
+
+        shutil.copy(tmpl_src / "indexsidebar.html", tmpl_dst / "indexsidebar.html")
+        if self.version.status != "EOL":
+            dbv_path.write_bytes(self.docs_by_version_content)
+        else:
+            shutil.copy(tmpl_src / "_docs_by_version.html", dbv_path)
 
     def copy_build_to_webroot(self, http: urllib3.PoolManager) -> None:
         """Copy a given build to the appropriate webroot with appropriate rights."""
@@ -1087,7 +1098,7 @@ def build_docs(args: argparse.Namespace) -> int:
     force_build = args.force
     del args.force
 
-    isb_content, eol_isb_content = render_indexsidebar(versions)
+    docs_by_version_content = render_docs_by_version(versions).encode()
     switchers_content = render_switchers(versions, languages)
 
     build_succeeded = set()
@@ -1108,13 +1119,11 @@ def build_docs(args: argparse.Namespace) -> int:
             scope.set_tag("version", version.name)
             scope.set_tag("language", language.tag)
         cpython_repo.update()
-        v_isb_content = isb_content if version.status != "EOL" else eol_isb_content
         builder = DocBuilder(
             version,
-            versions,
             language,
             cpython_repo,
-            v_isb_content,
+            docs_by_version_content,
             switchers_content,
             **vars(args),
         )
@@ -1170,21 +1179,10 @@ def parse_languages_from_config() -> Languages:
     return Languages.from_json(config["defaults"], config["languages"])
 
 
-def render_indexsidebar(versions: Versions) -> tuple[bytes, bytes]:
-    """Pre-render indexsidebar.html for Sphinx."""
-    docs_by_version = f"""\
-<h3>{{% trans %}}Docs by version{{% endtrans %}}</h3>
-<ul>
-{"\n".join([f'  <li><a href="{v.url}">{v.title}</a></li>' for v in reversed(versions)])}
-  <li><a href="https://www.python.org/doc/versions/">{{% trans %}}All versions{{% endtrans %}}</a></li>
-</ul>
-"""
-
-    template_path = HERE / "templates" / "indexsidebar.html"
-    template = Template(template_path.read_text(encoding="UTF-8"))
-    rendered_template = template.substitute(DOCS_BY_VERSION=docs_by_version).encode()
-    eol_template = template.substitute(DOCS_BY_VERSION="").encode()
-    return rendered_template, eol_template
+def render_docs_by_version(versions: Versions) -> str:
+    """Generate content for _docs_by_version.html."""
+    links = [f'<li><a href="{v.url}">{v.title}</a></li>' for v in reversed(versions)]
+    return "\n".join(links)
 
 
 def render_switchers(versions: Versions, languages: Languages) -> bytes:
