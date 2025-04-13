@@ -473,7 +473,7 @@ def setup_switchers(script_content: bytes, html_root: Path) -> None:
     - Cross-link various versions in a version switcher
     """
     switchers_path = html_root / "_static" / "switchers.js"
-    switchers_path.write_text(script_content, encoding="UTF-8")
+    switchers_path.write_bytes(script_content)
 
     for file in html_root.glob("**/*.html"):
         depth = len(file.relative_to(html_root).parts) - 1
