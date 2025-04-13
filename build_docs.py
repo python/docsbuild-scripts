@@ -143,16 +143,6 @@ class Versions:
         """Find the current CPython version in development."""
         return max(self, key=Version.as_tuple)
 
-    def setup_indexsidebar(self, current: Version, dest_path: Path) -> None:
-        """Build indexsidebar.html for Sphinx."""
-        template_path = HERE / "templates" / "indexsidebar.html"
-        template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
-        rendered_template = template.render(
-            current_version=current,
-            versions=list(reversed(self)),
-        )
-        dest_path.write_text(rendered_template, encoding="UTF-8")
-
 
 @dataclasses.dataclass(frozen=True, kw_only=True, slots=True)
 class Version:
@@ -529,9 +519,9 @@ class DocBuilder:
     """Builder for a CPython version and a language."""
 
     version: Version
-    versions: Versions
     language: Language
     cpython_repo: Repository
+    indexsidebar_content: bytes
     switchers_content: bytes
     build_root: Path
     www_root: Path
@@ -667,10 +657,8 @@ class DocBuilder:
                 text = text.replace(" -A switchers=1", "")
                 (self.checkout / "Doc" / "Makefile").write_text(text, encoding="utf-8")
 
-            self.versions.setup_indexsidebar(
-                self.version,
-                self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html",
-            )
+            indexsidebar_path = self.checkout / "Doc/tools/templates/indexsidebar.html"
+            indexsidebar_path.write_bytes(self.indexsidebar_content)
         run_with_logging([
             "make",
             "-C",
@@ -1099,6 +1087,7 @@ def build_docs(args: argparse.Namespace) -> int:
     force_build = args.force
     del args.force
 
+    isb_content, eol_isb_content = render_indexsidebar(versions)
     switchers_content = render_switchers(versions, languages)
 
     build_succeeded = set()
@@ -1118,12 +1107,14 @@ def build_docs(args: argparse.Namespace) -> int:
             scope = sentry_sdk.get_isolation_scope()
             scope.set_tag("version", version.name)
             scope.set_tag("language", language.tag)
-            cpython_repo.update()
+        cpython_repo.update()
+        v_isb_content = isb_content if version.status != "EOL" else eol_isb_content
         builder = DocBuilder(
             version,
             versions,
             language,
             cpython_repo,
+            v_isb_content,
             switchers_content,
             **vars(args),
         )
@@ -1177,6 +1168,23 @@ def parse_languages_from_config() -> Languages:
     """Read config.toml to discover languages to build."""
     config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
     return Languages.from_json(config["defaults"], config["languages"])
+
+
+def render_indexsidebar(versions: Versions) -> tuple[bytes, bytes]:
+    """Pre-render indexsidebar.html for Sphinx."""
+    docs_by_version = f"""\
+<h3>{{% trans %}}Docs by version{{% endtrans %}}</h3>
+<ul>
+{"\n".join([f'  <li><a href="{v.url}">{v.title}</a></li>' for v in reversed(versions)])}
+  <li><a href="https://www.python.org/doc/versions/">{{% trans %}}All versions{{% endtrans %}}</a></li>
+</ul>
+"""
+
+    template_path = HERE / "templates" / "indexsidebar.html"
+    template = Template(template_path.read_text(encoding="UTF-8"))
+    rendered_template = template.substitute(DOCS_BY_VERSION=docs_by_version).encode()
+    eol_template = template.substitute(DOCS_BY_VERSION="").encode()
+    return rendered_template, eol_template
 
 
 def render_switchers(versions: Versions, languages: Languages) -> bytes:

@@ -1,30 +1,18 @@
 {#
-Beware, this file is rendered twice via Jinja2:
-- First by build_docs.py, given 'current_version' and 'versions'.
-- A 2nd time by Sphinx.
+Beware, this file is rendered twice:
+- First by build_docs.py using string.Template, given '$DOCS_BY_VERSION'.
+- Second time by Sphinx, using Jinja.
 #}
 
-{% raw %}
 <h3>{% trans %}Download{% endtrans %}</h3>
 <p><a href="{{ pathto('download') }}">{% trans %}Download these documents{% endtrans %}</a></p>
-{% endraw %}
-{% if current_version.status != "EOL" %}
-{% raw %}<h3>{% trans %}Docs by version{% endtrans %}</h3>{% endraw %}
-<ul>
-  {% for version in versions %}
-  <li><a href="{{ version.url }}">{{ version.title }}</a></li>
-  {% endfor %}
-  {% raw %}<li><a href="https://www.python.org/doc/versions/">{% trans %}All versions{% endtrans %}</a></li>{% endraw %}
-</ul>
-{% endif %}
-{% raw %}
+$DOCS_BY_VERSION
 <h3>{% trans %}Other resources{% endtrans %}</h3>
 <ul>
   {# XXX: many of these should probably be merged in the main docs #}
-  <li><a href="https://peps.python.org">{% trans %}PEP Index{% endtrans %}</a></li>
+  <li><a href="https://peps.python.org/">{% trans %}PEP Index{% endtrans %}</a></li>
   <li><a href="https://wiki.python.org/moin/BeginnersGuide">{% trans %}Beginner's Guide{% endtrans %}</a></li>
   <li><a href="https://wiki.python.org/moin/PythonBooks">{% trans %}Book List{% endtrans %}</a></li>
   <li><a href="https://www.python.org/doc/av/">{% trans %}Audio/Visual Talks{% endtrans %}</a></li>
   <li><a href="https://devguide.python.org/">{% trans %}Python Developer’s Guide{% endtrans %}</a></li>
 </ul>
-{% endraw %}
