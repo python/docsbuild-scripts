@@ -13,14 +13,24 @@ env:
 jobs:
   integration:
     name: Integration test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+        - "3.13"
+        - "3.14"
+        os: [windows-latest, macos-latest, ubuntu-latest]
     steps:
     - uses: actions/checkout@v4
       with:
         persist-credentials: false
-    - uses: actions/setup-python@v5
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
       with:
-        python-version: "3.13"
+        python-version: ${{ matrix.python-version }}
+        allow-prereleases: true
 
     - name: Set up requirements
       run: |
