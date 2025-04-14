@@ -27,11 +27,8 @@ def test_requirements(name: str, expected: str) -> None:
     # Arrange
     version = Version(name=name, status="stable", branch_or_tag="")
 
-    # Act
-    requirements = version.requirements
-
-    # Assert
-    assert expected in requirements
+    # Act / Assert
+    assert expected in version.requirements
 
 
 def test_requirements_error() -> None:
