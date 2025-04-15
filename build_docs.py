@@ -363,10 +363,10 @@ class Repository:
         """Return the reference of a given tag or branch."""
         try:
             # Maybe it's a branch
-            return self.run("show-ref", "-s", "origin/" + pattern).stdout.strip()
+            return self.run("show-ref", "-s", f"origin/{pattern}").stdout.strip()
         except subprocess.CalledProcessError:
             # Maybe it's a tag
-            return self.run("show-ref", "-s", "tags/" + pattern).stdout.strip()
+            return self.run("show-ref", "-s", f"tags/{pattern}").stdout.strip()
 
     def fetch(self) -> subprocess.CompletedProcess:
         """Try (and retry) to run git fetch."""
@@ -656,11 +656,11 @@ class DocBuilder:
             "make",
             "-C",
             self.checkout / "Doc",
-            "PYTHON=" + str(python),
-            "SPHINXBUILD=" + str(sphinxbuild),
-            "BLURB=" + str(blurb),
-            "VENVDIR=" + str(self.venv),
-            "SPHINXOPTS=" + " ".join(sphinxopts),
+            f"PYTHON={python}",
+            f"SPHINXBUILD={sphinxbuild}",
+            f"BLURB={blurb}",
+            f"VENVDIR={self.venv}",
+            f"SPHINXOPTS={' '.join(sphinxopts)}",
             "SPHINXERRORHANDLING=",
             maketarget,
         ])
@@ -683,7 +683,7 @@ class DocBuilder:
             # opengraph previews
             requirements.append("matplotlib>=3")
 
-        venv_path = self.build_root / ("venv-" + self.version.name)
+        venv_path = self.build_root / f"venv-{self.version.name}"
         venv.create(venv_path, symlinks=os.name != "nt", with_pip=True)
         run(
             [venv_path / "bin" / "python", "-m", "pip", "install", "--upgrade"]
