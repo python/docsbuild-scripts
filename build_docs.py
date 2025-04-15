@@ -337,23 +337,15 @@ def run_with_logging(cmd: Sequence[str | Path], cwd: Path | None = None) -> None
         raise subprocess.CalledProcessError(return_code, cmd[0])
 
 
-def changed_files(left: Path, right: Path) -> list[str]:
-    """Compute a list of different files between left and right, recursively.
-    Resulting paths are relative to left.
-    """
-    changed = []
+def changed_files(left: Path, right: Path) -> int:
+    """Compute the number of different files in the two directory trees."""
 
-    def traverse(dircmp_result: filecmp.dircmp) -> None:
-        base = Path(dircmp_result.left).relative_to(left)
-        for file in dircmp_result.diff_files:
-            changed.append(str(base / file))
-            if file == "index.html":
-                changed.append(str(base) + "/")
-        for dircomp in dircmp_result.subdirs.values():
-            traverse(dircomp)
+    def traverse(dircmp_result: filecmp.dircmp) -> int:
+        changed = len(dircmp_result.diff_files)
+        changed += sum(map(traverse, dircmp_result.subdirs.values()))
+        return changed
 
-    traverse(filecmp.dircmp(left, right))
-    return changed
+    return traverse(filecmp.dircmp(left, right))
 
 
 @dataclasses.dataclass
@@ -735,10 +727,10 @@ class DocBuilder:
             logging.warning("Can't change mod of %s: %s", target, str(err))
         chgrp(target, group=self.group, recursive=True)
 
-        changed = []
+        changed = 0
         if self.includes_html:
             # Copy built HTML files to webroot (default /srv/docs.python.org)
-            changed = changed_files(self.checkout / "Doc" / "build" / "html", target)
+            changed += changed_files(self.checkout / "Doc" / "build" / "html", target)
             logging.info("Copying HTML files to %s", target)
             chgrp(
                 self.checkout / "Doc" / "build" / "html/",
@@ -768,13 +760,12 @@ class DocBuilder:
                 archives_dir.stat().st_mode | stat.S_IROTH | stat.S_IXOTH
             )
             chgrp(archives_dir, group=self.group)
+            changed += 1
             for dist_file in dist_dir.iterdir():
                 shutil.copy2(dist_file, archives_dir / dist_file.name)
-            changed.append("archives/")
-            for file in archives_dir.iterdir():
-                changed.append(f"archives/{file.name}")
+                changed += 1
 
-        logging.info("%s files changed", len(changed))
+        logging.info("%s files changed", changed)
         if changed and not self.skip_cache_invalidation:
             surrogate_key = f"{self.language.tag}/{self.version.name}"
             purge_surrogate_key(http, surrogate_key)
