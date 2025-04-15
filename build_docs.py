@@ -671,8 +671,8 @@ class DocBuilder:
             "SPHINXERRORHANDLING=",
             maketarget,
         ])
-        run(["mkdir", "-p", self.log_directory])
-        run(["chgrp", "-R", self.group, self.log_directory])
+        self.log_directory.mkdir(parents=True, exist_ok=True)
+        chgrp(self.log_directory, group=self.group, recursive=True)
         if self.includes_html:
             setup_switchers(
                 self.switchers_content, self.checkout / "Doc" / "build" / "html"
@@ -723,10 +723,7 @@ class DocBuilder:
         else:
             language_dir = self.www_root / self.language.tag
             language_dir.mkdir(parents=True, exist_ok=True)
-            try:
-                run(["chgrp", "-R", self.group, language_dir])
-            except subprocess.CalledProcessError as err:
-                logging.warning("Can't change group of %s: %s", language_dir, str(err))
+            chgrp(language_dir, group=self.group, recursive=True)
             language_dir.chmod(0o775)
             target = language_dir / self.version.name
 
@@ -735,22 +732,18 @@ class DocBuilder:
             target.chmod(0o775)
         except PermissionError as err:
             logging.warning("Can't change mod of %s: %s", target, str(err))
-        try:
-            run(["chgrp", "-R", self.group, target])
-        except subprocess.CalledProcessError as err:
-            logging.warning("Can't change group of %s: %s", target, str(err))
+        chgrp(target, group=self.group, recursive=True)
 
         changed = []
         if self.includes_html:
             # Copy built HTML files to webroot (default /srv/docs.python.org)
             changed = changed_files(self.checkout / "Doc" / "build" / "html", target)
             logging.info("Copying HTML files to %s", target)
-            run([
-                "chown",
-                "-R",
-                ":" + self.group,
+            chgrp(
                 self.checkout / "Doc" / "build" / "html/",
-            ])
+                group=self.group,
+                recursive=True,
+            )
             run(["chmod", "-R", "o+r", self.checkout / "Doc" / "build" / "html"])
             run([
                 "find",
@@ -776,12 +769,7 @@ class DocBuilder:
         if not self.quick and (self.checkout / "Doc" / "dist").is_dir():
             # Copy archive files to /archives/
             logging.debug("Copying dist files.")
-            run([
-                "chown",
-                "-R",
-                ":" + self.group,
-                self.checkout / "Doc" / "dist",
-            ])
+            chgrp(self.checkout / "Doc" / "dist", group=self.group, recursive=True)
             run([
                 "chmod",
                 "-R",
@@ -789,7 +777,7 @@ class DocBuilder:
                 self.checkout / "Doc" / "dist",
             ])
             run(["mkdir", "-m", "o+rx", "-p", target / "archives"])
-            run(["chown", ":" + self.group, target / "archives"])
+            chgrp(target / "archives", group=self.group)
             run([
                 "cp",
                 "-a",
@@ -887,6 +875,36 @@ class DocBuilder:
         table = tomlkit.inline_table()
         table |= state
         logging.info("Saved new rebuild state for %s: %s", key, table.as_string())
+
+
+def chgrp(
+    path: Path,
+    /,
+    group: int | str | None,
+    *,
+    recursive: bool = False,
+    follow_symlinks: bool = True,
+) -> None:
+    if sys.platform == "win32":
+        return
+
+    from grp import getgrnam
+
+    try:
+        try:
+            group_id = int(group)
+        except ValueError:
+            group_id = getgrnam(group)[2]
+    except (LookupError, TypeError, ValueError):
+        return
+
+    try:
+        os.chown(path, -1, group_id, follow_symlinks=follow_symlinks)
+        if recursive:
+            for p in path.rglob("*"):
+                os.chown(p, -1, group_id, follow_symlinks=follow_symlinks)
+    except OSError as err:
+        logging.warning("Can't change group of %s: %s", path, str(err))
 
 
 def format_seconds(seconds: float) -> str:
@@ -1213,7 +1231,7 @@ def build_sitemap(
     sitemap_path = www_root / "sitemap.xml"
     sitemap_path.write_text(rendered_template + "\n", encoding="UTF-8")
     sitemap_path.chmod(0o664)
-    run(["chgrp", group, sitemap_path])
+    chgrp(sitemap_path, group=group)
 
 
 def build_404(www_root: Path, group: str) -> None:
@@ -1225,7 +1243,7 @@ def build_404(www_root: Path, group: str) -> None:
     not_found_file = www_root / "404.html"
     shutil.copyfile(HERE / "templates" / "404.html", not_found_file)
     not_found_file.chmod(0o664)
-    run(["chgrp", group, not_found_file])
+    chgrp(not_found_file, group=group)
 
 
 def copy_robots_txt(
@@ -1243,7 +1261,7 @@ def copy_robots_txt(
     robots_path = www_root / "robots.txt"
     shutil.copyfile(template_path, robots_path)
     robots_path.chmod(0o775)
-    run(["chgrp", group, robots_path])
+    chgrp(robots_path, group=group)
     if not skip_cache_invalidation:
         purge(http, "robots.txt")
 
@@ -1311,7 +1329,7 @@ def symlink(
         # Link does not exist or points to the wrong target.
         link.unlink(missing_ok=True)
         link.symlink_to(directory)
-        run(["chown", "-h", f":{group}", str(link)])
+        chgrp(link, group=group, follow_symlinks=False)
     if not skip_cache_invalidation:
         surrogate_key = f"{language_tag}/{name}"
         purge_surrogate_key(http, surrogate_key)
