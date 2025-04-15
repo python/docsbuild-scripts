@@ -757,7 +757,7 @@ class DocBuilder:
             ])
 
         dist_dir = self.checkout / "Doc" / "dist"
-        if not self.quick and dist_dir.is_dir():
+        if dist_dir.is_dir():
             # Copy archive files to /archives/
             logging.debug("Copying dist files.")
             chgrp(dist_dir, group=self.group, recursive=True)
