@@ -388,7 +388,7 @@ class Repository:
             return False  # Already cloned
         logging.info("Cloning %s into %s", self.remote, self.directory)
         self.directory.mkdir(mode=0o775, parents=True, exist_ok=True)
-        run(["git", "clone", self.remote, self.directory])
+        run(("git", "clone", self.remote, self.directory))
         return True
 
     def update(self) -> None:
@@ -481,7 +481,7 @@ def version_info() -> None:
     """Handler for --version."""
     try:
         platex_version = head(
-            subprocess.check_output(["platex", "--version"], text=True),
+            subprocess.check_output(("platex", "--version"), text=True),
             lines=3,
         )
     except FileNotFoundError:
@@ -489,7 +489,7 @@ def version_info() -> None:
 
     try:
         xelatex_version = head(
-            subprocess.check_output(["xelatex", "--version"], text=True),
+            subprocess.check_output(("xelatex", "--version"), text=True),
             lines=2,
         )
     except FileNotFoundError:
@@ -652,7 +652,7 @@ class DocBuilder:
                 (self.checkout / "Doc" / "Makefile").write_text(text, encoding="utf-8")
 
             self.setup_indexsidebar()
-        run_with_logging([
+        run_with_logging((
             "make",
             "-C",
             self.checkout / "Doc",
@@ -663,7 +663,7 @@ class DocBuilder:
             f"SPHINXOPTS={' '.join(sphinxopts)}",
             "SPHINXERRORHANDLING=",
             maketarget,
-        ])
+        ))
         self.log_directory.mkdir(parents=True, exist_ok=True)
         chgrp(self.log_directory, group=self.group, recursive=True)
         if self.includes_html:
@@ -678,7 +678,7 @@ class DocBuilder:
         So we can reuse them from builds to builds, while they contain
         different Sphinx versions.
         """
-        requirements = [self.theme] + self.version.requirements
+        requirements = list(self.version.requirements)
         if self.includes_html:
             # opengraph previews
             requirements.append("matplotlib>=3")
@@ -686,12 +686,19 @@ class DocBuilder:
         venv_path = self.build_root / f"venv-{self.version.name}"
         venv.create(venv_path, symlinks=os.name != "nt", with_pip=True)
         run(
-            [venv_path / "bin" / "python", "-m", "pip", "install", "--upgrade"]
-            + ["--upgrade-strategy=eager"]
-            + requirements,
+            (
+                venv_path / "bin" / "python",
+                "-m",
+                "pip",
+                "install",
+                "--upgrade",
+                "--upgrade-strategy=eager",
+                self.theme,
+                *requirements,
+            ),
             cwd=self.checkout / "Doc",
         )
-        run([venv_path / "bin" / "python", "-m", "pip", "freeze", "--all"])
+        run((venv_path / "bin" / "python", "-m", "pip", "freeze", "--all"))
         self.venv = venv_path
 
     def setup_indexsidebar(self) -> None:
@@ -738,7 +745,7 @@ class DocBuilder:
                 recursive=True,
             )
             chmod_make_readable(self.checkout / "Doc" / "build" / "html")
-            run([
+            run((
                 "rsync",
                 "-a",
                 "--delete-delay",
@@ -746,7 +753,7 @@ class DocBuilder:
                 "P archives/",
                 str(self.checkout / "Doc" / "build" / "html") + "/",
                 target,
-            ])
+            ))
 
         dist_dir = self.checkout / "Doc" / "dist"
         if dist_dir.is_dir():
