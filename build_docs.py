@@ -143,16 +143,6 @@ class Versions:
         """Find the current CPython version in development."""
         return max(self, key=Version.as_tuple)
 
-    def setup_indexsidebar(self, current: Version, dest_path: Path) -> None:
-        """Build indexsidebar.html for Sphinx."""
-        template_path = HERE / "templates" / "indexsidebar.html"
-        template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
-        rendered_template = template.render(
-            current_version=current,
-            versions=list(reversed(self)),
-        )
-        dest_path.write_text(rendered_template, encoding="UTF-8")
-
 
 @dataclasses.dataclass(frozen=True, kw_only=True, slots=True)
 class Version:
@@ -529,9 +519,9 @@ class DocBuilder:
     """Builder for a CPython version and a language."""
 
     version: Version
-    versions: Versions
     language: Language
     cpython_repo: Repository
+    docs_by_version_content: bytes
     switchers_content: bytes
     build_root: Path
     www_root: Path
@@ -667,10 +657,7 @@ class DocBuilder:
                 text = text.replace(" -A switchers=1", "")
                 (self.checkout / "Doc" / "Makefile").write_text(text, encoding="utf-8")
 
-            self.versions.setup_indexsidebar(
-                self.version,
-                self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html",
-            )
+            self.setup_indexsidebar()
         run_with_logging([
             "make",
             "-C",
@@ -712,6 +699,18 @@ class DocBuilder:
         )
         run([venv_path / "bin" / "python", "-m", "pip", "freeze", "--all"])
         self.venv = venv_path
+
+    def setup_indexsidebar(self) -> None:
+        """Copy indexsidebar.html for Sphinx."""
+        tmpl_src = HERE / "templates"
+        tmpl_dst = self.checkout / "Doc" / "tools" / "templates"
+        dbv_path = tmpl_dst / "_docs_by_version.html"
+
+        shutil.copy(tmpl_src / "indexsidebar.html", tmpl_dst / "indexsidebar.html")
+        if self.version.status != "EOL":
+            dbv_path.write_bytes(self.docs_by_version_content)
+        else:
+            shutil.copy(tmpl_src / "_docs_by_version.html", dbv_path)
 
     def copy_build_to_webroot(self, http: urllib3.PoolManager) -> None:
         """Copy a given build to the appropriate webroot with appropriate rights."""
@@ -1099,6 +1098,7 @@ def build_docs(args: argparse.Namespace) -> int:
     force_build = args.force
     del args.force
 
+    docs_by_version_content = render_docs_by_version(versions).encode()
     switchers_content = render_switchers(versions, languages)
 
     build_succeeded = set()
@@ -1118,12 +1118,12 @@ def build_docs(args: argparse.Namespace) -> int:
             scope = sentry_sdk.get_isolation_scope()
             scope.set_tag("version", version.name)
             scope.set_tag("language", language.tag)
-            cpython_repo.update()
+        cpython_repo.update()
         builder = DocBuilder(
             version,
-            versions,
             language,
             cpython_repo,
+            docs_by_version_content,
             switchers_content,
             **vars(args),
         )
@@ -1177,6 +1177,12 @@ def parse_languages_from_config() -> Languages:
     """Read config.toml to discover languages to build."""
     config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
     return Languages.from_json(config["defaults"], config["languages"])
+
+
+def render_docs_by_version(versions: Versions) -> str:
+    """Generate content for _docs_by_version.html."""
+    links = [f'<li><a href="{v.url}">{v.title}</a></li>' for v in reversed(versions)]
+    return "\n".join(links)
 
 
 def render_switchers(versions: Versions, languages: Languages) -> bytes:
