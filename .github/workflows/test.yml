@@ -44,6 +44,7 @@ jobs:
       with:
         name: www-root
         path: ./www
+        retention-days: 2
 
   unit:
     name: Unit tests
