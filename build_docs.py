@@ -756,22 +756,23 @@ class DocBuilder:
                 target,
             ])
 
-        if not self.quick and (self.checkout / "Doc" / "dist").is_dir():
+        dist_dir = self.checkout / "Doc" / "dist"
+        if dist_dir.is_dir():
             # Copy archive files to /archives/
             logging.debug("Copying dist files.")
-            chgrp(self.checkout / "Doc" / "dist", group=self.group, recursive=True)
-            chmod_make_readable(self.checkout / "Doc" / "dist")
-            run(["mkdir", "-m", "o+rx", "-p", target / "archives"])
-            chgrp(target / "archives", group=self.group)
-            run([
-                "cp",
-                "-a",
-                *(self.checkout / "Doc" / "dist").glob("*"),
-                target / "archives",
-            ])
+            chgrp(dist_dir, group=self.group, recursive=True)
+            chmod_make_readable(dist_dir)
+            archives_dir = target / "archives"
+            archives_dir.mkdir(parents=True, exist_ok=True)
+            archives_dir.chmod(
+                archives_dir.stat().st_mode | stat.S_IROTH | stat.S_IXOTH
+            )
+            chgrp(archives_dir, group=self.group)
+            for dist_file in dist_dir.iterdir():
+                shutil.copy2(dist_file, archives_dir / dist_file.name)
             changed.append("archives/")
-            for file in (target / "archives").iterdir():
-                changed.append("archives/" + file.name)
+            for file in archives_dir.iterdir():
+                changed.append(f"archives/{file.name}")
 
         logging.info("%s files changed", len(changed))
         if changed and not self.skip_cache_invalidation:

@@ -39,6 +39,12 @@ jobs:
         --languages en
         --branches 3.14
 
+    - name: Upload documentation
+      uses: actions/upload-artifact@v4
+      with:
+        name: www-root
+        path: ./www
+
   unit:
     name: Unit tests
     runs-on: ${{ matrix.os }}
