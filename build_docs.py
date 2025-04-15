@@ -56,6 +56,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import venv
 from bisect import bisect_left as bisect
 from contextlib import contextmanager, suppress
 from pathlib import Path
@@ -690,7 +691,7 @@ class DocBuilder:
             requirements.append("matplotlib>=3")
 
         venv_path = self.build_root / ("venv-" + self.version.name)
-        run([sys.executable, "-m", "venv", venv_path])
+        venv.create(venv_path, symlinks=os.name != "nt", with_pip=True)
         run(
             [venv_path / "bin" / "python", "-m", "pip", "install", "--upgrade"]
             + ["--upgrade-strategy=eager"]
