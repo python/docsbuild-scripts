@@ -281,6 +281,14 @@ class Language:
         return self.iso639_tag.replace("_", "-").lower()
 
     @property
+    def is_translation(self) -> bool:
+        return self.tag != "en"
+
+    @property
+    def locale_repo_url(self) -> str:
+        return f"https://github.com/python/python-docs-{self.tag}.git"
+
+    @property
     def switcher_label(self) -> str:
         if self.translated_name:
             return f"{self.name} | {self.translated_name}"
@@ -549,7 +557,7 @@ class DocBuilder:
                 logging.info("Skipping non-HTML build (language is HTML-only).")
                 return None  # skipped
             self.cpython_repo.switch(self.version.branch_or_tag)
-            if self.language.tag != "en":
+            if self.language.is_translation:
                 self.clone_translation()
             if trigger_reason := self.should_rebuild(force_build):
                 self.build_venv()
@@ -570,6 +578,10 @@ class DocBuilder:
         return True
 
     @property
+    def locale_dir(self) -> Path:
+        return self.build_root / self.version.name / "locale"
+
+    @property
     def checkout(self) -> Path:
         """Path to CPython git clone."""
         return self.build_root / _checkout_name(self.select_output)
@@ -582,15 +594,8 @@ class DocBuilder:
     def translation_repo(self) -> Repository:
         """See PEP 545 for translations repository naming convention."""
 
-        locale_repo = f"https://github.com/python/python-docs-{self.language.tag}.git"
-        locale_clone_dir = (
-            self.build_root
-            / self.version.name
-            / "locale"
-            / self.language.iso639_tag
-            / "LC_MESSAGES"
-        )
-        return Repository(locale_repo, locale_clone_dir)
+        locale_clone_dir = self.locale_dir / self.language.iso639_tag / "LC_MESSAGES"
+        return Repository(self.language.locale_repo_url, locale_clone_dir)
 
     @property
     def translation_branch(self) -> str:
@@ -611,10 +616,9 @@ class DocBuilder:
         logging.info("Build start.")
         start_time = perf_counter()
         sphinxopts = list(self.language.sphinxopts)
-        if self.language.tag != "en":
-            locale_dirs = self.build_root / self.version.name / "locale"
+        if self.language.is_translation:
             sphinxopts.extend((
-                f"-D locale_dirs={locale_dirs}",
+                f"-D locale_dirs={self.locale_dir}",
                 f"-D language={self.language.iso639_tag}",
                 "-D gettext_compact=0",
                 "-D translation_progress_classes=1",
@@ -636,7 +640,7 @@ class DocBuilder:
 
         if self.includes_html:
             site_url = self.version.url
-            if self.language.tag != "en":
+            if self.language.is_translation:
                 site_url += f"{self.language.tag}/"
             # Define a tag to enable opengraph socialcards previews
             # (used in Doc/conf.py and requires matplotlib)
@@ -718,7 +722,7 @@ class DocBuilder:
         logging.info("Publishing start.")
         start_time = perf_counter()
         self.www_root.mkdir(parents=True, exist_ok=True)
-        if self.language.tag == "en":
+        if not self.language.is_translation:
             target = self.www_root / self.version.name
         else:
             language_dir = self.www_root / self.language.tag
@@ -786,7 +790,7 @@ class DocBuilder:
             logging.info("Should rebuild: no previous state found.")
             return "no previous state"
         cpython_sha = self.cpython_repo.run("rev-parse", "HEAD").stdout.strip()
-        if self.language.tag != "en":
+        if self.language.is_translation:
             translation_sha = self.translation_repo.run(
                 "rev-parse", "HEAD"
             ).stdout.strip()
@@ -849,7 +853,7 @@ class DocBuilder:
             "triggered_by": trigger,
             "cpython_sha": self.cpython_repo.run("rev-parse", "HEAD").stdout.strip(),
         }
-        if self.language.tag != "en":
+        if self.language.is_translation:
             state["translation_sha"] = self.translation_repo.run(
                 "rev-parse", "HEAD"
             ).stdout.strip()
