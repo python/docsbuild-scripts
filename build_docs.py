@@ -54,6 +54,7 @@ import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import venv
@@ -744,18 +745,7 @@ class DocBuilder:
                 group=self.group,
                 recursive=True,
             )
-            run(["chmod", "-R", "o+r", self.checkout / "Doc" / "build" / "html"])
-            run([
-                "find",
-                self.checkout / "Doc" / "build" / "html",
-                "-type",
-                "d",
-                "-exec",
-                "chmod",
-                "o+x",
-                "{}",
-                ";",
-            ])
+            chmod_make_readable(self.checkout / "Doc" / "build" / "html")
             run([
                 "rsync",
                 "-a",
@@ -770,12 +760,7 @@ class DocBuilder:
             # Copy archive files to /archives/
             logging.debug("Copying dist files.")
             chgrp(self.checkout / "Doc" / "dist", group=self.group, recursive=True)
-            run([
-                "chmod",
-                "-R",
-                "o+r",
-                self.checkout / "Doc" / "dist",
-            ])
+            chmod_make_readable(self.checkout / "Doc" / "dist")
             run(["mkdir", "-m", "o+rx", "-p", target / "archives"])
             chgrp(target / "archives", group=self.group)
             run([
@@ -905,6 +890,18 @@ def chgrp(
                 os.chown(p, -1, group_id, follow_symlinks=follow_symlinks)
     except OSError as err:
         logging.warning("Can't change group of %s: %s", path, str(err))
+
+
+def chmod_make_readable(path: Path, /, mode: int = stat.S_IROTH) -> None:
+    if not path.is_dir():
+        raise ValueError
+
+    path.chmod(path.stat().st_mode | stat.S_IROTH | stat.S_IXOTH)  # o+rx
+    for p in path.rglob("*"):
+        if p.is_dir():
+            p.chmod(p.stat().st_mode | stat.S_IROTH | stat.S_IXOTH)  # o+rx
+        else:
+            p.chmod(p.stat().st_mode | stat.S_IROTH)  # o+r
 
 
 def format_seconds(seconds: float) -> str:
