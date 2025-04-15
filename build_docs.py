@@ -194,7 +194,7 @@ class Version:
             return dependencies + ["standard-imghdr"]
 
         # Requirements/constraints for Python 3.7 and older, pre-requirements.txt
-        reqs = ["jieba", "blurb", "jinja2<3.1", "docutils<=0.17.1", "standard-imghdr"]
+        reqs = ["jieba", "blurb<1.2", "jinja2<3.1", "docutils<0.18", "standard-imghdr"]
         if self.name in {"3.7", "3.6", "2.7"}:
             return reqs + ["sphinx==2.3.1"]
         if self.name == "3.5":
