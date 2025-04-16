@@ -183,9 +183,9 @@ class Version:
 
         """
         dependencies = [
+            "-rrequirements.txt",
             "jieba",  # To improve zh search.
             "PyStemmer~=2.2.0",  # To improve performance for word stemming.
-            "-rrequirements.txt",
         ]
         if self.as_tuple() >= (3, 11):
             return dependencies
@@ -194,7 +194,19 @@ class Version:
             return dependencies + ["standard-imghdr"]
 
         # Requirements/constraints for Python 3.7 and older, pre-requirements.txt
-        reqs = ["jieba", "blurb<1.2", "jinja2<3.1", "docutils<0.18", "standard-imghdr"]
+        reqs = [
+            "blurb<1.2",
+            "docutils<=0.17.1",
+            "jieba",
+            "jinja2<3.1",
+            "sphinxcontrib-applehelp<=1.0.2",
+            "sphinxcontrib-devhelp<=1.0.2",
+            "sphinxcontrib-htmlhelp<=2.0",
+            "sphinxcontrib-jsmath<=1.0.1",
+            "sphinxcontrib-qthelp<=1.0.3",
+            "sphinxcontrib-serializinghtml<=1.1.5",
+            "standard-imghdr",
+        ]
         if self.name in {"3.7", "3.6", "2.7"}:
             return reqs + ["sphinx==2.3.1"]
         if self.name == "3.5":
