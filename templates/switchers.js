@@ -41,9 +41,12 @@ const _create_placeholders_if_missing = () => {
     if (item.innerText.toLowerCase().includes("documentation")) {
       const container = document.createElement("li");
       container.className = "switchers";
+      container.style.display = "inline-flex";
       for (const placeholder_name of ["language", "version"]) {
         const placeholder = document.createElement("div");
         placeholder.className = `${placeholder_name}_switcher_placeholder`;
+        placeholder.style.marginRight = "5px";
+        placeholder.style.paddingLeft = "5px";
         container.appendChild(placeholder);
       }
       item.parentElement.insertBefore(container, item);
