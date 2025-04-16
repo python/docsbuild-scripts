@@ -295,18 +295,79 @@ class Language:
         return self.iso639_tag.replace("_", "-").lower()
 
     @property
-    def is_translation(self) -> bool:
-        return self.tag != "en"
-
-    @property
-    def locale_repo_url(self) -> str:
-        return f"https://github.com/python/python-docs-{self.tag}.git"
-
-    @property
     def switcher_label(self) -> str:
         if self.translated_name:
             return f"{self.name} | {self.translated_name}"
         return self.name
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True, slots=True)
+class BuildMetadata:
+    _ver: Version
+    _lang: Language
+
+    @property
+    def sphinxopts(self) -> Sequence[str]:
+        return self._lang.sphinxopts
+
+    @property
+    def iso639_tag(self) -> str:
+        return self._lang.iso639_tag
+
+    @property
+    def html_only(self) -> bool:
+        return self._lang.html_only
+
+    @property
+    def url(self):
+        """The URL of this version in production."""
+        if self.is_translation:
+            return f"https://docs.python.org/{self.version}/{self.language}/"
+        return f"https://docs.python.org/{self.version}/"
+
+    @property
+    def branch_or_tag(self) -> str:
+        return self._ver.branch_or_tag
+
+    @property
+    def status(self) -> str:
+        return self._ver.status
+
+    @property
+    def is_eol(self) -> bool:
+        return self._ver.status == "EOL"
+
+    @property
+    def dependencies(self) -> list[str]:
+        return self._ver.requirements
+
+    @property
+    def version(self):
+        return self._ver.name
+
+    @property
+    def version_tuple(self):
+        return self._ver.as_tuple()
+
+    @property
+    def language(self):
+        return self._lang.tag
+
+    @property
+    def is_translation(self):
+        return self.language != "en"
+
+    @property
+    def slug(self) -> str:
+        return f"{self.language}/{self.version}"
+
+    @property
+    def venv_name(self) -> str:
+        return f"venv-{self.version}"
+
+    @property
+    def locale_repo_url(self) -> str:
+        return f"https://github.com/python/python-docs-{self.language}.git"
 
 
 def run(
@@ -534,8 +595,7 @@ def version_info() -> None:
 class DocBuilder:
     """Builder for a CPython version and a language."""
 
-    version: Version
-    language: Language
+    build_meta: BuildMetadata
     cpython_repo: Repository
     docs_by_version_content: bytes
     switchers_content: bytes
@@ -553,7 +613,7 @@ class DocBuilder:
         return (
             self.select_output in {"only-html", "only-html-en"}
             or self.quick
-            or self.language.html_only
+            or self.build_meta.html_only
         )
 
     @property
@@ -567,11 +627,11 @@ class DocBuilder:
         start_timestamp = dt.datetime.now(tz=dt.UTC).replace(microsecond=0)
         logging.info("Running.")
         try:
-            if self.language.html_only and not self.includes_html:
+            if self.build_meta.html_only and not self.includes_html:
                 logging.info("Skipping non-HTML build (language is HTML-only).")
                 return None  # skipped
-            self.cpython_repo.switch(self.version.branch_or_tag)
-            if self.language.is_translation:
+            self.cpython_repo.switch(self.build_meta.branch_or_tag)
+            if self.build_meta.is_translation:
                 self.clone_translation()
             if trigger_reason := self.should_rebuild(force_build):
                 self.build_venv()
@@ -593,7 +653,7 @@ class DocBuilder:
 
     @property
     def locale_dir(self) -> Path:
-        return self.build_root / self.version.name / "locale"
+        return self.build_root / self.build_meta.version / "locale"
 
     @property
     def checkout(self) -> Path:
@@ -608,8 +668,8 @@ class DocBuilder:
     def translation_repo(self) -> Repository:
         """See PEP 545 for translations repository naming convention."""
 
-        locale_clone_dir = self.locale_dir / self.language.iso639_tag / "LC_MESSAGES"
-        return Repository(self.language.locale_repo_url, locale_clone_dir)
+        locale_clone_dir = self.locale_dir / self.build_meta.iso639_tag / "LC_MESSAGES"
+        return Repository(self.build_meta.locale_repo_url, locale_clone_dir)
 
     @property
     def translation_branch(self) -> str:
@@ -623,25 +683,25 @@ class DocBuilder:
         """
         remote_branches = self.translation_repo.run("branch", "-r").stdout
         branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
-        return locate_nearest_version(branches, self.version.name)
+        return locate_nearest_version(branches, self.build_meta.version)
 
     def build(self) -> None:
         """Build this version/language doc."""
         logging.info("Build start.")
         start_time = perf_counter()
-        sphinxopts = list(self.language.sphinxopts)
-        if self.language.is_translation:
+        sphinxopts = list(self.build_meta.sphinxopts)
+        if self.build_meta.is_translation:
             sphinxopts.extend((
                 f"-D locale_dirs={self.locale_dir}",
-                f"-D language={self.language.iso639_tag}",
+                f"-D language={self.build_meta.iso639_tag}",
                 "-D gettext_compact=0",
                 "-D translation_progress_classes=1",
             ))
 
-        if self.version.status == "EOL":
+        if self.build_meta.is_eol:
             sphinxopts.append("-D html_context.outdated=1")
 
-        if self.version.status in ("in development", "pre-release"):
+        if self.build_meta.status in ("in development", "pre-release"):
             maketarget = "autobuild-dev"
         else:
             maketarget = "autobuild-stable"
@@ -653,9 +713,7 @@ class DocBuilder:
         blurb = self.venv / "bin" / "blurb"
 
         if self.includes_html:
-            site_url = self.version.url
-            if self.language.is_translation:
-                site_url += f"{self.language.tag}/"
+            site_url = self.build_meta.url
             # Define a tag to enable opengraph socialcards previews
             # (used in Doc/conf.py and requires matplotlib)
             sphinxopts += (
@@ -663,7 +721,7 @@ class DocBuilder:
                 f"-D ogp_site_url={site_url}",
             )
 
-            if self.version.as_tuple() < (3, 8):
+            if self.build_meta.version_tuple < (3, 8):
                 # Disable CPython switchers, we handle them now:
                 text = (self.checkout / "Doc" / "Makefile").read_text(encoding="utf-8")
                 text = text.replace(" -A switchers=1", "")
@@ -696,12 +754,12 @@ class DocBuilder:
         So we can reuse them from builds to builds, while they contain
         different Sphinx versions.
         """
-        requirements = list(self.version.requirements)
+        requirements = list(self.build_meta.dependencies)
         if self.includes_html:
             # opengraph previews
             requirements.append("matplotlib>=3")
 
-        venv_path = self.build_root / f"venv-{self.version.name}"
+        venv_path = self.build_root / self.build_meta.venv_name
         venv.create(venv_path, symlinks=os.name != "nt", with_pip=True)
         run(
             (
@@ -726,7 +784,7 @@ class DocBuilder:
         dbv_path = tmpl_dst / "_docs_by_version.html"
 
         shutil.copy(tmpl_src / "indexsidebar.html", tmpl_dst / "indexsidebar.html")
-        if self.version.status != "EOL":
+        if not self.build_meta.is_eol:
             dbv_path.write_bytes(self.docs_by_version_content)
         else:
             shutil.copy(tmpl_src / "_docs_by_version.html", dbv_path)
@@ -736,14 +794,14 @@ class DocBuilder:
         logging.info("Publishing start.")
         start_time = perf_counter()
         self.www_root.mkdir(parents=True, exist_ok=True)
-        if not self.language.is_translation:
-            target = self.www_root / self.version.name
+        if not self.build_meta.is_translation:
+            target = self.www_root / self.build_meta.version
         else:
-            language_dir = self.www_root / self.language.tag
+            language_dir = self.www_root / self.build_meta.language
             language_dir.mkdir(parents=True, exist_ok=True)
             chgrp(language_dir, group=self.group, recursive=True)
             language_dir.chmod(0o775)
-            target = language_dir / self.version.name
+            target = language_dir / self.build_meta.version
 
         target.mkdir(parents=True, exist_ok=True)
         try:
@@ -792,8 +850,7 @@ class DocBuilder:
 
         logging.info("%s files changed", changed)
         if changed and not self.skip_cache_invalidation:
-            surrogate_key = f"{self.language.tag}/{self.version.name}"
-            purge_surrogate_key(http, surrogate_key)
+            purge_surrogate_key(http, self.build_meta.slug)
         logging.info(
             "Publishing done (%s).", format_seconds(perf_counter() - start_time)
         )
@@ -804,7 +861,7 @@ class DocBuilder:
             logging.info("Should rebuild: no previous state found.")
             return "no previous state"
         cpython_sha = self.cpython_repo.run("rev-parse", "HEAD").stdout.strip()
-        if self.language.is_translation:
+        if self.build_meta.is_translation:
             translation_sha = self.translation_repo.run(
                 "rev-parse", "HEAD"
             ).stdout.strip()
@@ -839,7 +896,7 @@ class DocBuilder:
             state_file = self.build_root / "state.toml"
         try:
             return tomlkit.loads(state_file.read_text(encoding="UTF-8"))[
-                f"/{self.language.tag}/{self.version.name}/"
+                f"/{self.build_meta.slug}/"
             ]
         except (KeyError, FileNotFoundError):
             return {}
@@ -860,14 +917,14 @@ class DocBuilder:
         except FileNotFoundError:
             states = tomlkit.document()
 
-        key = f"/{self.language.tag}/{self.version.name}/"
+        key = f"/{self.build_meta.slug}/"
         state = {
             "last_build_start": build_start,
             "last_build_duration": round(build_duration, 0),
             "triggered_by": trigger,
             "cpython_sha": self.cpython_repo.run("rev-parse", "HEAD").stdout.strip(),
         }
-        if self.language.is_translation:
+        if self.build_meta.is_translation:
             state["translation_sha"] = self.translation_repo.run(
                 "rev-parse", "HEAD"
             ).stdout.strip()
@@ -1122,9 +1179,9 @@ def build_docs(args: argparse.Namespace) -> int:
     # pairs from the end of the list, effectively reversing it.
     # This runs languages in config.toml order and versions newest first.
     todo = [
-        (version, language)
-        for version in versions.filter(args.branches)
-        for language in reversed(languages.filter(args.languages))
+        BuildMetadata(_ver=ver, _lang=lang)
+        for ver in versions.filter(args.branches)
+        for lang in reversed(languages.filter(args.languages))
     ]
     del args.branches
     del args.languages
@@ -1141,20 +1198,17 @@ def build_docs(args: argparse.Namespace) -> int:
         args.build_root / _checkout_name(args.select_output),
     )
     while todo:
-        version, language = todo.pop()
+        b = todo.pop()
         logging.root.handlers[0].setFormatter(
-            logging.Formatter(
-                f"%(asctime)s %(levelname)s {language.tag}/{version.name}: %(message)s"
-            )
+            logging.Formatter(f"%(asctime)s %(levelname)s {b.slug}: %(message)s")
         )
         if sentry_sdk:
             scope = sentry_sdk.get_isolation_scope()
-            scope.set_tag("version", version.name)
-            scope.set_tag("language", language.tag)
+            scope.set_tag("version", b.version)
+            scope.set_tag("language", b.language)
         cpython_repo.update()
         builder = DocBuilder(
-            version,
-            language,
+            b,
             cpython_repo,
             docs_by_version_content,
             switchers_content,
@@ -1162,7 +1216,7 @@ def build_docs(args: argparse.Namespace) -> int:
         )
         built_successfully = builder.run(http, force_build=force_build)
         if built_successfully:
-            build_succeeded.add((version.name, language.tag))
+            build_succeeded.add(b.slug)
         elif built_successfully is not None:
             any_build_failed = True
 
@@ -1285,7 +1339,7 @@ def make_symlinks(
     group: str,
     versions: Versions,
     languages: Languages,
-    successful_builds: Set[tuple[str, str]],
+    successful_builds: Set[str],
     skip_cache_invalidation: bool,
     http: urllib3.PoolManager,
 ) -> None:
@@ -1305,7 +1359,7 @@ def make_symlinks(
         ("dev", versions.current_dev.name),
     ):
         for language in languages:
-            if (symlink_target, language.tag) in successful_builds:
+            if f"{language.tag}/{symlink_target}" in successful_builds:
                 symlink(
                     www_root,
                     language.tag,
