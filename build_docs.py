@@ -200,6 +200,7 @@ class Version:
             "docutils<=0.17.1",
             "jieba",
             "jinja2<3.1",
+            "python-docs-theme<=2023.3.1",
             "sphinxcontrib-applehelp<=1.0.2",
             "sphinxcontrib-devhelp<=1.0.2",
             "sphinxcontrib-htmlhelp<=2.0",
