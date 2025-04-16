@@ -195,6 +195,7 @@ class Version:
 
         # Requirements/constraints for Python 3.7 and older, pre-requirements.txt
         reqs = [
+            "alabaster<0.7.12",
             "blurb<1.2",
             "docutils<=0.17.1",
             "jieba",
