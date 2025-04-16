@@ -212,7 +212,7 @@ class Version:
         if self.name in {"3.7", "3.6", "2.7"}:
             return reqs + ["sphinx==2.3.1"]
         if self.name == "3.5":
-            return reqs + ["sphinx==1.8.4"]
+            return reqs + ["sphinx==1.8.4", "standard-pipes"]
         raise ValueError("unreachable")
 
     @property
