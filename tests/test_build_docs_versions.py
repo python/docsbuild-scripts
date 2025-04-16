@@ -17,7 +17,7 @@ def versions() -> Versions:
     ])
 
 
-def test_reversed(versions) -> None:
+def test_reversed(versions: Versions) -> None:
     # Act
     output = list(reversed(versions))
 
