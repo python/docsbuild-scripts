@@ -36,6 +36,11 @@ sphinxopts = [
     '-D latex_elements.fontenc=\\usepackage{fontspec}',
 ]
 
+[languages.bn_IN]
+name = "Bengali"
+translated_name = "বাংলা"
+in_prod = false
+
 [languages.id]
 name = "Indonesian"
 translated_name = "Indonesia"
