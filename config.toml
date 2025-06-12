@@ -88,6 +88,11 @@ sphinxopts = [
 name = "Polish"
 translated_name = "polski"
 
+[languages.ro]
+name = "Romanian"
+translated_name = "Românește"
+in_prod = false
+
 [languages.pt_BR]
 name = "Brazilian Portuguese"
 translated_name = "Português brasileiro"
