@@ -967,6 +967,8 @@ def parse_args() -> argparse.Namespace:
         description="Runs a build of the Python docs for various branches.",
         allow_abbrev=False,
     )
+    parser.color = True
+    parser.suggest_on_error = True
     parser.add_argument(
         "--select-output",
         choices=("no-html", "only-html", "only-html-en"),
