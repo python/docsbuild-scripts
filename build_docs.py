@@ -5,6 +5,26 @@
 Without any arguments builds docs for all active versions and
 languages.
 
+Environment variables for:
+
+- `SENTRY_DSN` (Error reporting)
+- `FASTLY_SERVICE_ID` / `FASTLY_TOKEN` (CDN purges)
+- `PYTHON_DOCS_ENABLE_ANALYTICS` (Enable Plausible for online docs)
+
+are read from the site configuration path for your platform
+(/etc/xdg/docsbuild-scripts on linux) if available,
+and can be overriden by writing a file to the user config dir
+for your platform ($HOME/.config/docsbuild-scripts on linux).
+The contents of the file is parsed as toml:
+
+```toml
+[env]
+SENTRY_DSN = "https://0a0a0a0a0a0a0a0a0a0a0a@sentry.io/69420"
+FASTLY_SERVICE_ID = "deadbeefdeadbeefdead"
+FASTLY_TOKEN = "secureme!"
+PYTHON_DOCS_ENABLE_ANALYTICS = "1"
+```
+
 Languages are stored in `config.toml` while versions are discovered
 from the devguide.
 
@@ -22,36 +42,43 @@ Modified by Julien Palard to build translations.
 
 from __future__ import annotations
 
-from argparse import ArgumentParser, Namespace
-from collections.abc import Iterable, Sequence
-from contextlib import suppress, contextmanager
-from dataclasses import dataclass
+import argparse
+import concurrent.futures
+import dataclasses
+import datetime as dt
 import filecmp
 import json
 import logging
 import logging.handlers
-from functools import total_ordering
-from os import getenv, readlink
+import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
+import venv
 from bisect import bisect_left as bisect
-from datetime import datetime as dt, timezone
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from string import Template
 from time import perf_counter, sleep
-from typing import Literal
 from urllib.parse import urljoin
 
 import jinja2
+import platformdirs
 import tomlkit
 import urllib3
 import zc.lockfile
 
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from collections.abc import Collection, Iterator, Sequence, Set
+    from typing import Literal
+
 try:
-    from os import EX_OK, EX_SOFTWARE as EX_FAILURE
+    from os import EX_OK
+    from os import EX_SOFTWARE as EX_FAILURE
 except ImportError:
     EX_OK, EX_FAILURE = 0, 1
 
@@ -65,9 +92,67 @@ else:
 HERE = Path(__file__).resolve().parent
 
 
-@total_ordering
+@dataclasses.dataclass(frozen=True, slots=True)
+class Versions:
+    _seq: Sequence[Version]
+
+    def __iter__(self) -> Iterator[Version]:
+        return iter(self._seq)
+
+    def __reversed__(self) -> Iterator[Version]:
+        return reversed(self._seq)
+
+    @classmethod
+    def from_json(cls, data: dict) -> Versions:
+        """Load versions from the devguide's JSON representation."""
+        permitted = ", ".join(sorted(Version.STATUSES | Version.SYNONYMS.keys()))
+
+        versions = []
+        for name, release in data.items():
+            branch = release["branch"]
+            status = release["status"]
+            status = Version.SYNONYMS.get(status, status)
+            if status not in Version.STATUSES:
+                msg = (
+                    f"Saw invalid version status {status!r}, "
+                    f"expected to be one of {permitted}."
+                )
+                raise ValueError(msg)
+            versions.append(Version(name=name, status=status, branch_or_tag=branch))
+
+        return cls(sorted(versions, key=Version.as_tuple))
+
+    def filter(self, branches: Sequence[str] = ()) -> Sequence[Version]:
+        """Filter the given versions.
+
+        If *branches* is given, only *versions* matching *branches* are returned.
+
+        Else all live versions are returned (this means no EOL and no
+        security-fixes branches).
+        """
+        if branches:
+            branches = frozenset(branches)
+            return [v for v in self if {v.name, v.branch_or_tag} & branches]
+        return [v for v in self if v.status not in {"EOL", "security-fixes"}]
+
+    @property
+    def current_stable(self) -> Version:
+        """Find the current stable CPython version."""
+        return max((v for v in self if v.status == "stable"), key=Version.as_tuple)
+
+    @property
+    def current_dev(self) -> Version:
+        """Find the current CPython version in development."""
+        return max(self, key=Version.as_tuple)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True, slots=True)
 class Version:
     """Represents a CPython version and its documentation build dependencies."""
+
+    name: str
+    status: Literal["EOL", "security-fixes", "stable", "pre-release", "in development"]
+    branch_or_tag: str
 
     STATUSES = {"EOL", "security-fixes", "stable", "pre-release", "in development"}
 
@@ -81,22 +166,11 @@ class Version:
         "prerelease": "pre-release",
     }
 
-    def __init__(self, name, *, status, branch_or_tag=None):
-        status = self.SYNONYMS.get(status, status)
-        if status not in self.STATUSES:
-            raise ValueError(
-                "Version status expected to be one of: "
-                f"{', '.join(self.STATUSES|set(self.SYNONYMS.keys()))}, got {status!r}."
-            )
-        self.name = name
-        self.branch_or_tag = branch_or_tag
-        self.status = status
-
-    def __repr__(self):
-        return f"Version({self.name})"
+    def __eq__(self, other: Version) -> bool:
+        return self.name == other.name
 
     @property
-    def requirements(self):
+    def requirements(self) -> list[str]:
         """Generate the right requirements for this version.
 
         Since CPython 3.8 a Doc/requirements.txt file can be used.
@@ -108,61 +182,60 @@ class Version:
         See https://github.com/python/cpython/issues/91483
 
         """
-        if self.name == "3.5":
-            return ["jieba", "blurb", "sphinx==1.8.4", "jinja2<3.1", "docutils<=0.17.1"]
-        if self.name in {"3.7", "3.6", "2.7"}:
-            return ["jieba", "blurb", "sphinx==2.3.1", "jinja2<3.1", "docutils<=0.17.1"]
-
-        return [
+        dependencies = [
+            "-rrequirements.txt",
             "jieba",  # To improve zh search.
             "PyStemmer~=2.2.0",  # To improve performance for word stemming.
-            "-rrequirements.txt",
         ]
+        if self.as_tuple() >= (3, 11):
+            return dependencies
+        if self.as_tuple() >= (3, 8):
+            # Restore the imghdr module for Python 3.8-3.10.
+            return dependencies + ["standard-imghdr"]
+
+        # Requirements/constraints for Python 3.7 and older, pre-requirements.txt
+        reqs = [
+            "alabaster<0.7.12",
+            "blurb<1.2",
+            "docutils<=0.17.1",
+            "jieba",
+            "jinja2<3.1",
+            "python-docs-theme<=2023.3.1",
+            "sphinxcontrib-applehelp<=1.0.2",
+            "sphinxcontrib-devhelp<=1.0.2",
+            "sphinxcontrib-htmlhelp<=2.0",
+            "sphinxcontrib-jsmath<=1.0.1",
+            "sphinxcontrib-qthelp<=1.0.3",
+            "sphinxcontrib-serializinghtml<=1.1.5",
+            "standard-imghdr",
+        ]
+        if self.name in {"3.7", "3.6", "2.7"}:
+            return reqs + ["sphinx==2.3.1"]
+        if self.name == "3.5":
+            return reqs + ["sphinx==1.8.4", "standard-pipes"]
+        raise ValueError("unreachable")
 
     @property
-    def changefreq(self):
+    def changefreq(self) -> str:
         """Estimate this version change frequency, for the sitemap."""
         return {"EOL": "never", "security-fixes": "yearly"}.get(self.status, "daily")
 
-    def as_tuple(self):
+    def as_tuple(self) -> tuple[int, ...]:
         """This version name as tuple, for easy comparisons."""
         return version_to_tuple(self.name)
 
     @property
-    def url(self):
+    def url(self) -> str:
         """The doc URL of this version in production."""
         return f"https://docs.python.org/{self.name}/"
 
     @property
-    def title(self):
+    def title(self) -> str:
         """The title of this version's doc, for the sidebar."""
         return f"Python {self.name} ({self.status})"
 
-    @staticmethod
-    def filter(versions, branch=None):
-        """Filter the given versions.
-
-        If *branch* is given, only *versions* matching *branch* are returned.
-
-        Else all live versions are returned (this means no EOL and no
-        security-fixes branches).
-        """
-        if branch:
-            return [v for v in versions if branch in (v.name, v.branch_or_tag)]
-        return [v for v in versions if v.status not in ("EOL", "security-fixes")]
-
-    @staticmethod
-    def current_stable(versions):
-        """Find the current stable CPython version."""
-        return max((v for v in versions if v.status == "stable"), key=Version.as_tuple)
-
-    @staticmethod
-    def current_dev(versions):
-        """Find the current CPython version in development."""
-        return max(versions, key=Version.as_tuple)
-
     @property
-    def picker_label(self):
+    def picker_label(self) -> str:
         """Forge the label of a version picker."""
         if self.status == "in development":
             return f"dev ({self.name})"
@@ -170,57 +243,75 @@ class Version:
             return f"pre ({self.name})"
         return self.name
 
-    def setup_indexsidebar(self, versions: Sequence[Version], dest_path: Path):
-        """Build indexsidebar.html for Sphinx."""
-        template_path = HERE / "templates" / "indexsidebar.html"
-        template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
-        rendered_template = template.render(
-            current_version=self,
-            versions=versions[::-1],
-        )
-        dest_path.write_text(rendered_template, encoding="UTF-8")
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Languages:
+    _seq: Sequence[Language]
+
+    def __iter__(self) -> Iterator[Language]:
+        return iter(self._seq)
+
+    def __reversed__(self) -> Iterator[Language]:
+        return reversed(self._seq)
 
     @classmethod
-    def from_json(cls, name, values):
-        """Loads a version from devguide's json representation."""
-        return cls(name, status=values["status"], branch_or_tag=values["branch"])
+    def from_json(cls, defaults: dict, languages: dict) -> Languages:
+        default_translated_name = defaults.get("translated_name", "")
+        default_in_prod = defaults.get("in_prod", True)
+        default_sphinxopts = defaults.get("sphinxopts", [])
+        default_html_only = defaults.get("html_only", False)
+        langs = [
+            Language(
+                iso639_tag=iso639_tag,
+                name=section["name"],
+                translated_name=section.get("translated_name", default_translated_name),
+                in_prod=section.get("in_prod", default_in_prod),
+                sphinxopts=section.get("sphinxopts", default_sphinxopts),
+                html_only=section.get("html_only", default_html_only),
+            )
+            for iso639_tag, section in languages.items()
+        ]
+        return cls(langs)
 
-    def __eq__(self, other):
-        return self.name == other.name
+    def filter(self, language_tags: Sequence[str] = ()) -> Sequence[Language]:
+        """Filter a sequence of languages according to --languages."""
+        if language_tags:
+            language_tags = frozenset(language_tags)
+            return [l for l in self if l.tag in language_tags]  # NoQA: E741
+        return list(self)
 
-    def __gt__(self, other):
-        return self.as_tuple() > other.as_tuple()
 
-
-@dataclass(order=True, frozen=True, kw_only=True)
+@dataclasses.dataclass(order=True, frozen=True, kw_only=True)
 class Language:
     iso639_tag: str
     name: str
     translated_name: str
     in_prod: bool
-    sphinxopts: tuple
+    sphinxopts: Sequence[str]
     html_only: bool = False
 
     @property
-    def tag(self):
+    def tag(self) -> str:
         return self.iso639_tag.replace("_", "-").lower()
 
     @property
-    def switcher_label(self):
+    def is_translation(self) -> bool:
+        return self.tag != "en"
+
+    @property
+    def locale_repo_url(self) -> str:
+        return f"https://github.com/python/python-docs-{self.tag}.git"
+
+    @property
+    def switcher_label(self) -> str:
         if self.translated_name:
             return f"{self.name} | {self.translated_name}"
         return self.name
 
-    @staticmethod
-    def filter(languages, language_tags=None):
-        """Filter a sequence of languages according to --languages."""
-        if language_tags:
-            languages_dict = {language.tag: language for language in languages}
-            return [languages_dict[tag] for tag in language_tags]
-        return languages
 
-
-def run(cmd, cwd=None) -> subprocess.CompletedProcess:
+def run(
+    cmd: Sequence[str | Path], cwd: Path | None = None
+) -> subprocess.CompletedProcess:
     """Like subprocess.run, with logging before and after the command execution."""
     cmd = list(map(str, cmd))
     cmdstring = shlex.join(cmd)
@@ -246,7 +337,7 @@ def run(cmd, cwd=None) -> subprocess.CompletedProcess:
     return result
 
 
-def run_with_logging(cmd, cwd=None):
+def run_with_logging(cmd: Sequence[str | Path], cwd: Path | None = None) -> None:
     """Like subprocess.check_call, with logging before the command execution."""
     cmd = list(map(str, cmd))
     logging.debug("Run: '%s'", shlex.join(cmd))
@@ -268,46 +359,38 @@ def run_with_logging(cmd, cwd=None):
         raise subprocess.CalledProcessError(return_code, cmd[0])
 
 
-def changed_files(left, right):
-    """Compute a list of different files between left and right, recursively.
-    Resulting paths are relative to left.
-    """
-    changed = []
+def changed_files(left: Path, right: Path) -> int:
+    """Compute the number of different files in the two directory trees."""
 
-    def traverse(dircmp_result):
-        base = Path(dircmp_result.left).relative_to(left)
-        for file in dircmp_result.diff_files:
-            changed.append(str(base / file))
-            if file == "index.html":
-                changed.append(str(base) + "/")
-        for dircomp in dircmp_result.subdirs.values():
-            traverse(dircomp)
+    def traverse(dircmp_result: filecmp.dircmp) -> int:
+        changed = len(dircmp_result.diff_files)
+        changed += sum(map(traverse, dircmp_result.subdirs.values()))
+        return changed
 
-    traverse(filecmp.dircmp(left, right))
-    return changed
+    return traverse(filecmp.dircmp(left, right))
 
 
-@dataclass
+@dataclasses.dataclass
 class Repository:
     """Git repository abstraction for our specific needs."""
 
     remote: str
     directory: Path
 
-    def run(self, *args):
+    def run(self, *args: str) -> subprocess.CompletedProcess:
         """Run git command in the clone repository."""
         return run(("git", "-C", self.directory) + args)
 
-    def get_ref(self, pattern):
+    def get_ref(self, pattern: str) -> str:
         """Return the reference of a given tag or branch."""
         try:
             # Maybe it's a branch
-            return self.run("show-ref", "-s", "origin/" + pattern).stdout.strip()
+            return self.run("show-ref", "-s", f"origin/{pattern}").stdout.strip()
         except subprocess.CalledProcessError:
             # Maybe it's a tag
-            return self.run("show-ref", "-s", "tags/" + pattern).stdout.strip()
+            return self.run("show-ref", "-s", f"tags/{pattern}").stdout.strip()
 
-    def fetch(self):
+    def fetch(self) -> subprocess.CompletedProcess:
         """Try (and retry) to run git fetch."""
         try:
             return self.run("fetch")
@@ -316,35 +399,37 @@ class Repository:
             sleep(5)
         return self.run("fetch")
 
-    def switch(self, branch_or_tag):
+    def switch(self, branch_or_tag: str) -> None:
         """Reset and cleans the repository to the given branch or tag."""
         self.run("reset", "--hard", self.get_ref(branch_or_tag), "--")
         self.run("clean", "-dfqx")
 
-    def clone(self):
+    def clone(self) -> bool:
         """Maybe clone the repository, if not already cloned."""
         if (self.directory / ".git").is_dir():
             return False  # Already cloned
         logging.info("Cloning %s into %s", self.remote, self.directory)
         self.directory.mkdir(mode=0o775, parents=True, exist_ok=True)
-        run(["git", "clone", self.remote, self.directory])
+        run(("git", "clone", self.remote, self.directory))
         return True
 
-    def update(self):
+    def update(self) -> None:
         self.clone() or self.fetch()
 
 
-def version_to_tuple(version):
+def version_to_tuple(version: str) -> tuple[int, ...]:
     """Transform a version string to a tuple, for easy comparisons."""
     return tuple(int(part) for part in version.split("."))
 
 
-def tuple_to_version(version_tuple):
+def tuple_to_version(version_tuple: tuple[int, ...]) -> str:
     """Reverse version_to_tuple."""
     return ".".join(str(part) for part in version_tuple)
 
 
-def locate_nearest_version(available_versions, target_version):
+def locate_nearest_version(
+    available_versions: Collection[str], target_version: str
+) -> str:
     """Look for the nearest version of target_version in available_versions.
     Versions are to be given as tuples, like (3, 7) for 3.7.
 
@@ -388,25 +473,13 @@ def edit(file: Path):
     temporary.rename(file)
 
 
-def setup_switchers(
-    versions: Sequence[Version], languages: Sequence[Language], html_root: Path
-):
+def setup_switchers(script_content: bytes, html_root: Path) -> None:
     """Setup cross-links between CPython versions:
     - Cross-link various languages in a language switcher
     - Cross-link various versions in a version switcher
     """
-    language_pairs = sorted((l.tag, l.switcher_label) for l in languages if l.in_prod)
-    version_pairs = [(v.name, v.picker_label) for v in reversed(versions)]
-
-    switchers_template_file = HERE / "templates" / "switchers.js"
     switchers_path = html_root / "_static" / "switchers.js"
-
-    template = Template(switchers_template_file.read_text(encoding="UTF-8"))
-    rendered_template = template.safe_substitute(
-        LANGUAGES=json.dumps(language_pairs),
-        VERSIONS=json.dumps(version_pairs),
-    )
-    switchers_path.write_text(rendered_template, encoding="UTF-8")
+    switchers_path.write_bytes(script_content)
 
     for file in html_root.glob("**/*.html"):
         depth = len(file.relative_to(html_root).parts) - 1
@@ -421,65 +494,16 @@ def setup_switchers(
                 ofile.write(line)
 
 
-def copy_robots_txt(
-    www_root: Path,
-    group,
-    skip_cache_invalidation,
-    http: urllib3.PoolManager,
-) -> None:
-    """Copy robots.txt to www_root."""
-    if not www_root.exists():
-        logging.info("Skipping copying robots.txt (www root does not even exist).")
-        return
-    logging.info("Copying robots.txt...")
-    template_path = HERE / "templates" / "robots.txt"
-    robots_path = www_root / "robots.txt"
-    shutil.copyfile(template_path, robots_path)
-    robots_path.chmod(0o775)
-    run(["chgrp", group, robots_path])
-    if not skip_cache_invalidation:
-        purge(http, "robots.txt")
-
-
-def build_sitemap(
-    versions: Iterable[Version], languages: Iterable[Language], www_root: Path, group
-):
-    """Build a sitemap with all live versions and translations."""
-    if not www_root.exists():
-        logging.info("Skipping sitemap generation (www root does not even exist).")
-        return
-    logging.info("Starting sitemap generation...")
-    template_path = HERE / "templates" / "sitemap.xml"
-    template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
-    rendered_template = template.render(languages=languages, versions=versions)
-    sitemap_path = www_root / "sitemap.xml"
-    sitemap_path.write_text(rendered_template + "\n", encoding="UTF-8")
-    sitemap_path.chmod(0o664)
-    run(["chgrp", group, sitemap_path])
-
-
-def build_404(www_root: Path, group):
-    """Build a nice 404 error page to display in case PDFs are not built yet."""
-    if not www_root.exists():
-        logging.info("Skipping 404 page generation (www root does not even exist).")
-        return
-    logging.info("Copying 404 page...")
-    not_found_file = www_root / "404.html"
-    shutil.copyfile(HERE / "templates" / "404.html", not_found_file)
-    not_found_file.chmod(0o664)
-    run(["chgrp", group, not_found_file])
-
-
-def head(text, lines=10):
+def head(text: str, lines: int = 10) -> str:
     """Return the first *lines* lines from the given text."""
     return "\n".join(text.split("\n")[:lines])
 
 
-def version_info():
+def version_info() -> None:
     """Handler for --version."""
     try:
         platex_version = head(
-            subprocess.check_output(["platex", "--version"], text=True),
+            subprocess.check_output(("platex", "--version"), text=True),
             lines=3,
         )
     except FileNotFoundError:
@@ -487,7 +511,7 @@ def version_info():
 
     try:
         xelatex_version = head(
-            subprocess.check_output(["xelatex", "--version"], text=True),
+            subprocess.check_output(("xelatex", "--version"), text=True),
             lines=2,
         )
     except FileNotFoundError:
@@ -506,11 +530,442 @@ def version_info():
     )
 
 
-def parse_args():
+@dataclasses.dataclass
+class DocBuilder:
+    """Builder for a CPython version and a language."""
+
+    version: Version
+    language: Language
+    cpython_repo: Repository
+    docs_by_version_content: bytes
+    switchers_content: bytes
+    build_root: Path
+    www_root: Path
+    select_output: Literal["no-html", "only-html", "only-html-en"] | None
+    quick: bool
+    group: str
+    log_directory: Path
+    skip_cache_invalidation: bool
+    theme: str
+
+    @property
+    def html_only(self) -> bool:
+        return (
+            self.select_output in {"only-html", "only-html-en"}
+            or self.quick
+            or self.language.html_only
+        )
+
+    @property
+    def includes_html(self) -> bool:
+        """Does the build we are running include HTML output?"""
+        return self.select_output != "no-html"
+
+    def run(self, http: urllib3.PoolManager, force_build: bool) -> bool | None:
+        """Build and publish a Python doc, for a language, and a version."""
+        start_time = perf_counter()
+        start_timestamp = dt.datetime.now(tz=dt.UTC).replace(microsecond=0)
+        logging.info("Running.")
+        try:
+            if self.language.html_only and not self.includes_html:
+                logging.info("Skipping non-HTML build (language is HTML-only).")
+                return None  # skipped
+            self.cpython_repo.switch(self.version.branch_or_tag)
+            if self.language.is_translation:
+                self.clone_translation()
+            if trigger_reason := self.should_rebuild(force_build):
+                self.build_venv()
+                self.build()
+                self.copy_build_to_webroot(http)
+                self.save_state(
+                    build_start=start_timestamp,
+                    build_duration=perf_counter() - start_time,
+                    trigger=trigger_reason,
+                )
+            else:
+                return None  # skipped
+        except Exception as err:
+            logging.exception("Badly handled exception, human, please help.")
+            if sentry_sdk:
+                sentry_sdk.capture_exception(err)
+            return False
+        return True
+
+    @property
+    def locale_dir(self) -> Path:
+        return self.build_root / self.version.name / "locale"
+
+    @property
+    def checkout(self) -> Path:
+        """Path to CPython git clone."""
+        return self.build_root / _checkout_name(self.select_output)
+
+    def clone_translation(self) -> None:
+        self.translation_repo.update()
+        self.translation_repo.switch(self.translation_branch)
+
+    @property
+    def translation_repo(self) -> Repository:
+        """See PEP 545 for translations repository naming convention."""
+
+        locale_clone_dir = self.locale_dir / self.language.iso639_tag / "LC_MESSAGES"
+        return Repository(self.language.locale_repo_url, locale_clone_dir)
+
+    @property
+    def translation_branch(self) -> str:
+        """Some CPython versions may be untranslated, being either too old or
+        too new.
+
+        This function looks for remote branches on the given repo, and
+        returns the name of the nearest existing branch.
+
+        It could be enhanced to also search for tags.
+        """
+        remote_branches = self.translation_repo.run("branch", "-r").stdout
+        branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
+        return locate_nearest_version(branches, self.version.name)
+
+    def build(self) -> None:
+        """Build this version/language doc."""
+        logging.info("Build start.")
+        start_time = perf_counter()
+        sphinxopts = list(self.language.sphinxopts)
+        if self.language.is_translation:
+            sphinxopts.extend((
+                f"-D locale_dirs={self.locale_dir}",
+                f"-D language={self.language.iso639_tag}",
+                "-D gettext_compact=0",
+                "-D translation_progress_classes=1",
+            ))
+
+        if self.version.status == "EOL":
+            sphinxopts.append("-D html_context.outdated=1")
+
+        if self.version.status in ("in development", "pre-release"):
+            maketarget = "autobuild-dev"
+        else:
+            maketarget = "autobuild-stable"
+        if self.html_only:
+            maketarget += "-html"
+        logging.info("Running make %s", maketarget)
+        python = self.venv / "bin" / "python"
+        sphinxbuild = self.venv / "bin" / "sphinx-build"
+        blurb = self.venv / "bin" / "blurb"
+
+        if self.includes_html:
+            site_url = self.version.url
+            if self.language.is_translation:
+                site_url += f"{self.language.tag}/"
+            # Define a tag to enable opengraph socialcards previews
+            # (used in Doc/conf.py and requires matplotlib)
+            sphinxopts += (
+                "-t create-social-cards",
+                f"-D ogp_site_url={site_url}",
+            )
+
+            if self.version.as_tuple() < (3, 8):
+                # Disable CPython switchers, we handle them now:
+                text = (self.checkout / "Doc" / "Makefile").read_text(encoding="utf-8")
+                text = text.replace(" -A switchers=1", "")
+                (self.checkout / "Doc" / "Makefile").write_text(text, encoding="utf-8")
+
+            self.setup_indexsidebar()
+        run_with_logging((
+            "make",
+            "-C",
+            self.checkout / "Doc",
+            f"PYTHON={python}",
+            f"SPHINXBUILD={sphinxbuild}",
+            f"BLURB={blurb}",
+            f"VENVDIR={self.venv}",
+            f"SPHINXOPTS={' '.join(sphinxopts)}",
+            "SPHINXERRORHANDLING=",
+            maketarget,
+        ))
+        self.log_directory.mkdir(parents=True, exist_ok=True)
+        chgrp(self.log_directory, group=self.group, recursive=True)
+        if self.includes_html:
+            setup_switchers(
+                self.switchers_content, self.checkout / "Doc" / "build" / "html"
+            )
+        logging.info("Build done (%s).", format_seconds(perf_counter() - start_time))
+
+    def build_venv(self) -> None:
+        """Build a venv for the specific Python version.
+
+        So we can reuse them from builds to builds, while they contain
+        different Sphinx versions.
+        """
+        requirements = list(self.version.requirements)
+        if self.includes_html:
+            # opengraph previews
+            requirements.append("matplotlib>=3")
+
+        venv_path = self.build_root / f"venv-{self.version.name}"
+        venv.create(venv_path, symlinks=os.name != "nt", with_pip=True)
+        run(
+            (
+                venv_path / "bin" / "python",
+                "-m",
+                "pip",
+                "install",
+                "--upgrade",
+                "--upgrade-strategy=eager",
+                self.theme,
+                *requirements,
+            ),
+            cwd=self.checkout / "Doc",
+        )
+        run((venv_path / "bin" / "python", "-m", "pip", "freeze", "--all"))
+        self.venv = venv_path
+
+    def setup_indexsidebar(self) -> None:
+        """Copy indexsidebar.html for Sphinx."""
+        tmpl_src = HERE / "templates"
+        tmpl_dst = self.checkout / "Doc" / "tools" / "templates"
+        dbv_path = tmpl_dst / "_docs_by_version.html"
+
+        shutil.copy(tmpl_src / "indexsidebar.html", tmpl_dst / "indexsidebar.html")
+        if self.version.status != "EOL":
+            dbv_path.write_bytes(self.docs_by_version_content)
+        else:
+            shutil.copy(tmpl_src / "_docs_by_version.html", dbv_path)
+
+    def copy_build_to_webroot(self, http: urllib3.PoolManager) -> None:
+        """Copy a given build to the appropriate webroot with appropriate rights."""
+        logging.info("Publishing start.")
+        start_time = perf_counter()
+        self.www_root.mkdir(parents=True, exist_ok=True)
+        if not self.language.is_translation:
+            target = self.www_root / self.version.name
+        else:
+            language_dir = self.www_root / self.language.tag
+            language_dir.mkdir(parents=True, exist_ok=True)
+            chgrp(language_dir, group=self.group, recursive=True)
+            language_dir.chmod(0o775)
+            target = language_dir / self.version.name
+
+        target.mkdir(parents=True, exist_ok=True)
+        try:
+            target.chmod(0o775)
+        except PermissionError as err:
+            logging.warning("Can't change mod of %s: %s", target, str(err))
+        chgrp(target, group=self.group, recursive=True)
+
+        changed = 0
+        if self.includes_html:
+            # Copy built HTML files to webroot (default /srv/docs.python.org)
+            changed += changed_files(self.checkout / "Doc" / "build" / "html", target)
+            logging.info("Copying HTML files to %s", target)
+            chgrp(
+                self.checkout / "Doc" / "build" / "html/",
+                group=self.group,
+                recursive=True,
+            )
+            chmod_make_readable(self.checkout / "Doc" / "build" / "html")
+            run((
+                "rsync",
+                "-a",
+                "--delete-delay",
+                "--filter",
+                "P archives/",
+                str(self.checkout / "Doc" / "build" / "html") + "/",
+                target,
+            ))
+
+        dist_dir = self.checkout / "Doc" / "dist"
+        if dist_dir.is_dir():
+            # Copy archive files to /archives/
+            logging.debug("Copying dist files.")
+            chgrp(dist_dir, group=self.group, recursive=True)
+            chmod_make_readable(dist_dir)
+            archives_dir = target / "archives"
+            archives_dir.mkdir(parents=True, exist_ok=True)
+            archives_dir.chmod(
+                archives_dir.stat().st_mode | stat.S_IROTH | stat.S_IXOTH
+            )
+            chgrp(archives_dir, group=self.group)
+            changed += 1
+            for dist_file in dist_dir.iterdir():
+                shutil.copy2(dist_file, archives_dir / dist_file.name)
+                changed += 1
+
+        logging.info("%s files changed", changed)
+        if changed and not self.skip_cache_invalidation:
+            surrogate_key = f"{self.language.tag}/{self.version.name}"
+            purge_surrogate_key(http, surrogate_key)
+        logging.info(
+            "Publishing done (%s).", format_seconds(perf_counter() - start_time)
+        )
+
+    def should_rebuild(self, force: bool) -> str | Literal[False]:
+        state = self.load_state()
+        if not state:
+            logging.info("Should rebuild: no previous state found.")
+            return "no previous state"
+        cpython_sha = self.cpython_repo.run("rev-parse", "HEAD").stdout.strip()
+        if self.language.is_translation:
+            translation_sha = self.translation_repo.run(
+                "rev-parse", "HEAD"
+            ).stdout.strip()
+            if translation_sha != state["translation_sha"]:
+                logging.info(
+                    "Should rebuild: new translations (from %s to %s)",
+                    state["translation_sha"],
+                    translation_sha,
+                )
+                return "new translations"
+        if cpython_sha != state["cpython_sha"]:
+            diff = self.cpython_repo.run(
+                "diff", "--name-only", state["cpython_sha"], cpython_sha
+            ).stdout
+            if "Doc/" in diff or "Misc/NEWS.d/" in diff:
+                logging.info(
+                    "Should rebuild: Doc/ has changed (from %s to %s)",
+                    state["cpython_sha"],
+                    cpython_sha,
+                )
+                return "Doc/ has changed"
+        if force:
+            logging.info("Should rebuild: forced.")
+            return "forced"
+        logging.info("Nothing changed, no rebuild needed.")
+        return False
+
+    def load_state(self) -> dict:
+        if self.select_output is not None:
+            state_file = self.build_root / f"state-{self.select_output}.toml"
+        else:
+            state_file = self.build_root / "state.toml"
+        try:
+            return tomlkit.loads(state_file.read_text(encoding="UTF-8"))[
+                f"/{self.language.tag}/{self.version.name}/"
+            ]
+        except (KeyError, FileNotFoundError):
+            return {}
+
+    def save_state(
+        self, build_start: dt.datetime, build_duration: float, trigger: str
+    ) -> None:
+        """Save current CPython sha1 and current translation sha1.
+
+        Using this we can deduce if a rebuild is needed or not.
+        """
+        if self.select_output is not None:
+            state_file = self.build_root / f"state-{self.select_output}.toml"
+        else:
+            state_file = self.build_root / "state.toml"
+        try:
+            states = tomlkit.parse(state_file.read_text(encoding="UTF-8"))
+        except FileNotFoundError:
+            states = tomlkit.document()
+
+        key = f"/{self.language.tag}/{self.version.name}/"
+        state = {
+            "last_build_start": build_start,
+            "last_build_duration": round(build_duration, 0),
+            "triggered_by": trigger,
+            "cpython_sha": self.cpython_repo.run("rev-parse", "HEAD").stdout.strip(),
+        }
+        if self.language.is_translation:
+            state["translation_sha"] = self.translation_repo.run(
+                "rev-parse", "HEAD"
+            ).stdout.strip()
+        states[key] = state
+        state_file.write_text(tomlkit.dumps(states), encoding="UTF-8")
+
+        table = tomlkit.inline_table()
+        table |= state
+        logging.info("Saved new rebuild state for %s: %s", key, table.as_string())
+
+
+def chgrp(
+    path: Path,
+    /,
+    group: int | str | None,
+    *,
+    recursive: bool = False,
+    follow_symlinks: bool = True,
+) -> None:
+    if sys.platform == "win32":
+        return
+
+    from grp import getgrnam
+
+    try:
+        try:
+            group_id = int(group)
+        except ValueError:
+            group_id = getgrnam(group)[2]
+    except (LookupError, TypeError, ValueError):
+        return
+
+    try:
+        os.chown(path, -1, group_id, follow_symlinks=follow_symlinks)
+        if recursive:
+            for p in path.rglob("*"):
+                os.chown(p, -1, group_id, follow_symlinks=follow_symlinks)
+    except OSError as err:
+        logging.warning("Can't change group of %s: %s", path, str(err))
+
+
+def chmod_make_readable(path: Path, /, mode: int = stat.S_IROTH) -> None:
+    if not path.is_dir():
+        raise ValueError
+
+    path.chmod(path.stat().st_mode | stat.S_IROTH | stat.S_IXOTH)  # o+rx
+    for p in path.rglob("*"):
+        if p.is_dir():
+            p.chmod(p.stat().st_mode | stat.S_IROTH | stat.S_IXOTH)  # o+rx
+        else:
+            p.chmod(p.stat().st_mode | stat.S_IROTH)  # o+r
+
+
+def format_seconds(seconds: float) -> str:
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    hours, minutes, seconds = int(hours), int(minutes), round(seconds)
+
+    match (hours, minutes, seconds):
+        case 0, 0, s:
+            return f"{s}s"
+        case 0, m, s:
+            return f"{m}m {s}s"
+        case h, m, s:
+            return f"{h}h {m}m {s}s"
+
+    raise ValueError("unreachable")
+
+
+def _checkout_name(select_output: str | None) -> str:
+    if select_output is not None:
+        return f"cpython-{select_output}"
+    return "cpython"
+
+
+def main() -> int:
+    """Script entry point."""
+    args = parse_args()
+    setup_logging(args.log_directory, args.select_output)
+    load_environment_variables()
+
+    if args.select_output is None:
+        return build_docs_with_lock(args, "build_docs.lock")
+    if args.select_output == "no-html":
+        return build_docs_with_lock(args, "build_docs_archives.lock")
+    if args.select_output == "only-html":
+        return build_docs_with_lock(args, "build_docs_html.lock")
+    if args.select_output == "only-html-en":
+        return build_docs_with_lock(args, "build_docs_html_en.lock")
+    return EX_FAILURE
+
+
+def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
 
-    parser = ArgumentParser(
-        description="Runs a build of the Python docs for various branches."
+    parser = argparse.ArgumentParser(
+        description="Runs a build of the Python docs for various branches.",
+        allow_abbrev=False,
     )
     parser.add_argument(
         "--select-output",
@@ -525,9 +980,10 @@ def parse_args():
     )
     parser.add_argument(
         "-b",
-        "--branch",
+        "--branches",
+        nargs="*",
         metavar="3.12",
-        help="Version to build (defaults to all maintained branches).",
+        help="Versions to build (defaults to all maintained branches).",
     )
     parser.add_argument(
         "-r",
@@ -542,6 +998,12 @@ def parse_args():
         type=Path,
         help="Path where generated files will be copied.",
         default=Path("/srv/docs.python.org"),
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Always build the chosen languages and versions, "
+        "regardless of existing state.",
     )
     parser.add_argument(
         "--skip-cache-invalidation",
@@ -592,10 +1054,10 @@ def parse_args():
     return args
 
 
-def setup_logging(log_directory: Path, select_output: str | None):
+def setup_logging(log_directory: Path, select_output: str | None) -> None:
     """Setup logging to stderr if run by a human, or to a file if run from a cron."""
     log_format = "%(asctime)s %(levelname)s: %(message)s"
-    if sys.stderr.isatty():
+    if sys.stderr.isatty() or "CI" in os.environ:
         logging.basicConfig(format=log_format, stream=sys.stderr)
     else:
         log_directory.mkdir(parents=True, exist_ok=True)
@@ -609,393 +1071,255 @@ def setup_logging(log_directory: Path, select_output: str | None):
     logging.getLogger().setLevel(logging.DEBUG)
 
 
-@dataclass
-class DocBuilder:
-    """Builder for a CPython version and a language."""
-
-    version: Version
-    versions: Sequence[Version]
-    language: Language
-    languages: Sequence[Language]
-    cpython_repo: Repository
-    build_root: Path
-    www_root: Path
-    select_output: Literal["no-html", "only-html", "only-html-en"] | None
-    quick: bool
-    group: str
-    log_directory: Path
-    skip_cache_invalidation: bool
-    theme: Path
-
-    @property
-    def html_only(self):
-        return (
-            self.select_output in {"only-html", "only-html-en"}
-            or self.quick
-            or self.language.html_only
-        )
-
-    @property
-    def includes_html(self):
-        """Does the build we are running include HTML output?"""
-        return self.select_output != "no-html"
-
-    def run(self, http: urllib3.PoolManager) -> bool:
-        """Build and publish a Python doc, for a language, and a version."""
-        start_time = perf_counter()
-        start_timestamp = dt.now(tz=timezone.utc).replace(microsecond=0)
-        logging.info("Running.")
-        try:
-            if self.language.html_only and not self.includes_html:
-                logging.info("Skipping non-HTML build (language is HTML-only).")
-                return True
-            self.cpython_repo.switch(self.version.branch_or_tag)
-            if self.language.tag != "en":
-                self.clone_translation()
-            if trigger_reason := self.should_rebuild():
-                self.build_venv()
-                self.build()
-                self.copy_build_to_webroot(http)
-                self.save_state(
-                    build_start=start_timestamp,
-                    build_duration=perf_counter() - start_time,
-                    trigger=trigger_reason,
-                )
-        except Exception as err:
-            logging.exception("Badly handled exception, human, please help.")
-            if sentry_sdk:
-                sentry_sdk.capture_exception(err)
-            return False
-        return True
-
-    @property
-    def checkout(self) -> Path:
-        """Path to CPython git clone."""
-        return self.build_root / _checkout_name(self.select_output)
-
-    def clone_translation(self):
-        self.translation_repo.update()
-        self.translation_repo.switch(self.translation_branch)
-
-    @property
-    def translation_repo(self):
-        """See PEP 545 for translations repository naming convention."""
-
-        locale_repo = f"https://github.com/python/python-docs-{self.language.tag}.git"
-        locale_clone_dir = (
-            self.build_root
-            / self.version.name
-            / "locale"
-            / self.language.iso639_tag
-            / "LC_MESSAGES"
-        )
-        return Repository(locale_repo, locale_clone_dir)
-
-    @property
-    def translation_branch(self):
-        """Some CPython versions may be untranslated, being either too old or
-        too new.
-
-        This function looks for remote branches on the given repo, and
-        returns the name of the nearest existing branch.
-
-        It could be enhanced to also search for tags.
-        """
-        remote_branches = self.translation_repo.run("branch", "-r").stdout
-        branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
-        return locate_nearest_version(branches, self.version.name)
-
-    def build(self):
-        """Build this version/language doc."""
-        logging.info("Build start.")
-        start_time = perf_counter()
-        sphinxopts = list(self.language.sphinxopts)
-        if self.language.tag != "en":
-            locale_dirs = self.build_root / self.version.name / "locale"
-            sphinxopts.extend(
-                (
-                    f"-D locale_dirs={locale_dirs}",
-                    f"-D language={self.language.iso639_tag}",
-                    "-D gettext_compact=0",
-                    "-D translation_progress_classes=1",
-                )
-            )
-        if self.language.tag == "ja":
-            # Since luatex doesn't support \ufffd, replace \ufffd with '?'.
-            # https://gist.github.com/zr-tex8r/e0931df922f38fbb67634f05dfdaf66b
-            # Luatex already fixed this issue, so we can remove this once Texlive
-            # is updated.
-            # (https://github.com/TeX-Live/luatex/commit/af5faf1)
-            subprocess.check_output(
-                "sed -i s/\N{REPLACEMENT CHARACTER}/?/g "
-                f"{locale_dirs}/ja/LC_MESSAGES/**/*.po",
-                shell=True,
-            )
-            subprocess.check_output(
-                "sed -i s/\N{REPLACEMENT CHARACTER}/?/g "
-                f"{self.checkout}/Doc/**/*.rst",
-                shell=True,
-            )
-
-        if self.version.status == "EOL":
-            sphinxopts.append("-D html_context.outdated=1")
-
-        if self.version.status in ("in development", "pre-release"):
-            maketarget = "autobuild-dev"
-        else:
-            maketarget = "autobuild-stable"
-        if self.html_only:
-            maketarget += "-html"
-        logging.info("Running make %s", maketarget)
-        python = self.venv / "bin" / "python"
-        sphinxbuild = self.venv / "bin" / "sphinx-build"
-        blurb = self.venv / "bin" / "blurb"
-
-        if self.includes_html:
-            # Define a tag to enable opengraph socialcards previews
-            # (used in Doc/conf.py and requires matplotlib)
-            sphinxopts.append("-t create-social-cards")
-
-            # Disable CPython switchers, we handle them now:
-            run(
-                ["sed", "-i"]
-                + ([""] if sys.platform == "darwin" else [])
-                + ["s/ *-A switchers=1//", self.checkout / "Doc" / "Makefile"]
-            )
-            self.version.setup_indexsidebar(
-                self.versions,
-                self.checkout / "Doc" / "tools" / "templates" / "indexsidebar.html",
-            )
-        run_with_logging(
-            [
-                "make",
-                "-C",
-                self.checkout / "Doc",
-                "PYTHON=" + str(python),
-                "SPHINXBUILD=" + str(sphinxbuild),
-                "BLURB=" + str(blurb),
-                "VENVDIR=" + str(self.venv),
-                "SPHINXOPTS=" + " ".join(sphinxopts),
-                "SPHINXERRORHANDLING=",
-                maketarget,
-            ]
-        )
-        run(["mkdir", "-p", self.log_directory])
-        run(["chgrp", "-R", self.group, self.log_directory])
-        if self.includes_html:
-            setup_switchers(
-                self.versions, self.languages, self.checkout / "Doc" / "build" / "html"
-            )
-        logging.info("Build done (%s).", format_seconds(perf_counter() - start_time))
-
-    def build_venv(self):
-        """Build a venv for the specific Python version.
-
-        So we can reuse them from builds to builds, while they contain
-        different Sphinx versions.
-        """
-        requirements = [self.theme] + self.version.requirements
-        if self.includes_html:
-            # opengraph previews
-            requirements.append("matplotlib>=3")
-
-        venv_path = self.build_root / ("venv-" + self.version.name)
-        run([sys.executable, "-m", "venv", venv_path])
-        run(
-            [venv_path / "bin" / "python", "-m", "pip", "install", "--upgrade"]
-            + ["--upgrade-strategy=eager"]
-            + requirements,
-            cwd=self.checkout / "Doc",
-        )
-        run([venv_path / "bin" / "python", "-m", "pip", "freeze", "--all"])
-        self.venv = venv_path
-
-    def copy_build_to_webroot(self, http: urllib3.PoolManager) -> None:
-        """Copy a given build to the appropriate webroot with appropriate rights."""
-        logging.info("Publishing start.")
-        start_time = perf_counter()
-        self.www_root.mkdir(parents=True, exist_ok=True)
-        if self.language.tag == "en":
-            target = self.www_root / self.version.name
-        else:
-            language_dir = self.www_root / self.language.tag
-            language_dir.mkdir(parents=True, exist_ok=True)
-            try:
-                run(["chgrp", "-R", self.group, language_dir])
-            except subprocess.CalledProcessError as err:
-                logging.warning("Can't change group of %s: %s", language_dir, str(err))
-            language_dir.chmod(0o775)
-            target = language_dir / self.version.name
-
-        target.mkdir(parents=True, exist_ok=True)
-        try:
-            target.chmod(0o775)
-        except PermissionError as err:
-            logging.warning("Can't change mod of %s: %s", target, str(err))
-        try:
-            run(["chgrp", "-R", self.group, target])
-        except subprocess.CalledProcessError as err:
-            logging.warning("Can't change group of %s: %s", target, str(err))
-
-        changed = []
-        if self.includes_html:
-            # Copy built HTML files to webroot (default /srv/docs.python.org)
-            changed = changed_files(self.checkout / "Doc" / "build" / "html", target)
-            logging.info("Copying HTML files to %s", target)
-            run(
-                [
-                    "chown",
-                    "-R",
-                    ":" + self.group,
-                    self.checkout / "Doc" / "build" / "html/",
-                ]
-            )
-            run(["chmod", "-R", "o+r", self.checkout / "Doc" / "build" / "html"])
-            run(
-                [
-                    "find",
-                    self.checkout / "Doc" / "build" / "html",
-                    "-type",
-                    "d",
-                    "-exec",
-                    "chmod",
-                    "o+x",
-                    "{}",
-                    ";",
-                ]
-            )
-            run(
-                [
-                    "rsync",
-                    "-a",
-                    "--delete-delay",
-                    "--filter",
-                    "P archives/",
-                    str(self.checkout / "Doc" / "build" / "html") + "/",
-                    target,
-                ]
-            )
-
-        if not self.quick:
-            # Copy archive files to /archives/
-            logging.debug("Copying dist files.")
-            run(
-                [
-                    "chown",
-                    "-R",
-                    ":" + self.group,
-                    self.checkout / "Doc" / "dist",
-                ]
-            )
-            run(
-                [
-                    "chmod",
-                    "-R",
-                    "o+r",
-                    self.checkout / "Doc" / "dist",
-                ]
-            )
-            run(["mkdir", "-m", "o+rx", "-p", target / "archives"])
-            run(["chown", ":" + self.group, target / "archives"])
-            run(
-                [
-                    "cp",
-                    "-a",
-                    *(self.checkout / "Doc" / "dist").glob("*"),
-                    target / "archives",
-                ]
-            )
-            changed.append("archives/")
-            for file in (target / "archives").iterdir():
-                changed.append("archives/" + file.name)
-
-        logging.info("%s files changed", len(changed))
-        if changed and not self.skip_cache_invalidation:
-            surrogate_key = f"{self.language.tag}/{self.version.name}"
-            purge_surrogate_key(http, surrogate_key)
+def load_environment_variables() -> None:
+    dbs_user_config = platformdirs.user_config_path("docsbuild-scripts")
+    dbs_site_config = platformdirs.site_config_path("docsbuild-scripts")
+    if dbs_user_config.is_file():
+        env_conf_file = dbs_user_config
+    elif dbs_site_config.is_file():
+        env_conf_file = dbs_site_config
+    else:
         logging.info(
-            "Publishing done (%s).", format_seconds(perf_counter() - start_time)
+            "No environment variables configured. Configure in %s or %s.",
+            dbs_site_config,
+            dbs_user_config,
         )
+        return
 
-    def should_rebuild(self):
-        state = self.load_state()
-        if not state:
-            logging.info("Should rebuild: no previous state found.")
-            return "no previous state"
-        cpython_sha = self.cpython_repo.run("rev-parse", "HEAD").stdout.strip()
-        if self.language.tag != "en":
-            translation_sha = self.translation_repo.run(
-                "rev-parse", "HEAD"
-            ).stdout.strip()
-            if translation_sha != state["translation_sha"]:
-                logging.info(
-                    "Should rebuild: new translations (from %s to %s)",
-                    state["translation_sha"],
-                    translation_sha,
+    logging.info("Reading environment variables from %s.", env_conf_file)
+    if env_conf_file == dbs_site_config:
+        logging.info("You can override settings in %s.", dbs_user_config)
+    elif dbs_site_config.is_file():
+        logging.info("Overriding %s.", dbs_site_config)
+
+    env_config = env_conf_file.read_text(encoding="utf-8")
+    for key, value in tomlkit.parse(env_config).get("env", {}).items():
+        logging.debug("Setting %s in environment.", key)
+        os.environ[key] = value
+
+
+def build_docs_with_lock(args: argparse.Namespace, lockfile_name: str) -> int:
+    try:
+        lock = zc.lockfile.LockFile(HERE / lockfile_name)
+    except zc.lockfile.LockError:
+        logging.info("Another builder is running... dying...")
+        return EX_FAILURE
+
+    try:
+        return build_docs(args)
+    finally:
+        lock.close()
+
+
+def build_docs(args: argparse.Namespace) -> int:
+    """Build all docs (each language and each version)."""
+    logging.info("Full build start.")
+    start_time = perf_counter()
+    http = urllib3.PoolManager()
+    versions = parse_versions_from_devguide(http)
+    languages = parse_languages_from_config()
+    # Reverse languages but not versions, because we take version-language
+    # pairs from the end of the list, effectively reversing it.
+    # This runs languages in config.toml order and versions newest first.
+    todo = [
+        (version, language)
+        for version in versions.filter(args.branches)
+        for language in reversed(languages.filter(args.languages))
+    ]
+    del args.branches
+    del args.languages
+    force_build = args.force
+    del args.force
+
+    docs_by_version_content = render_docs_by_version(versions).encode()
+    switchers_content = render_switchers(versions, languages)
+
+    build_succeeded = set()
+    any_build_failed = False
+    cpython_repo = Repository(
+        "https://github.com/python/cpython.git",
+        args.build_root / _checkout_name(args.select_output),
+    )
+    while todo:
+        version, language = todo.pop()
+        logging.root.handlers[0].setFormatter(
+            logging.Formatter(
+                f"%(asctime)s %(levelname)s {language.tag}/{version.name}: %(message)s"
+            )
+        )
+        if sentry_sdk:
+            scope = sentry_sdk.get_isolation_scope()
+            scope.set_tag("version", version.name)
+            scope.set_tag("language", language.tag)
+        cpython_repo.update()
+        builder = DocBuilder(
+            version,
+            language,
+            cpython_repo,
+            docs_by_version_content,
+            switchers_content,
+            **vars(args),
+        )
+        built_successfully = builder.run(http, force_build=force_build)
+        if built_successfully:
+            build_succeeded.add((version.name, language.tag))
+        elif built_successfully is not None:
+            any_build_failed = True
+
+    logging.root.handlers[0].setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
+    )
+
+    build_sitemap(versions, languages, args.www_root, args.group)
+    build_404(args.www_root, args.group)
+    copy_robots_txt(
+        args.www_root,
+        args.group,
+        args.skip_cache_invalidation,
+        http,
+    )
+    make_symlinks(
+        args.www_root,
+        args.group,
+        versions,
+        languages,
+        build_succeeded,
+        args.skip_cache_invalidation,
+        http,
+    )
+    if build_succeeded:
+        # Only check canonicals if at least one version was built.
+        proofread_canonicals(args.www_root, args.skip_cache_invalidation, http)
+
+    logging.info("Full build done (%s).", format_seconds(perf_counter() - start_time))
+
+    return EX_FAILURE if any_build_failed else EX_OK
+
+
+def parse_versions_from_devguide(http: urllib3.PoolManager) -> Versions:
+    releases = http.request(
+        "GET",
+        "https://raw.githubusercontent.com/"
+        "python/devguide/main/include/release-cycle.json",
+        timeout=30,
+    ).json()
+    return Versions.from_json(releases)
+
+
+def parse_languages_from_config() -> Languages:
+    """Read config.toml to discover languages to build."""
+    config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
+    return Languages.from_json(config["defaults"], config["languages"])
+
+
+def render_docs_by_version(versions: Versions) -> str:
+    """Generate content for _docs_by_version.html."""
+    links = [f'<li><a href="{v.url}">{v.title}</a></li>' for v in reversed(versions)]
+    return "\n".join(links)
+
+
+def render_switchers(versions: Versions, languages: Languages) -> bytes:
+    language_pairs = sorted((l.tag, l.switcher_label) for l in languages if l.in_prod)  # NoQA: E741
+    version_pairs = [(v.name, v.picker_label) for v in reversed(versions)]
+
+    switchers_template_file = HERE / "templates" / "switchers.js"
+    template = Template(switchers_template_file.read_text(encoding="UTF-8"))
+    rendered_template = template.safe_substitute(
+        LANGUAGES=json.dumps(language_pairs),
+        VERSIONS=json.dumps(version_pairs),
+    )
+    return rendered_template.encode("UTF-8")
+
+
+def build_sitemap(
+    versions: Versions, languages: Languages, www_root: Path, group: str
+) -> None:
+    """Build a sitemap with all live versions and translations."""
+    if not www_root.exists():
+        logging.info("Skipping sitemap generation (www root does not even exist).")
+        return
+    logging.info("Starting sitemap generation...")
+    template_path = HERE / "templates" / "sitemap.xml"
+    template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
+    rendered_template = template.render(languages=languages, versions=versions)
+    sitemap_path = www_root / "sitemap.xml"
+    sitemap_path.write_text(rendered_template + "\n", encoding="UTF-8")
+    sitemap_path.chmod(0o664)
+    chgrp(sitemap_path, group=group)
+
+
+def build_404(www_root: Path, group: str) -> None:
+    """Build a nice 404 error page to display in case PDFs are not built yet."""
+    if not www_root.exists():
+        logging.info("Skipping 404 page generation (www root does not even exist).")
+        return
+    logging.info("Copying 404 page...")
+    not_found_file = www_root / "404.html"
+    shutil.copyfile(HERE / "templates" / "404.html", not_found_file)
+    not_found_file.chmod(0o664)
+    chgrp(not_found_file, group=group)
+
+
+def copy_robots_txt(
+    www_root: Path,
+    group: str,
+    skip_cache_invalidation: bool,
+    http: urllib3.PoolManager,
+) -> None:
+    """Copy robots.txt to www_root."""
+    if not www_root.exists():
+        logging.info("Skipping copying robots.txt (www root does not even exist).")
+        return
+    logging.info("Copying robots.txt...")
+    template_path = HERE / "templates" / "robots.txt"
+    robots_path = www_root / "robots.txt"
+    shutil.copyfile(template_path, robots_path)
+    robots_path.chmod(0o775)
+    chgrp(robots_path, group=group)
+    if not skip_cache_invalidation:
+        purge(http, "robots.txt")
+
+
+def make_symlinks(
+    www_root: Path,
+    group: str,
+    versions: Versions,
+    languages: Languages,
+    successful_builds: Set[tuple[str, str]],
+    skip_cache_invalidation: bool,
+    http: urllib3.PoolManager,
+) -> None:
+    """Maintains the /2/, /3/, and /dev/ symlinks for each language.
+
+    Like:
+    - /2/ → /2.7/
+    - /3/ → /3.12/
+    - /dev/ → /3.14/
+    - /fr/3/ → /fr/3.12/
+    - /es/dev/ → /es/3.14/
+    """
+    logging.info("Creating major and development version symlinks...")
+    for symlink_name, symlink_target in (
+        ("3", versions.current_stable.name),
+        ("2", "2.7"),
+        ("dev", versions.current_dev.name),
+    ):
+        for language in languages:
+            if (symlink_target, language.tag) in successful_builds:
+                symlink(
+                    www_root,
+                    language.tag,
+                    symlink_target,
+                    symlink_name,
+                    group,
+                    skip_cache_invalidation,
+                    http,
                 )
-                return "new translations"
-        if cpython_sha != state["cpython_sha"]:
-            diff = self.cpython_repo.run(
-                "diff", "--name-only", state["cpython_sha"], cpython_sha
-            ).stdout
-            if "Doc/" in diff or "Misc/NEWS.d/" in diff:
-                logging.info(
-                    "Should rebuild: Doc/ has changed (from %s to %s)",
-                    state["cpython_sha"],
-                    cpython_sha,
-                )
-                return "Doc/ has changed"
-        logging.info("Nothing changed, no rebuild needed.")
-        return False
-
-    def load_state(self) -> dict:
-        if self.select_output is not None:
-            state_file = self.build_root / f"state-{self.select_output}.toml"
-        else:
-            state_file = self.build_root / "state.toml"
-        try:
-            return tomlkit.loads(state_file.read_text(encoding="UTF-8"))[
-                f"/{self.language.tag}/{self.version.name}/"
-            ]
-        except (KeyError, FileNotFoundError):
-            return {}
-
-    def save_state(self, build_start: dt, build_duration: float, trigger: str):
-        """Save current CPython sha1 and current translation sha1.
-
-        Using this we can deduce if a rebuild is needed or not.
-        """
-        if self.select_output is not None:
-            state_file = self.build_root / f"state-{self.select_output}.toml"
-        else:
-            state_file = self.build_root / "state.toml"
-        try:
-            states = tomlkit.parse(state_file.read_text(encoding="UTF-8"))
-        except FileNotFoundError:
-            states = tomlkit.document()
-
-        key = f"/{self.language.tag}/{self.version.name}/"
-        state = {
-            "last_build_start": build_start,
-            "last_build_duration": round(build_duration, 0),
-            "triggered_by": trigger,
-            "cpython_sha": self.cpython_repo.run("rev-parse", "HEAD").stdout.strip(),
-        }
-        if self.language.tag != "en":
-            state["translation_sha"] = self.translation_repo.run(
-                "rev-parse", "HEAD"
-            ).stdout.strip()
-        states[key] = state
-        state_file.write_text(tomlkit.dumps(states), encoding="UTF-8")
-
-        table = tomlkit.inline_table()
-        table |= state
-        logging.info("Saved new rebuild state for %s: %s", key, table.as_string())
 
 
 def symlink(
     www_root: Path,
-    language: Language,
+    language_tag: str,
     directory: str,
     name: str,
     group: str,
@@ -1003,82 +1327,75 @@ def symlink(
     http: urllib3.PoolManager,
 ) -> None:
     """Used by major_symlinks and dev_symlink to maintain symlinks."""
-    if language.tag == "en":  # English is rooted on /, no /en/
+    msg = "Creating symlink from /%s/ to /%s/"
+    if language_tag == "en":  # English is rooted on /, no /en/
         path = www_root
+        logging.debug(msg, name, directory)
     else:
-        path = www_root / language.tag
+        path = www_root / language_tag
+        logging.debug(msg, f"{language_tag}/{name}", f"{language_tag}/{directory}")
     link = path / name
     directory_path = path / directory
     if not directory_path.exists():
         return  # No touching link, dest doc not built yet.
 
-    if not link.exists() or readlink(link) != directory:
+    if not link.exists() or os.readlink(link) != directory:
         # Link does not exist or points to the wrong target.
         link.unlink(missing_ok=True)
         link.symlink_to(directory)
-        run(["chown", "-h", f":{group}", str(link)])
+        chgrp(link, group=group, follow_symlinks=False)
     if not skip_cache_invalidation:
-        surrogate_key = f"{language.tag}/{name}"
+        surrogate_key = f"{language_tag}/{name}"
         purge_surrogate_key(http, surrogate_key)
 
 
-def major_symlinks(
-    www_root: Path,
-    group: str,
-    versions: Iterable[Version],
-    languages: Iterable[Language],
-    skip_cache_invalidation: bool,
-    http: urllib3.PoolManager,
+def proofread_canonicals(
+    www_root: Path, skip_cache_invalidation: bool, http: urllib3.PoolManager
 ) -> None:
-    """Maintains the /2/ and /3/ symlinks for each language.
+    """In www_root we check that all canonical links point to existing contents.
 
-    Like:
-    - /3/ → /3.9/
-    - /fr/3/ → /fr/3.9/
-    - /es/3/ → /es/3.9/
+    It can happen that a canonical is "broken":
+
+    - /3.11/whatsnew/3.11.html typically would link to
+    /3/whatsnew/3.11.html, which may not exist yet.
     """
-    logging.info("Creating major version symlinks...")
-    current_stable = Version.current_stable(versions).name
-    for language in languages:
-        symlink(
-            www_root,
-            language,
-            current_stable,
-            "3",
-            group,
-            skip_cache_invalidation,
-            http,
-        )
-        symlink(www_root, language, "2.7", "2", group, skip_cache_invalidation, http)
+    logging.info("Checking canonical links...")
+    worker_count = (os.cpu_count() or 1) + 2
+    with concurrent.futures.ThreadPoolExecutor(worker_count) as executor:
+        futures = {
+            executor.submit(_check_canonical_rel, file, www_root)
+            for file in www_root.glob("**/*.html")
+        }
+        paths_to_purge = {
+            res.relative_to(www_root)  # strip the leading /srv/docs.python.org
+            for fut in concurrent.futures.as_completed(futures)
+            if (res := fut.result()) is not None
+        }
+    if not skip_cache_invalidation:
+        purge(http, *paths_to_purge)
 
 
-def dev_symlink(
-    www_root: Path,
-    group,
-    versions,
-    languages,
-    skip_cache_invalidation: bool,
-    http: urllib3.PoolManager,
-) -> None:
-    """Maintains the /dev/ symlinks for each language.
+# Python 3.12 onwards doesn't use self-closing tags for <link rel="canonical">
+_canonical_re = re.compile(
+    b"""<link rel="canonical" href="https://docs.python.org/([^"]*)"(?: /)?>"""
+)
 
-    Like:
-    - /dev/ → /3.11/
-    - /fr/dev/ → /fr/3.11/
-    - /es/dev/ → /es/3.11/
-    """
-    logging.info("Creating development version symlinks...")
-    current_dev = Version.current_dev(versions).name
-    for language in languages:
-        symlink(
-            www_root,
-            language,
-            current_dev,
-            "dev",
-            group,
-            skip_cache_invalidation,
-            http,
-        )
+
+def _check_canonical_rel(file: Path, www_root: Path) -> Path | None:
+    # Check for a canonical relation link in the HTML.
+    # If one exists, ensure that the target exists
+    # or otherwise remove the canonical link element.
+    html = file.read_bytes()
+    canonical = _canonical_re.search(html)
+    if canonical is None:
+        return None
+    target = canonical[1].decode(encoding="UTF-8", errors="surrogateescape")
+    if (www_root / target).exists():
+        return None
+    logging.info("Removing broken canonical from %s to %s", file, target)
+    start, end = canonical.span()
+    file.write_bytes(html[:start] + html[end:])
+    return file
 
 
 def purge(http: urllib3.PoolManager, *paths: Path | str) -> None:
@@ -1102,8 +1419,13 @@ def purge_surrogate_key(http: urllib3.PoolManager, surrogate_key: str) -> None:
 
     https://www.fastly.com/documentation/reference/api/purging/#purge-tag
     """
-    service_id = getenv("FASTLY_SERVICE_ID", "__UNSET__")
-    fastly_key = getenv("FASTLY_TOKEN", "__UNSET__")
+    unset = "__UNSET__"
+    service_id = os.environ.get("FASTLY_SERVICE_ID", unset)
+    fastly_key = os.environ.get("FASTLY_TOKEN", unset)
+
+    if service_id == unset or fastly_key == unset:
+        logging.info("CDN secrets not set, skipping Surrogate-Key purge")
+        return
 
     logging.info("Purging Surrogate-Key '%s' from CDN", surrogate_key)
     http.request(
@@ -1114,187 +1436,5 @@ def purge_surrogate_key(http: urllib3.PoolManager, surrogate_key: str) -> None:
     )
 
 
-def proofread_canonicals(
-    www_root: Path, skip_cache_invalidation: bool, http: urllib3.PoolManager
-) -> None:
-    """In www_root we check that all canonical links point to existing contents.
-
-    It can happen that a canonical is "broken":
-
-    - /3.11/whatsnew/3.11.html typically would link to
-    /3/whatsnew/3.11.html, which may not exist yet.
-    """
-    logging.info("Checking canonical links...")
-    canonical_re = re.compile(
-        """<link rel="canonical" href="https://docs.python.org/([^"]*)" />"""
-    )
-    for file in www_root.glob("**/*.html"):
-        html = file.read_text(encoding="UTF-8", errors="surrogateescape")
-        canonical = canonical_re.search(html)
-        if not canonical:
-            continue
-        target = canonical.group(1)
-        if not (www_root / target).exists():
-            logging.info("Removing broken canonical from %s to %s", file, target)
-            html = html.replace(canonical.group(0), "")
-            file.write_text(html, encoding="UTF-8", errors="surrogateescape")
-            if not skip_cache_invalidation:
-                purge(http, str(file).replace("/srv/docs.python.org/", ""))
-
-
-def parse_versions_from_devguide(http: urllib3.PoolManager) -> list[Version]:
-    releases = http.request(
-        "GET",
-        "https://raw.githubusercontent.com/"
-        "python/devguide/main/include/release-cycle.json",
-        timeout=30,
-    ).json()
-    versions = [Version.from_json(name, release) for name, release in releases.items()]
-    versions.sort(key=Version.as_tuple)
-    return versions
-
-
-def parse_languages_from_config() -> list[Language]:
-    """Read config.toml to discover languages to build."""
-    config = tomlkit.parse((HERE / "config.toml").read_text(encoding="UTF-8"))
-    defaults = config["defaults"]
-    default_translated_name = defaults.get("translated_name", "")
-    default_in_prod = defaults.get("in_prod", True)
-    default_sphinxopts = defaults.get("sphinxopts", [])
-    default_html_only = defaults.get("html_only", False)
-    return [
-        Language(
-            iso639_tag=iso639_tag,
-            name=section["name"],
-            translated_name=section.get("translated_name", default_translated_name),
-            in_prod=section.get("in_prod", default_in_prod),
-            sphinxopts=section.get("sphinxopts", default_sphinxopts),
-            html_only=section.get("html_only", default_html_only),
-        )
-        for iso639_tag, section in config["languages"].items()
-    ]
-
-
-def format_seconds(seconds: float) -> str:
-    hours, remainder = divmod(seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    hours, minutes, seconds = int(hours), int(minutes), round(seconds)
-
-    match (hours, minutes, seconds):
-        case 0, 0, s:
-            return f"{s}s"
-        case 0, m, s:
-            return f"{m}m {s}s"
-        case h, m, s:
-            return f"{h}h {m}m {s}s"
-
-
-def build_docs(args) -> bool:
-    """Build all docs (each language and each version)."""
-    logging.info("Full build start.")
-    start_time = perf_counter()
-    http = urllib3.PoolManager()
-    versions = parse_versions_from_devguide(http)
-    languages = parse_languages_from_config()
-    # Reverse languages but not versions, because we take version-language
-    # pairs from the end of the list, effectively reversing it.
-    # This runs languages in config.toml order and versions newest first.
-    todo = [
-        (version, language)
-        for version in Version.filter(versions, args.branch)
-        for language in reversed(Language.filter(languages, args.languages))
-    ]
-    del args.branch
-    del args.languages
-    all_built_successfully = True
-    cpython_repo = Repository(
-        "https://github.com/python/cpython.git",
-        args.build_root / _checkout_name(args.select_output),
-    )
-    while todo:
-        version, language = todo.pop()
-        logging.root.handlers[0].setFormatter(
-            logging.Formatter(
-                f"%(asctime)s %(levelname)s {language.tag}/{version.name}: %(message)s"
-            )
-        )
-        if sentry_sdk:
-            scope = sentry_sdk.get_isolation_scope()
-            scope.set_tag("version", version.name)
-            scope.set_tag("language", language.tag)
-            cpython_repo.update()
-        builder = DocBuilder(
-            version, versions, language, languages, cpython_repo, **vars(args)
-        )
-        all_built_successfully &= builder.run(http)
-    logging.root.handlers[0].setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
-    )
-
-    build_sitemap(versions, languages, args.www_root, args.group)
-    build_404(args.www_root, args.group)
-    copy_robots_txt(
-        args.www_root,
-        args.group,
-        args.skip_cache_invalidation,
-        http,
-    )
-    major_symlinks(
-        args.www_root,
-        args.group,
-        versions,
-        languages,
-        args.skip_cache_invalidation,
-        http,
-    )
-    dev_symlink(
-        args.www_root,
-        args.group,
-        versions,
-        languages,
-        args.skip_cache_invalidation,
-        http,
-    )
-    proofread_canonicals(args.www_root, args.skip_cache_invalidation, http)
-
-    logging.info("Full build done (%s).", format_seconds(perf_counter() - start_time))
-
-    return all_built_successfully
-
-
-def _checkout_name(select_output: str | None) -> str:
-    if select_output is not None:
-        return f"cpython-{select_output}"
-    return "cpython"
-
-
-def main():
-    """Script entry point."""
-    args = parse_args()
-    setup_logging(args.log_directory, args.select_output)
-
-    if args.select_output is None:
-        build_docs_with_lock(args, "build_docs.lock")
-    elif args.select_output == "no-html":
-        build_docs_with_lock(args, "build_docs_archives.lock")
-    elif args.select_output == "only-html":
-        build_docs_with_lock(args, "build_docs_html.lock")
-    elif args.select_output == "only-html-en":
-        build_docs_with_lock(args, "build_docs_html_en.lock")
-
-
-def build_docs_with_lock(args: Namespace, lockfile_name: str) -> int:
-    try:
-        lock = zc.lockfile.LockFile(HERE / lockfile_name)
-    except zc.lockfile.LockError:
-        logging.info("Another builder is running... dying...")
-        return EX_FAILURE
-
-    try:
-        return EX_OK if build_docs(args) else EX_FAILURE
-    finally:
-        lock.close()
-
-
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

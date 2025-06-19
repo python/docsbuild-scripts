@@ -1,3 +1,8 @@
+# docsbuild-scripts
+
+[![GitHub Actions status](https://github.com/python/docsbuild-scripts/actions/workflows/test.yml/badge.svg)](https://github.com/python/docsbuild-scripts/actions/workflows/test.yml)
+[![Codecov](https://codecov.io/gh/python/docsbuild-scripts/branch/main/graph/badge.svg)](https://codecov.io/gh/python/docsbuild-scripts)
+
 This repository contains scripts for automatically building the Python
 documentation on [docs.python.org](https://docs.python.org).
 
@@ -12,7 +17,7 @@ python3 ./build_docs.py --quick --build-root ./build_root --www-root ./www --log
 ```
 
 If you don't need to build all translations of all branches, add
-`--language en --branch main`.
+`--languages en --branches main`.
 
 
 ## Check current version
@@ -34,9 +39,9 @@ of Sphinx we're using where:
     3.9        ø              sphinx==2.4.4       needs_sphinx='1.8'
     3.10       ø              sphinx==3.4.3       needs_sphinx='3.2'
     3.11       ø              sphinx~=7.2.0       needs_sphinx='4.2'
-    3.12       ø              sphinx~=8.1.0       needs_sphinx='7.2.6'
-    3.13       ø              sphinx~=8.1.0       needs_sphinx='7.2.6'
-    3.14       ø              sphinx~=8.1.0       needs_sphinx='7.2.6'
+    3.12       ø              sphinx~=8.2.0       needs_sphinx='8.2.0'
+    3.13       ø              sphinx~=8.2.0       needs_sphinx='8.2.0'
+    3.14       ø              sphinx~=8.2.0       needs_sphinx='8.2.0'
     =========  =============  ==================  ====================
 
     Sphinx build as seen on docs.python.org:
@@ -47,9 +52,9 @@ of Sphinx we're using where:
     3.9        2.4.4  2.4.4  2.4.4  2.4.4  2.4.4  2.4.4  2.4.4  2.4.4  2.4.4    2.4.4  2.4.4  2.4.4    2.4.4
     3.10       3.4.3  3.4.3  3.4.3  3.4.3  3.4.3  3.4.3  3.4.3  3.4.3  3.4.3    3.4.3  3.4.3  3.4.3    3.4.3
     3.11       7.2.6  7.2.6  7.2.6  7.2.6  7.2.6  7.2.6  7.2.6  7.2.6  7.2.6    7.2.6  7.2.6  7.2.6    7.2.6
-    3.12       8.1.3  8.1.3  8.1.3  8.1.3  8.1.3  8.1.3  8.1.3  8.1.3  8.1.3    8.1.3  8.1.3  8.1.3    8.1.3
-    3.13       8.1.3  8.1.3  8.1.3  8.1.3  8.1.3  8.1.3  8.1.3  8.1.3  8.1.3    8.1.3  8.1.3  8.1.3    8.1.3
-    3.14       8.1.3  8.1.3  8.1.3  8.1.3  8.1.3  8.1.3  8.1.3  8.1.3  8.1.3    8.1.3  8.1.3  8.1.3    8.1.3
+    3.12       8.2.3  8.2.3  8.2.3  8.2.3  8.2.3  8.2.3  8.2.3  8.2.3  8.2.3    8.2.3  8.2.3  8.2.3    8.2.3
+    3.13       8.2.3  8.2.3  8.2.3  8.2.3  8.2.3  8.2.3  8.2.3  8.2.3  8.2.3    8.2.3  8.2.3  8.2.3    8.2.3
+    3.14       8.2.3  8.2.3  8.2.3  8.2.3  8.2.3  8.2.3  8.2.3  8.2.3  8.2.3    8.2.3  8.2.3  8.2.3    8.2.3
     =========  =====  =====  =====  =====  =====  =====  =====  =====  =======  =====  =====  =======  =======
 
 ## Manually rebuild a branch
@@ -66,5 +71,5 @@ To manually rebuild a branch, for example 3.11:
 ssh docs.nyc1.psf.io
 sudo su --shell=/bin/bash docsbuild
 screen -DUR  # Rejoin screen session if it exists, otherwise create a new one
-/srv/docsbuild/venv/bin/python /srv/docsbuild/scripts/build_docs.py --branch 3.11
+/srv/docsbuild/venv/bin/python /srv/docsbuild/scripts/build_docs.py --force --branch 3.11
 ```

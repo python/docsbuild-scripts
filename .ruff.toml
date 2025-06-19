@@ -1,0 +1,34 @@
+target-version = "py313"  # Pin Ruff to Python 3.13
+line-length = 88
+output-format = "full"
+
+[format]
+preview = true
+docstring-code-format = true
+
+[lint]
+preview = true
+select = [
+    "C4",    # flake8-comprehensions
+    "B",     # flake8-bugbear
+    "E",     # pycodestyle
+    "F",     # pyflakes
+    "FA",    # flake8-future-annotations
+    "FLY",   # flynt
+    "G",     # flake8-logging-format
+    "I",     # isort
+    "N",     # pep8-naming
+    "PERF",  # perflint
+    "PGH",   # pygrep-hooks
+    "PT",    # flake8-pytest-style
+    "TC",    # flake8-type-checking
+    "UP",    # pyupgrade
+    "W",     # pycodestyle
+]
+ignore = [
+    "E501",  # Ignore line length errors (we use auto-formatting)
+]
+
+[lint.flake8-type-checking]
+exempt-modules = []
+strict = true

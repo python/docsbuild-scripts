@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 
-from pathlib import Path
 import argparse
 import asyncio
 import logging
 import re
+from pathlib import Path
 
+import git
 import httpx
 import urllib3
 from tabulate import tabulate
-import git
 
 import build_docs
 
@@ -111,12 +111,10 @@ async def which_sphinx_is_used_in_production():
     table = [
         [
             version.name,
-            *await asyncio.gather(
-                *[
-                    get_version_in_prod(language.tag, version.name)
-                    for language in LANGUAGES
-                ]
-            ),
+            *await asyncio.gather(*[
+                get_version_in_prod(language.tag, version.name)
+                for language in LANGUAGES
+            ]),
         ]
         for version in VERSIONS
     ]

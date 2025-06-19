@@ -29,6 +29,33 @@ const _ALL_VERSIONS = new Map($VERSIONS);
 const _ALL_LANGUAGES = new Map($LANGUAGES);
 
 /**
+ * Required for Python 3.7 and earlier.
+ * @returns {void}
+ * @private
+ */
+const _create_placeholders_if_missing = () => {
+  if (document.querySelectorAll(".version_switcher_placeholder").length) return;
+
+  const items = document.querySelectorAll("body>div.related>ul>li:not(.right)");
+  for (const item of items) {
+    if (item.innerText.toLowerCase().includes("documentation")) {
+      const container = document.createElement("li");
+      container.className = "switchers";
+      container.style.display = "inline-flex";
+      for (const placeholder_name of ["language", "version"]) {
+        const placeholder = document.createElement("div");
+        placeholder.className = `${placeholder_name}_switcher_placeholder`;
+        placeholder.style.marginRight = "5px";
+        placeholder.style.paddingLeft = "5px";
+        container.appendChild(placeholder);
+      }
+      item.parentElement.insertBefore(container, item);
+      return;
+    }
+  }
+};
+
+/**
  * @param {Map<string, string>} versions
  * @returns {HTMLSelectElement}
  * @private
@@ -174,6 +201,8 @@ const _on_language_switch = async (event) => {
 const _initialise_switchers = () => {
   const versions = _ALL_VERSIONS;
   const languages = _ALL_LANGUAGES;
+
+  _create_placeholders_if_missing();
 
   document
     .querySelectorAll(".version_switcher_placeholder")
