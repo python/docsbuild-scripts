@@ -15,6 +15,10 @@ sphinxopts = [
     "-D latex_elements.fontenc=",
 ]
 
+[languages.el]
+name = "Greek"
+translated_name = "Ελληνικά"
+
 [languages.en]
 name = "English"
 
@@ -124,7 +128,3 @@ sphinxopts = [
     '-D latex_elements.inputenc=',
     '-D latex_elements.fontenc=\\usepackage{xeCJK}',
 ]
-
-[languages.el]
-name = "Greek"
-translated_name = "Ελληνικά"
