@@ -127,4 +127,4 @@ sphinxopts = [
 
 [languages.el]
 name = "Greek"
-repo_name = "python-docs-gr"
+translated_name = "Ελληνικά"
