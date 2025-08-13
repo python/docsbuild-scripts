@@ -42,7 +42,7 @@ sphinxopts = [
 
 [languages.hu]
 name = "Hungarian"
-translated_name = "magyar"
+translated_name = "Magyar"
 in_prod = false
 
 [languages.bn_IN]
