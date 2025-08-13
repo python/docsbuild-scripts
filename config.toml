@@ -40,6 +40,11 @@ sphinxopts = [
     '-D latex_elements.fontenc=\\usepackage{fontspec}',
 ]
 
+[languages.hu]
+name = "Hungarian"
+translated_name = "magyar"
+in_prod = false
+
 [languages.bn_IN]
 name = "Bengali"
 translated_name = "বাংলা"
