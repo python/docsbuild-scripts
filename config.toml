@@ -15,6 +15,10 @@ sphinxopts = [
     "-D latex_elements.fontenc=",
 ]
 
+[languages.el]
+name = "Greek"
+translated_name = "Ελληνικά"
+
 [languages.en]
 name = "English"
 
@@ -35,6 +39,11 @@ sphinxopts = [
     '-D latex_elements.inputenc=',
     '-D latex_elements.fontenc=\\usepackage{fontspec}',
 ]
+
+[languages.bn_IN]
+name = "Bengali"
+translated_name = "বাংলা"
+in_prod = false
 
 [languages.id]
 name = "Indonesian"
@@ -86,6 +95,11 @@ translated_name = "polski"
 [languages.pt_BR]
 name = "Brazilian Portuguese"
 translated_name = "Português brasileiro"
+
+[languages.ro]
+name = "Romanian"
+translated_name = "Românește"
+in_prod = false
 
 [languages.tr]
 name = "Turkish"
