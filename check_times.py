@@ -82,34 +82,32 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
+    ALL_BUILDS = ("no-html", "only-html", "only-html-en")
     parser.add_argument(
-        "--html-en", action="store_true", help="Show HTML-only (English) build times"
-    )
-    parser.add_argument(
-        "--html", action="store_true", help="Show HTML-only build times"
-    )
-    parser.add_argument(
-        "--no-html", action="store_true", help="Show no-HTML build times"
+        "--select-output",
+        choices=ALL_BUILDS,
+        nargs="*",
+        help="Choose what builds to show (default: all).",
     )
     args = parser.parse_args()
+    parser.suggest_on_error = True
 
-    # If none specified, show all
-    if not (args.html_en or args.html or args.no_html):
-        args.html_en = args.html = args.no_html = True
+    if not args.select_output:
+        args.select_output = ALL_BUILDS
 
-    if args.html_en:
+    if "only-html-en" in args.select_output:
         print("Build times (HTML only; English)")
         print("=======================")
         print()
         calc_time(get_lines("docsbuild-only-html-en.log"))
 
-    if args.html:
+    if "only-html" in args.select_output:
         print("Build times (HTML only)")
         print("=======================")
         print()
         calc_time(get_lines("docsbuild-only-html.log"))
 
-    if args.no_html:
+    if "no-html" in args.select_output:
         print("Build times (no HTML)")
         print("=====================")
         print()
