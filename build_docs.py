@@ -303,20 +303,20 @@ class Language:
 
 @dataclasses.dataclass(frozen=True, kw_only=True, slots=True)
 class BuildMetadata:
-    _ver: Version
-    _lang: Language
+    _version: Version
+    _language: Language
 
     @property
     def sphinxopts(self) -> Sequence[str]:
-        return self._lang.sphinxopts
+        return self._language.sphinxopts
 
     @property
     def iso639_tag(self) -> str:
-        return self._lang.iso639_tag
+        return self._language.iso639_tag
 
     @property
     def html_only(self) -> bool:
-        return self._lang.html_only
+        return self._language.html_only
 
     @property
     def url(self):
@@ -327,31 +327,31 @@ class BuildMetadata:
 
     @property
     def branch_or_tag(self) -> str:
-        return self._ver.branch_or_tag
+        return self._version.branch_or_tag
 
     @property
     def status(self) -> str:
-        return self._ver.status
+        return self._version.status
 
     @property
     def is_eol(self) -> bool:
-        return self._ver.status == "EOL"
+        return self._version.status == "EOL"
 
     @property
     def dependencies(self) -> list[str]:
-        return self._ver.requirements
+        return self._version.requirements
 
     @property
     def version(self):
-        return self._ver.name
+        return self._version.name
 
     @property
     def version_tuple(self):
-        return self._ver.as_tuple()
+        return self._version.as_tuple()
 
     @property
     def language(self):
-        return self._lang.tag
+        return self._language.tag
 
     @property
     def is_translation(self):
@@ -1180,9 +1180,9 @@ def build_docs(args: argparse.Namespace) -> int:
     # pairs from the end of the list, effectively reversing it.
     # This runs languages in config.toml order and versions newest first.
     todo = [
-        BuildMetadata(_ver=ver, _lang=lang)
-        for ver in versions.filter(args.branches)
-        for lang in reversed(languages.filter(args.languages))
+        BuildMetadata(_version=version, _language=language)
+        for version in versions.filter(args.branches)
+        for language in reversed(languages.filter(args.languages))
     ]
     del args.branches
     del args.languages
@@ -1199,17 +1199,19 @@ def build_docs(args: argparse.Namespace) -> int:
         args.build_root / _checkout_name(args.select_output),
     )
     while todo:
-        b = todo.pop()
+        build_props = todo.pop()
         logging.root.handlers[0].setFormatter(
-            logging.Formatter(f"%(asctime)s %(levelname)s {b.slug}: %(message)s")
+            logging.Formatter(
+                f"%(asctime)s %(levelname)s {build_props.slug}: %(message)s"
+            )
         )
         if sentry_sdk:
             scope = sentry_sdk.get_isolation_scope()
-            scope.set_tag("version", b.version)
-            scope.set_tag("language", b.language)
+            scope.set_tag("version", build_props.version)
+            scope.set_tag("language", build_props.language)
         cpython_repo.update()
         builder = DocBuilder(
-            b,
+            build_props,
             cpython_repo,
             docs_by_version_content,
             switchers_content,
@@ -1217,7 +1219,7 @@ def build_docs(args: argparse.Namespace) -> int:
         )
         built_successfully = builder.run(http, force_build=force_build)
         if built_successfully:
-            build_succeeded.add(b.slug)
+            build_succeeded.add(build_props.slug)
         elif built_successfully is not None:
             any_build_failed = True
 
