@@ -316,7 +316,7 @@ class BuildMetadata:
 
     @property
     def html_only(self) -> bool:
-        return self._language.html_only
+        return self._language.html_only or not self._language.in_prod
 
     @property
     def url(self):
