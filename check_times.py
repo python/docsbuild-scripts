@@ -10,6 +10,7 @@ For example:
    $ python check_times.py
 """
 
+import argparse
 import gzip
 import tomllib
 from pathlib import Path
@@ -78,17 +79,36 @@ def calc_time(lines: list[str]) -> None:
 
 
 if __name__ == "__main__":
-    print("Build times (HTML only; English)")
-    print("=======================")
-    print()
-    calc_time(get_lines("docsbuild-only-html-en.log"))
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ALL_BUILDS = ("no-html", "only-html", "only-html-en")
+    parser.add_argument(
+        "--select-output",
+        choices=ALL_BUILDS,
+        nargs="*",
+        help="Choose what builds to show (default: all).",
+    )
+    args = parser.parse_args()
+    parser.suggest_on_error = True
 
-    print("Build times (HTML only)")
-    print("=======================")
-    print()
-    calc_time(get_lines("docsbuild-only-html.log"))
+    if not args.select_output:
+        args.select_output = ALL_BUILDS
 
-    print("Build times (no HTML)")
-    print("=====================")
-    print()
-    calc_time(get_lines("docsbuild-no-html.log"))
+    if "only-html-en" in args.select_output:
+        print("Build times (HTML only; English)")
+        print("=======================")
+        print()
+        calc_time(get_lines("docsbuild-only-html-en.log"))
+
+    if "only-html" in args.select_output:
+        print("Build times (HTML only)")
+        print("=======================")
+        print()
+        calc_time(get_lines("docsbuild-only-html.log"))
+
+    if "no-html" in args.select_output:
+        print("Build times (no HTML)")
+        print("=====================")
+        print()
+        calc_time(get_lines("docsbuild-no-html.log"))
