@@ -71,5 +71,5 @@ To manually rebuild a branch, for example 3.11:
 ssh docs.nyc1.psf.io
 sudo su --shell=/bin/bash docsbuild
 screen -DUR  # Rejoin screen session if it exists, otherwise create a new one
-/srv/docsbuild/venv/bin/python /srv/docsbuild/scripts/build_docs.py --force --branch 3.11
+/srv/docsbuild/venv/bin/python /srv/docsbuild/scripts/build_docs.py --force --branches 3.11
 ```
