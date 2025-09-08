@@ -85,7 +85,7 @@ def search_sphinx_versions_in_cpython(repo: git.Repo):
         for version in VERSIONS
     ]
     headers = ["version", *CONF_FILES.keys()]
-    print(tabulate(table, headers=headers, tablefmt="rst", disable_numparse=True))
+    print(tabulate(table, headers=headers, tablefmt="github", disable_numparse=True))
 
 
 async def get_version_in_prod(language: str, version: str) -> str:
@@ -119,21 +119,25 @@ async def which_sphinx_is_used_in_production():
         for version in VERSIONS
     ]
     headers = ["version", *[language.tag for language in LANGUAGES]]
-    print(tabulate(table, headers=headers, tablefmt="rst", disable_numparse=True))
+    print(tabulate(table, headers=headers, tablefmt="github", disable_numparse=True))
 
 
-def main():
+def check_versions(cpython_clone: str) -> None:
     logging.basicConfig(level=logging.INFO)
     logging.getLogger("charset_normalizer").setLevel(logging.WARNING)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
-    args = parse_args()
-    repo = git.Repo(args.cpython_clone)
+    repo = git.Repo(cpython_clone)
     print("Sphinx configuration in various branches:", end="\n\n")
     search_sphinx_versions_in_cpython(repo)
     print()
     print("Sphinx build as seen on docs.python.org:", end="\n\n")
     asyncio.run(which_sphinx_is_used_in_production())
+
+
+def main():
+    args = parse_args()
+    check_versions(args.cpython_clone)
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+cog
 GitPython
 httpx
 tabulate
