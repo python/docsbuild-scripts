@@ -28,26 +28,26 @@ check_versions("../cpython/")
 ]]] -->
 Sphinx configuration in various branches:
 
-| version   | travis   | requirements.txt   | conf.py              |
-|-----------|----------|--------------------|----------------------|
-| 2.6       | ø        | ø                  | ø                    |
-| 2.7       | ø        | ø                  | ø                    |
-| 3.0       | ø        | ø                  | ø                    |
-| 3.1       | ø        | ø                  | ø                    |
-| 3.2       | ø        | ø                  | ø                    |
-| 3.3       | ø        | ø                  | ø                    |
-| 3.4       | ø        | ø                  | needs_sphinx='1.2'   |
-| 3.5       | ø        | ø                  | ø                    |
-| 3.6       | ø        | ø                  | ø                    |
-| 3.7       | ø        | ø                  | ø                    |
-| 3.8       | ø        | ø                  | ø                    |
-| 3.9       | ø        | sphinx==2.4.4      | needs_sphinx='1.8'   |
-| 3.10      | ø        | sphinx==3.4.3      | needs_sphinx='3.2'   |
-| 3.11      | ø        | sphinx~=7.2.0      | needs_sphinx='4.2'   |
-| 3.12      | ø        | sphinx~=8.2.0      | needs_sphinx='8.2.0' |
-| 3.13      | ø        | sphinx~=8.2.0      | needs_sphinx='8.2.0' |
-| 3.14      | ø        | sphinx~=8.2.0      | needs_sphinx='8.2.0' |
-| 3.15      | ø        | sphinx~=8.2.0      | needs_sphinx='8.2.0' |
+| version   | requirements.txt   | conf.py              |
+|-----------|--------------------|----------------------|
+| 2.6       | ø                  | ø                    |
+| 2.7       | ø                  | ø                    |
+| 3.0       | ø                  | ø                    |
+| 3.1       | ø                  | ø                    |
+| 3.2       | ø                  | ø                    |
+| 3.3       | ø                  | ø                    |
+| 3.4       | ø                  | needs_sphinx='1.2'   |
+| 3.5       | ø                  | ø                    |
+| 3.6       | ø                  | ø                    |
+| 3.7       | ø                  | ø                    |
+| 3.8       | ø                  | ø                    |
+| 3.9       | sphinx==2.4.4      | needs_sphinx='1.8'   |
+| 3.10      | sphinx==3.4.3      | needs_sphinx='3.2'   |
+| 3.11      | sphinx~=7.2.0      | needs_sphinx='4.2'   |
+| 3.12      | sphinx~=8.2.0      | needs_sphinx='8.2.0' |
+| 3.13      | sphinx~=8.2.0      | needs_sphinx='8.2.0' |
+| 3.14      | sphinx~=8.2.0      | needs_sphinx='8.2.0' |
+| 3.15      | sphinx~=8.2.0      | needs_sphinx='8.2.0' |
 
 Sphinx build as seen on docs.python.org:
 

@@ -62,7 +62,6 @@ def find_sphinx_in_files(repo: git.Repo, branch_or_tag, filenames):
 
 
 CONF_FILES = {
-    "travis": ".travis.yml",
     "requirements.txt": "Doc/requirements.txt",
     "conf.py": "Doc/conf.py",
 }
