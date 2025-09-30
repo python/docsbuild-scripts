@@ -99,7 +99,6 @@ translated_name = "Português brasileiro"
 [languages.ro]
 name = "Romanian"
 translated_name = "Românește"
-in_prod = false
 
 [languages.tr]
 name = "Turkish"
