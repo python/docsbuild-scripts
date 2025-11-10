@@ -1256,8 +1256,7 @@ def build_docs(args: argparse.Namespace) -> int:
 def parse_versions_from_devguide(http: urllib3.PoolManager) -> Versions:
     releases = http.request(
         "GET",
-        "https://raw.githubusercontent.com/"
-        "python/devguide/main/include/release-cycle.json",
+        "https://peps.python.org/api/release-cycle.json",
         timeout=30,
     ).json()
     return Versions.from_json(releases)
