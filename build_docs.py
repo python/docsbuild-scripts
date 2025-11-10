@@ -26,7 +26,7 @@ PYTHON_DOCS_ENABLE_ANALYTICS = "1"
 ```
 
 Languages are stored in `config.toml` while versions are discovered
-from the devguide.
+from the PEPs site.
 
 -q selects "quick build", which means to build only HTML.
 
@@ -1174,7 +1174,7 @@ def build_docs(args: argparse.Namespace) -> int:
     logging.info("Full build start.")
     start_time = perf_counter()
     http = urllib3.PoolManager()
-    versions = parse_versions_from_devguide(http)
+    versions = parse_versions_from_peps_site(http)
     languages = parse_languages_from_config()
     # Reverse languages but not versions, because we take version-language
     # pairs from the end of the list, effectively reversing it.
@@ -1253,7 +1253,7 @@ def build_docs(args: argparse.Namespace) -> int:
     return EX_FAILURE if any_build_failed else EX_OK
 
 
-def parse_versions_from_devguide(http: urllib3.PoolManager) -> Versions:
+def parse_versions_from_peps_site(http: urllib3.PoolManager) -> Versions:
     releases = http.request(
         "GET",
         "https://peps.python.org/api/release-cycle.json",
