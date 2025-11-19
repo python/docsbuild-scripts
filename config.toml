@@ -100,6 +100,10 @@ translated_name = "Português brasileiro"
 name = "Romanian"
 translated_name = "Românește"
 
+[languages.sv]
+name = "Swedish"
+translated_name = "Svenska"
+
 [languages.tr]
 name = "Turkish"
 translated_name = "Türkçe"
