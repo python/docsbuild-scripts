@@ -103,6 +103,7 @@ translated_name = "Românește"
 [languages.sv]
 name = "Swedish"
 translated_name = "Svenska"
+in_prod = false
 
 [languages.tr]
 name = "Turkish"
