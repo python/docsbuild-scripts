@@ -4,6 +4,9 @@
 # html_only:       If true, only create HTML files.
 # sphinxopts:      Extra options to pass to SPHINXOPTS in the Makefile.
 
+# Remember to update the Salt config with redirects for new translations!
+# For example: https://github.com/python/psf-salt/commit/14bdc3ae054468092e5a8c3cdacfd02f43c32e19
+
 [defaults]
 # name has no default, it is mandatory.
 translated_name = ""
