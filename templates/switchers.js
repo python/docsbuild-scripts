@@ -63,6 +63,7 @@ const _create_placeholders_if_missing = () => {
 const _create_version_select = (versions) => {
   const select = document.createElement("select");
   select.className = "version-select";
+  select.setAttribute("aria-label", "Python version");
   if (_IS_LOCAL) {
     select.disabled = true;
     select.title = "Version switching is disabled in local builds";
@@ -96,6 +97,7 @@ const _create_language_select = (languages) => {
 
   const select = document.createElement("select");
   select.className = "language-select";
+  select.setAttribute("aria-label", "Language");
   if (_IS_LOCAL) {
     select.disabled = true;
     select.title = "Language switching is disabled in local builds";
