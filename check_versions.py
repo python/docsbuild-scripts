@@ -36,13 +36,13 @@ def find_upstream_remote_name(repo: git.Repo) -> str:
                 return f"{remote.name}/"
 
 
-def find_sphinx_spec(text: str):
+def find_sphinx_spec(text: str) -> str:
     if found := re.search(
         """sphinx[=<>~]{1,2}[0-9.]{3,}|needs_sphinx = [0-9.'"]*""",
         text,
         flags=re.IGNORECASE,
     ):
-        return found.group(0).replace(" ", "")
+        return found.group(0).replace(" ", "").replace('"', "'")
     return "ø"
 
 

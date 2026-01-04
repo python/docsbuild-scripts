@@ -39,7 +39,7 @@ Sphinx configuration in various branches:
 | 3.4       | ø                  | needs_sphinx='1.2'   |
 | 3.5       | ø                  | needs_sphinx='1.8'   |
 | 3.6       | ø                  | needs_sphinx='1.2'   |
-| 3.7       | sphinx==2.3.1      | needs_sphinx="1.6.6" |
+| 3.7       | sphinx==2.3.1      | needs_sphinx='1.6.6' |
 | 3.8       | sphinx==2.4.4      | needs_sphinx='1.8'   |
 | 3.9       | sphinx==2.4.4      | needs_sphinx='1.8'   |
 | 3.10      | sphinx==3.4.3      | needs_sphinx='3.2'   |
