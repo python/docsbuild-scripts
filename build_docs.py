@@ -1009,6 +1009,8 @@ def main() -> int:
     if args.select_output is None:
         return build_docs_with_lock(args, "build_docs.lock")
     if args.select_output == "no-html":
+        # Disable Plausible analytics for download copies
+        os.environ.pop("PYTHON_DOCS_ENABLE_ANALYTICS", None)
         return build_docs_with_lock(args, "build_docs_archives.lock")
     if args.select_output == "only-html":
         return build_docs_with_lock(args, "build_docs_html.lock")
