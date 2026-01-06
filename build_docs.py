@@ -86,8 +86,6 @@ try:
     import sentry_sdk
 except ImportError:
     sentry_sdk = None
-else:
-    sentry_sdk.init()
 
 HERE = Path(__file__).resolve().parent
 
@@ -1005,6 +1003,8 @@ def main() -> int:
     args = parse_args()
     setup_logging(args.log_directory, args.select_output)
     load_environment_variables()
+    if sentry_sdk:
+        sentry_sdk.init()
 
     if args.select_output is None:
         return build_docs_with_lock(args, "build_docs.lock")
