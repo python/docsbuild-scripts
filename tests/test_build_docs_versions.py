@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from build_docs import Version, Versions
@@ -57,16 +59,16 @@ def test_from_json() -> None:
     ]
 
 
-def test_from_json_error() -> None:
+def test_from_json_warning(caplog) -> None:
     # Arrange
     json_data = {"2.8": {"branch": "2.8", "pep": 404, "status": "ex-release"}}
 
-    # Act / Assert
-    with pytest.raises(
-        ValueError,
-        match="Saw invalid version status 'ex-release', expected to be one of",
-    ):
+    # Act
+    with caplog.at_level(logging.WARNING):
         Versions.from_json(json_data)
+
+    # Assert
+    assert "Saw invalid version status 'ex-release', expected to be one of" in caplog.text
 
 
 def test_current_stable(versions) -> None:
