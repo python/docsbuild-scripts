@@ -111,11 +111,11 @@ class Versions:
             status = release["status"]
             status = Version.SYNONYMS.get(status, status)
             if status not in Version.STATUSES:
-                msg = (
+                logging.warning(
                     f"Saw invalid version status {status!r}, "
-                    f"expected to be one of {permitted}."
+                    f"expected to be one of {permitted}. Context: {release}"
                 )
-                raise ValueError(msg)
+                continue
             versions.append(Version(name=name, status=status, branch_or_tag=branch))
 
         return cls(sorted(versions, key=Version.as_tuple))
