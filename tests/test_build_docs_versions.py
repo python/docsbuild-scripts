@@ -68,7 +68,9 @@ def test_from_json_warning(caplog) -> None:
         Versions.from_json(json_data)
 
     # Assert
-    assert "Saw invalid version status 'ex-release', expected to be one of" in caplog.text
+    assert (
+        "Saw invalid version status 'ex-release', expected to be one of" in caplog.text
+    )
 
 
 def test_current_stable(versions) -> None:
