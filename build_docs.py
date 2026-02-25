@@ -112,8 +112,10 @@ class Versions:
             status = Version.SYNONYMS.get(status, status)
             if status not in Version.STATUSES:
                 logging.warning(
-                    f"Saw invalid version status {status!r}, "
-                    f"expected to be one of {permitted}. Context: {release}"
+                    "Saw invalid version status %r, expected to be one of %s. Context: %s",
+                    status,
+                    permitted,
+                    release,
                 )
                 continue
             versions.append(Version(name=name, status=status, branch_or_tag=branch))
