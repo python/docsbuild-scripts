@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from build_docs import Version, Versions
@@ -57,16 +59,28 @@ def test_from_json() -> None:
     ]
 
 
-def test_from_json_error() -> None:
+def test_from_json_warning(caplog) -> None:
     # Arrange
-    json_data = {"2.8": {"branch": "2.8", "pep": 404, "status": "ex-release"}}
+    json_data = {
+        "2.8": {"branch": "2.8", "pep": 404, "status": "ex-release"},
+        "3.16": {
+            "branch": "",
+            "pep": 826,
+            "status": "",
+            "first_release": "2027-10-06",
+            "end_of_life": "2032-10",
+            "release_manager": "Savannah Ostrowski",
+        },
+    }
 
-    # Act / Assert
-    with pytest.raises(
-        ValueError,
-        match="Saw invalid version status 'ex-release', expected to be one of",
-    ):
-        Versions.from_json(json_data)
+    # Act
+    with caplog.at_level(logging.WARNING):
+        versions = list(Versions.from_json(json_data))
+
+    # Assert: both should be skipped
+    assert versions == []
+    assert "Saw invalid version status 'ex-release'" in caplog.text
+    assert "Saw invalid version status ''" in caplog.text
 
 
 def test_current_stable(versions) -> None:
