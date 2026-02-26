@@ -61,16 +61,26 @@ def test_from_json() -> None:
 
 def test_from_json_warning(caplog) -> None:
     # Arrange
-    json_data = {"2.8": {"branch": "2.8", "pep": 404, "status": "ex-release"}}
+    json_data = {
+        "2.8": {"branch": "2.8", "pep": 404, "status": "ex-release"},
+        "3.16": {
+            "branch": "",
+            "pep": 826,
+            "status": "",
+            "first_release": "2027-10-06",
+            "end_of_life": "2032-10",
+            "release_manager": "Savannah Ostrowski",
+        },
+    }
 
     # Act
     with caplog.at_level(logging.WARNING):
         Versions.from_json(json_data)
 
-    # Assert
-    assert (
-        "Saw invalid version status 'ex-release', expected to be one of" in caplog.text
-    )
+    # Assert: both should be skipped
+    assert versions == []
+    assert "Saw invalid version status 'ex-release'" in caplog.text
+    assert "Saw invalid version status ''" in caplog.text
 
 
 def test_current_stable(versions) -> None:
