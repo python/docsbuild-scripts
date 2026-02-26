@@ -75,7 +75,7 @@ def test_from_json_warning(caplog) -> None:
 
     # Act
     with caplog.at_level(logging.WARNING):
-        versions = Versions.from_json(json_data)
+        versions = list(Versions.from_json(json_data))
 
     # Assert: both should be skipped
     assert versions == []
