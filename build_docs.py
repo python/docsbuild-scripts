@@ -151,10 +151,24 @@ class Version:
     """Represents a CPython version and its documentation build dependencies."""
 
     name: str
-    status: Literal["EOL", "security-fixes", "stable", "pre-release", "in development"]
+    status: Literal[
+        "planned",
+        "in development",
+        "pre-release",
+        "stable",
+        "security-fixes",
+        "EOL",
+    ]
     branch_or_tag: str
 
-    STATUSES = {"EOL", "security-fixes", "stable", "pre-release", "in development"}
+    STATUSES = {
+        "planned",
+        "in development",
+        "pre-release",
+        "stable",
+        "security-fixes",
+        "EOL",
+    }
 
     # Those synonyms map branch status vocabulary found in the devguide
     # with our vocabulary.
