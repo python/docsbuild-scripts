@@ -66,7 +66,7 @@ def test_from_json_warning(caplog) -> None:
         "3.16": {
             "branch": "",
             "pep": 826,
-            "status": "",
+            "status": "planned",
             "first_release": "2027-10-06",
             "end_of_life": "2032-10",
             "release_manager": "Savannah Ostrowski",
@@ -74,13 +74,13 @@ def test_from_json_warning(caplog) -> None:
     }
 
     # Act
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.INFO):
         versions = list(Versions.from_json(json_data))
 
     # Assert: both should be skipped
     assert versions == []
     assert "Saw invalid version status 'ex-release'" in caplog.text
-    assert "Saw invalid version status ''" in caplog.text
+    assert "Skipping 3.16 with status 'planned'" in caplog.text
 
 
 def test_current_stable(versions) -> None:
