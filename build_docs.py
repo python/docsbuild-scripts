@@ -109,6 +109,9 @@ class Versions:
         for name, release in data.items():
             branch = release["branch"]
             status = release["status"]
+            if status in Version.SKIP_STATUSES:
+                logging.info("Skipping %s with status %r", name, status)
+                continue
             status = Version.SYNONYMS.get(status, status)
             if status not in Version.STATUSES:
                 logging.warning(
@@ -152,7 +155,6 @@ class Version:
 
     name: str
     status: Literal[
-        "planned",
         "in development",
         "pre-release",
         "stable",
@@ -162,13 +164,15 @@ class Version:
     branch_or_tag: str
 
     STATUSES = {
-        "planned",
         "in development",
         "pre-release",
         "stable",
         "security-fixes",
         "EOL",
     }
+
+    # Statuses for versions we don't build docs for at all.
+    SKIP_STATUSES = {"planned"}
 
     # Those synonyms map branch status vocabulary found in the devguide
     # with our vocabulary.
