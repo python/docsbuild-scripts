@@ -37,7 +37,7 @@ jobs:
         --branches 3.14
 
     - name: Upload documentation
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: www-root
         path: ./www
