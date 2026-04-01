@@ -6,6 +6,13 @@ Disallow: /dev
 Disallow: /release
 
 # Disallow EOL versions
+Disallow: /2/
+Disallow: /2.0/
+Disallow: /2.1/
+Disallow: /2.2/
+Disallow: /2.3/
+Disallow: /2.4/
+Disallow: /2.5/
 {% for version in versions -%}
 {% if version.status == "EOL" -%}
 Disallow: /{{ version.name }}/
