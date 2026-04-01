@@ -24,3 +24,4 @@ Disallow: /3.5/
 Disallow: /3.6/
 Disallow: /3.7/
 Disallow: /3.8/
+Disallow: /3.9/
