@@ -1251,7 +1251,8 @@ def build_docs(args: argparse.Namespace) -> int:
 
     build_sitemap(versions, languages, args.www_root, args.group)
     build_404(args.www_root, args.group)
-    copy_robots_txt(
+    build_robots_txt(
+        versions,
         args.www_root,
         args.group,
         args.skip_cache_invalidation,
@@ -1338,20 +1339,23 @@ def build_404(www_root: Path, group: str) -> None:
     chgrp(not_found_file, group=group)
 
 
-def copy_robots_txt(
+def build_robots_txt(
+    versions: Versions,
     www_root: Path,
     group: str,
     skip_cache_invalidation: bool,
     http: urllib3.PoolManager,
 ) -> None:
-    """Copy robots.txt to www_root."""
+    """Build robots.txt to www_root."""
     if not www_root.exists():
-        logging.info("Skipping copying robots.txt (www root does not even exist).")
+        logging.info("Skipping robots.txt generation (www root does not even exist).")
         return
-    logging.info("Copying robots.txt...")
+    logging.info("Starting robots.txt generation...")
     template_path = HERE / "templates" / "robots.txt"
+    template = jinja2.Template(template_path.read_text(encoding="UTF-8"))
+    rendered_template = template.render(versions=versions)
     robots_path = www_root / "robots.txt"
-    shutil.copyfile(template_path, robots_path)
+    robots_path.write_text(rendered_template, encoding="UTF-8")
     robots_path.chmod(0o775)
     chgrp(robots_path, group=group)
     if not skip_cache_invalidation:

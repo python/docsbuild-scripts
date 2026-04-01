@@ -1,6 +1,8 @@
+from unittest.mock import patch
+
 import pytest
 
-from build_docs import format_seconds
+from build_docs import Version, Versions, build_robots_txt, format_seconds
 
 
 @pytest.mark.parametrize(
@@ -24,3 +26,23 @@ from build_docs import format_seconds
 )
 def test_format_seconds(seconds: float, expected: str) -> None:
     assert format_seconds(seconds) == expected
+
+
+@patch("build_docs.chgrp")
+def test_build_robots_txt(mock_chgrp, tmp_path) -> None:
+    versions = Versions([
+        Version(name="3.14", status="EOL", branch_or_tag="3.14"),
+        Version(name="3.15", status="EOL", branch_or_tag="3.15"),
+        Version(name="3.16", status="security-fixes", branch_or_tag="3.16"),
+        Version(name="3.17", status="stable", branch_or_tag="2.17"),
+    ])
+
+    build_robots_txt(
+        versions, tmp_path, group="", skip_cache_invalidation=True, http=None
+    )
+
+    result = (tmp_path / "robots.txt").read_text()
+    assert "Disallow: /3.14/" in result
+    assert "Disallow: /3.15/" in result
+    assert "/3.16/" not in result
+    assert "/3.17/" not in result
