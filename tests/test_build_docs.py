@@ -1,4 +1,3 @@
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -38,7 +37,9 @@ def test_build_robots_txt(mock_chgrp, tmp_path) -> None:
         Version(name="3.17", status="stable", branch_or_tag="2.17"),
     ])
 
-    build_robots_txt(versions, tmp_path, group="", skip_cache_invalidation=True, http=None)
+    build_robots_txt(
+        versions, tmp_path, group="", skip_cache_invalidation=True, http=None
+    )
 
     result = (tmp_path / "robots.txt").read_text()
     assert "Disallow: /3.14/" in result
