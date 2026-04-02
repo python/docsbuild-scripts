@@ -209,7 +209,8 @@ class Version:
             return dependencies
         if self.as_tuple() >= (3, 8):
             # Restore the imghdr module for Python 3.8-3.10.
-            return dependencies + ["standard-imghdr"]
+            # Use setuptools with pkg_resources
+            return dependencies + ["standard-imghdr", "setuptools<82"]
 
         # Requirements/constraints for Python 3.7 and older, pre-requirements.txt
         reqs = [
