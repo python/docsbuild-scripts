@@ -747,6 +747,10 @@ class DocBuilder:
                 (self.checkout / "Doc" / "Makefile").write_text(text, encoding="utf-8")
 
             self.setup_indexsidebar()
+        if self.build_meta.version_tuple < (3, 10):
+            # The Makefile is broken, and the fix,
+            # python/cpython#145571 didn't make it into 3.9 in time
+            (self.checkout / "Doc" / "dist").mkdir(exist_ok=True)
         run_with_logging((
             "make",
             "-C",
