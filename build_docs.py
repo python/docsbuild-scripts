@@ -553,6 +553,27 @@ def edit(file: Path):
     temporary.rename(file)
 
 
+@contextmanager
+def wait_for_lock(
+    path: Path, timeout: float = 600, poll_interval: float = 10
+) -> Iterator[None]:
+    """Context manager to hold *path* as a lock file, waiting up to *timeout* seconds for it."""
+    deadline = perf_counter() + timeout
+    while True:
+        try:
+            lock = zc.lockfile.LockFile(path)
+            break
+        except zc.lockfile.LockError:
+            if perf_counter() >= deadline:
+                raise
+            logging.info("Waiting for lock %s...", path.name)
+            sleep(poll_interval)
+    try:
+        yield
+    finally:
+        lock.close()
+
+
 def setup_switchers(script_content: bytes, html_root: Path) -> None:
     """Setup cross-links between CPython versions:
     - Cross-link various languages in a language switcher
@@ -826,50 +847,58 @@ class DocBuilder:
             language_dir.chmod(0o775)
             target = language_dir / self.build_meta.version
 
-        target.mkdir(parents=True, exist_ok=True)
-        try:
-            target.chmod(0o775)
-        except PermissionError as err:
-            logging.warning("Can't change mod of %s: %s", target, str(err))
-        chgrp(target, group=self.group, recursive=True)
+        # Builds run concurrently but may publish the same language/version to
+        # the same directory, so serialise publishes per target.
+        # Contention is expected, but brief, so wait instead of dying.
+        with wait_for_lock(
+            HERE / f"publish-{self.build_meta.language}-{self.build_meta.version}.lock"
+        ):
+            target.mkdir(parents=True, exist_ok=True)
+            try:
+                target.chmod(0o775)
+            except PermissionError as err:
+                logging.warning("Can't change mod of %s: %s", target, str(err))
+            chgrp(target, group=self.group, recursive=True)
 
-        changed = 0
-        if self.includes_html:
-            # Copy built HTML files to webroot (default /srv/docs.python.org)
-            changed += changed_files(self.checkout / "Doc" / "build" / "html", target)
-            logging.info("Copying HTML files to %s", target)
-            chgrp(
-                self.checkout / "Doc" / "build" / "html/",
-                group=self.group,
-                recursive=True,
-            )
-            chmod_make_readable(self.checkout / "Doc" / "build" / "html")
-            run((
-                "rsync",
-                "-a",
-                "--delete-delay",
-                "--filter",
-                "P archives/",
-                str(self.checkout / "Doc" / "build" / "html") + "/",
-                target,
-            ))
+            changed = 0
+            if self.includes_html:
+                # Copy built HTML files to webroot (default /srv/docs.python.org)
+                changed += changed_files(
+                    self.checkout / "Doc" / "build" / "html", target
+                )
+                logging.info("Copying HTML files to %s", target)
+                chgrp(
+                    self.checkout / "Doc" / "build" / "html/",
+                    group=self.group,
+                    recursive=True,
+                )
+                chmod_make_readable(self.checkout / "Doc" / "build" / "html")
+                run((
+                    "rsync",
+                    "-a",
+                    "--delete-delay",
+                    "--filter",
+                    "P archives/",
+                    str(self.checkout / "Doc" / "build" / "html") + "/",
+                    target,
+                ))
 
-        dist_dir = self.checkout / "Doc" / "dist"
-        if dist_dir.is_dir():
-            # Copy archive files to /archives/
-            logging.debug("Copying dist files.")
-            chgrp(dist_dir, group=self.group, recursive=True)
-            chmod_make_readable(dist_dir)
-            archives_dir = target / "archives"
-            archives_dir.mkdir(parents=True, exist_ok=True)
-            archives_dir.chmod(
-                archives_dir.stat().st_mode | stat.S_IROTH | stat.S_IXOTH
-            )
-            chgrp(archives_dir, group=self.group)
-            changed += 1
-            for dist_file in dist_dir.iterdir():
-                shutil.copy2(dist_file, archives_dir / dist_file.name)
+            dist_dir = self.checkout / "Doc" / "dist"
+            if dist_dir.is_dir():
+                # Copy archive files to /archives/
+                logging.debug("Copying dist files.")
+                chgrp(dist_dir, group=self.group, recursive=True)
+                chmod_make_readable(dist_dir)
+                archives_dir = target / "archives"
+                archives_dir.mkdir(parents=True, exist_ok=True)
+                archives_dir.chmod(
+                    archives_dir.stat().st_mode | stat.S_IROTH | stat.S_IXOTH
+                )
+                chgrp(archives_dir, group=self.group)
                 changed += 1
+                for dist_file in dist_dir.iterdir():
+                    shutil.copy2(dist_file, archives_dir / dist_file.name)
+                    changed += 1
 
         logging.info("%s files changed", changed)
         if changed and not self.skip_cache_invalidation:
