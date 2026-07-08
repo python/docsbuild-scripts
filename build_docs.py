@@ -563,9 +563,11 @@ def wait_for_lock(
         try:
             lock = zc.lockfile.LockFile(path)
             break
-        except zc.lockfile.LockError:
+        except zc.lockfile.LockError as err:
             if perf_counter() >= deadline:
-                raise
+                raise TimeoutError(
+                    f"Gave up waiting for lock {path.name} after {timeout} seconds"
+                ) from err
             logging.info("Waiting for lock %s...", path.name)
             sleep(poll_interval)
     try:
@@ -684,6 +686,13 @@ class DocBuilder:
                 )
             else:
                 return None  # skipped
+        except TimeoutError as err:
+            # Another builder held the publish lock for too long; the docs
+            # were built fine and will be published on the next run.
+            logging.error("%s", err)
+            if sentry_sdk:
+                sentry_sdk.capture_exception(err)
+            return False
         except Exception as err:
             logging.exception("Badly handled exception, human, please help.")
             if sentry_sdk:
