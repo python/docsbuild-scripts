@@ -47,6 +47,7 @@ import concurrent.futures
 import dataclasses
 import datetime as dt
 import filecmp
+import io
 import json
 import logging
 import logging.handlers
@@ -58,6 +59,7 @@ import stat
 import subprocess
 import sys
 import venv
+import zipfile
 from bisect import bisect_left as bisect
 from contextlib import contextmanager, suppress
 from pathlib import Path
@@ -621,6 +623,8 @@ class DocBuilder:
     log_directory: Path
     skip_cache_invalidation: bool
     theme: str
+    fetch_artifacts: bool
+    github_token: str | None
 
     @property
     def html_only(self) -> bool:
@@ -648,8 +652,9 @@ class DocBuilder:
             if self.build_meta.is_translation:
                 self.clone_translation()
             if trigger_reason := self.should_rebuild(force_build):
-                self.build_venv()
-                self.build()
+                if not self.fetch_artifacts or self.includes_html:
+                    self.build_venv()
+                self.build(http)
                 self.copy_build_to_webroot(http)
                 self.save_state(
                     build_start=start_timestamp,
@@ -699,7 +704,7 @@ class DocBuilder:
         branches = re.findall(r"/([0-9]+\.[0-9]+)$", remote_branches, re.M)
         return locate_nearest_version(branches, self.build_meta.version)
 
-    def build(self) -> None:
+    def build(self, http: urllib3.PoolManager) -> None:
         """Build this version/language doc."""
         logging.info("Build start.")
         start_time = perf_counter()
@@ -719,48 +724,171 @@ class DocBuilder:
             maketarget = "autobuild-dev"
         else:
             maketarget = "autobuild-stable"
-        if self.html_only:
+
+        # If we fetch artifacts, we don't compile non-html locally, so we force html-only.
+        # However, if we don't even include HTML (e.g. no-html), we don't run make at all!
+        if self.fetch_artifacts:
+            if self.includes_html:
+                maketarget += "-html"
+            else:
+                maketarget = None
+        elif self.html_only:
             maketarget += "-html"
-        logging.info("Running make %s", maketarget)
-        python = self.venv / "bin" / "python"
-        sphinxbuild = self.venv / "bin" / "sphinx-build"
-        blurb = self.venv / "bin" / "blurb"
 
-        if self.includes_html:
-            site_url = self.build_meta.url
-            # Define a tag to enable opengraph socialcards previews
-            # (used in Doc/conf.py and requires matplotlib)
-            sphinxopts += (
-                "-t create-social-cards",
-                f"-D ogp_site_url={site_url}",
-            )
+        if maketarget is not None:
+            logging.info("Running make %s", maketarget)
+            python = self.venv / "bin" / "python"
+            sphinxbuild = self.venv / "bin" / "sphinx-build"
+            blurb = self.venv / "bin" / "blurb"
 
-            if self.build_meta.version_tuple < (3, 8):
-                # Disable CPython switchers, we handle them now:
-                text = (self.checkout / "Doc" / "Makefile").read_text(encoding="utf-8")
-                text = text.replace(" -A switchers=1", "")
-                (self.checkout / "Doc" / "Makefile").write_text(text, encoding="utf-8")
+            if self.includes_html:
+                site_url = self.build_meta.url
+                # Define a tag to enable opengraph socialcards previews
+                # (used in Doc/conf.py and requires matplotlib)
+                sphinxopts += (
+                    "-t create-social-cards",
+                    f"-D ogp_site_url={site_url}",
+                )
 
-            self.setup_indexsidebar()
-        run_with_logging((
-            "make",
-            "-C",
-            self.checkout / "Doc",
-            f"PYTHON={python}",
-            f"SPHINXBUILD={sphinxbuild}",
-            f"BLURB={blurb}",
-            f"VENVDIR={self.venv}",
-            f"SPHINXOPTS={' '.join(sphinxopts)}",
-            "SPHINXERRORHANDLING=",
-            maketarget,
-        ))
-        self.log_directory.mkdir(parents=True, exist_ok=True)
-        chgrp(self.log_directory, group=self.group, recursive=True)
-        if self.includes_html:
-            setup_switchers(
-                self.switchers_content, self.checkout / "Doc" / "build" / "html"
-            )
+                if self.build_meta.version_tuple < (3, 8):
+                    # Disable CPython switchers, we handle them now:
+                    text = (self.checkout / "Doc" / "Makefile").read_text(
+                        encoding="utf-8"
+                    )
+                    text = text.replace(" -A switchers=1", "")
+                    (self.checkout / "Doc" / "Makefile").write_text(
+                        text, encoding="utf-8"
+                    )
+
+                self.setup_indexsidebar()
+            run_with_logging((
+                "make",
+                "-C",
+                self.checkout / "Doc",
+                f"PYTHON={python}",
+                f"SPHINXBUILD={sphinxbuild}",
+                f"BLURB={blurb}",
+                f"VENVDIR={self.venv}",
+                f"SPHINXOPTS={' '.join(sphinxopts)}",
+                "SPHINXERRORHANDLING=",
+                maketarget,
+            ))
+            self.log_directory.mkdir(parents=True, exist_ok=True)
+            chgrp(self.log_directory, group=self.group, recursive=True)
+            if self.includes_html:
+                setup_switchers(
+                    self.switchers_content, self.checkout / "Doc" / "build" / "html"
+                )
+
+        if self.fetch_artifacts and not self.html_only:
+            self.download_non_html_artifacts(http)
+
         logging.info("Build done (%s).", format_seconds(perf_counter() - start_time))
+
+    def download_non_html_artifacts(self, http: urllib3.PoolManager) -> None:
+        """Download non-HTML artifacts from GitHub actions and extract to dist."""
+        token = (
+            self.github_token
+            or os.environ.get("GITHUB_TOKEN")
+            or os.environ.get("GH_TOKEN")
+        )
+        if not token:
+            raise ValueError(
+                "GitHub token is required to download actions artifacts. "
+                "Please set the GITHUB_TOKEN or GH_TOKEN environment variable, "
+                "or pass it via the --github-token argument."
+            )
+
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "docsbuild-scripts-fetch-artifacts",
+            "Authorization": f"Bearer {token}",
+        }
+
+        artifacts = []
+        page = 1
+        per_page = 100
+        max_pages = 5
+        version = self.build_meta.version
+        language = self.build_meta.language
+        pattern = rf"^python-{re.escape(version)}(?:\.\d+)?-{re.escape(language)}-docs"
+
+        logging.info("Searching for non-HTML artifacts for %s/%s", language, version)
+
+        while page <= max_pages:
+            url = f"https://api.github.com/repos/m-aciek/python-docs-offline/actions/artifacts?per_page={per_page}&page={page}"
+            logging.debug("Fetching page %d of artifacts: %s", page, url)
+            response = http.request("GET", url, headers=headers)
+            if response.status != 200:
+                raise RuntimeError(
+                    f"Failed to fetch artifacts list (page {page}): HTTP {response.status} - {response.data.decode('utf-8', errors='ignore')}"
+                )
+
+            try:
+                page_data = json.loads(response.data)
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to parse page {page} artifacts JSON: {e}"
+                ) from e
+
+            page_artifacts = page_data.get("artifacts", [])
+            if not page_artifacts:
+                break
+
+            artifacts.extend(page_artifacts)
+            page += 1
+
+        # Filter matching artifacts
+        matching = []
+        for artifact in artifacts:
+            name = artifact.get("name", "")
+            if not re.match(pattern, name):
+                continue
+            # Skip HTML and logs
+            if "-html" in name or "-logs" in name:
+                continue
+            matching.append(artifact)
+
+        if not matching:
+            raise RuntimeError(
+                f"No matching non-HTML artifacts found for {language}/{version}"
+            )
+
+        # Sort matching artifacts by created_at descending so we get the newest first
+        matching.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+
+        # Keep only the latest for each unique name
+        latest_artifacts = {}
+        for artifact in matching:
+            name = artifact["name"]
+            if name not in latest_artifacts:
+                latest_artifacts[name] = artifact
+
+        dist_dir = self.checkout / "Doc" / "dist"
+        if dist_dir.exists():
+            logging.info("Cleaning existing dist directory: %s", dist_dir)
+            shutil.rmtree(dist_dir)
+        dist_dir.mkdir(parents=True, exist_ok=True)
+
+        for name, artifact in latest_artifacts.items():
+            artifact_id = artifact["id"]
+            download_url = artifact["archive_download_url"]
+            logging.info("Downloading artifact: %s (ID: %s)", name, artifact_id)
+
+            resp = http.request("GET", download_url, headers=headers)
+            if resp.status != 200:
+                raise RuntimeError(
+                    f"Failed to download artifact {name}: HTTP {resp.status} - {resp.data.decode('utf-8', errors='ignore')}"
+                )
+
+            try:
+                with zipfile.ZipFile(io.BytesIO(resp.data)) as zip_file:
+                    zip_file.extractall(dist_dir)
+                logging.info("Successfully extracted %s to %s", name, dist_dir)
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to extract zip content for artifact {name}: {e}"
+                ) from e
 
     def build_venv(self) -> None:
         """Build a venv for the specific Python version.
@@ -1104,6 +1232,15 @@ def parse_args() -> argparse.Namespace:
         " 'fr' or 'pt-br'. "
         "Builds all available languages by default.",
         metavar="fr",
+    )
+    parser.add_argument(
+        "--fetch-artifacts",
+        action="store_true",
+        help="Fetch non-HTML docs from GitHub Artifacts instead of building them locally.",
+    )
+    parser.add_argument(
+        "--github-token",
+        help="GitHub Personal Access Token (PAT) for downloading artifacts. Can also be set via GITHUB_TOKEN or GH_TOKEN.",
     )
     parser.add_argument(
         "--version",

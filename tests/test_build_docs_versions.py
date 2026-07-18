@@ -10,6 +10,7 @@ from build_docs import Version, Versions
 @pytest.fixture
 def versions() -> Versions:
     return Versions([
+        Version(name="", status="planned", branch_or_tag=""),
         Version(name="3.14", status="in development", branch_or_tag=""),
         Version(name="3.13", status="stable", branch_or_tag=""),
         Version(name="3.12", status="stable", branch_or_tag=""),

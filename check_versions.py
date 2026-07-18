@@ -32,7 +32,7 @@ def find_upstream_remote_name(repo: git.Repo) -> str:
     """Find a remote in the repo that matches the URL pattern."""
     for remote in repo.remotes:
         for url in remote.urls:
-            if "github.com/python" in url:
+            if "github.com/python" in url or "github.com:python":
                 return f"{remote.name}/"
 
 
