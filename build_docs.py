@@ -804,24 +804,30 @@ class DocBuilder:
     def build_venv(self) -> None:
         """Build a venv for the specific Python version.
 
-        So we can reuse them from builds to builds, while they contain
-        different Sphinx versions.
+        The venv is recreated from scratch for every build: pip considers
+        a requirement satisfied when the installed version number matches,
+        even if the requirement is a direct URL now pointing at different
+        code, so a reused venv can silently keep outdated packages
+        (see python/cpython#153227).
         """
         requirements = list(self.build_meta.dependencies)
         if self.includes_html:
             # opengraph previews
             requirements.append("matplotlib>=3")
 
-        venv_path = self.build_root / self.build_meta.venv_name
-        venv.create(venv_path, symlinks=os.name != "nt", with_pip=True)
+        venv_name = self.build_meta.venv_name
+        if self.select_output is not None:
+            # Never share a venv with a concurrent differently-selected
+            # build, which may recreate it mid-build.
+            venv_name += f"-{self.select_output}"
+        venv_path = self.build_root / venv_name
+        venv.create(venv_path, symlinks=os.name != "nt", with_pip=True, clear=True)
         run(
             (
                 venv_path / "bin" / "python",
                 "-m",
                 "pip",
                 "install",
-                "--upgrade",
-                "--upgrade-strategy=eager",
                 self.theme,
                 *requirements,
             ),
