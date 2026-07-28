@@ -822,18 +822,20 @@ class DocBuilder:
             venv_name += f"-{self.select_output}"
         venv_path = self.build_root / venv_name
         venv.create(venv_path, symlinks=os.name != "nt", with_pip=True, clear=True)
+        python = venv_path / "bin" / "python"
+        run((python, "-m", "pip", "install", "--upgrade", "pip"))
+
+        if (self.checkout / "Doc" / "pylock.toml").exists():
+            requirements.remove("-rrequirements.txt")
+            run(
+                (python, "-m", "pip", "install", "-rpylock.toml"),
+                cwd=self.checkout / "Doc",
+            )
         run(
-            (
-                venv_path / "bin" / "python",
-                "-m",
-                "pip",
-                "install",
-                self.theme,
-                *requirements,
-            ),
+            (python, "-m", "pip", "install", self.theme, *requirements),
             cwd=self.checkout / "Doc",
         )
-        run((venv_path / "bin" / "python", "-m", "pip", "freeze", "--all"))
+        run((python, "-m", "pip", "freeze", "--all"))
         self.venv = venv_path
 
     def setup_indexsidebar(self) -> None:
