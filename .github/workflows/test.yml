@@ -9,8 +9,12 @@ env:
 
 jobs:
   integration:
-    name: Integration test
+    name: Integration test (${{ matrix.branch }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ["3.14", "main"]
     steps:
     - uses: actions/checkout@v7
       with:
@@ -34,12 +38,12 @@ jobs:
         --group "$(id -g)"
         --skip-cache-invalidation
         --languages en
-        --branches 3.14
+        --branches ${{ matrix.branch }}
 
     - name: Upload documentation
       uses: actions/upload-artifact@v7
       with:
-        name: www-root
+        name: www-root-${{ matrix.branch }}
         path: ./www
         retention-days: 2
 
