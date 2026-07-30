@@ -641,6 +641,7 @@ class DocBuilder:
     cpython_repo: Repository
     docs_by_version_content: bytes
     switchers_content: bytes
+    built_venvs: set[Path]
     build_root: Path
     www_root: Path
     select_output: Literal["no-html", "only-html", "only-html-en"] | None
@@ -804,30 +805,49 @@ class DocBuilder:
     def build_venv(self) -> None:
         """Build a venv for the specific Python version.
 
-        So we can reuse them from builds to builds, while they contain
-        different Sphinx versions.
+        The venv is created at most once per run, reused by later builds
+        of the same version, and removed at the end of the run: reusing
+        a venv across runs can silently keep outdated packages, because
+        pip considers a requirement satisfied when the installed version
+        number matches, even if the requirement is a direct URL now
+        pointing at different code.
         """
+        venv_name = self.build_meta.venv_name
+        if self.select_output is not None:
+            # Never share a venv with a concurrent differently-selected
+            # build, which may recreate it mid-build.
+            venv_name += f"-{self.select_output}"
+        venv_path = self.build_root / venv_name
+        if venv_path in self.built_venvs:
+            self.venv = venv_path
+            return
+
         requirements = list(self.build_meta.dependencies)
         if self.includes_html:
             # opengraph previews
             requirements.append("matplotlib>=3")
 
-        venv_path = self.build_root / self.build_meta.venv_name
-        venv.create(venv_path, symlinks=os.name != "nt", with_pip=True)
+        venv.create(
+            venv_path,
+            symlinks=os.name != "nt",
+            with_pip=True,
+            clear=True,
+            upgrade_deps=True,
+        )
+        python = venv_path / "bin" / "python"
+
+        if (self.checkout / "Doc" / "pylock.toml").is_file():
+            requirements.remove("-rrequirements.txt")
+            run(
+                (python, "-m", "pip", "install", "-rpylock.toml"),
+                cwd=self.checkout / "Doc",
+            )
         run(
-            (
-                venv_path / "bin" / "python",
-                "-m",
-                "pip",
-                "install",
-                "--upgrade",
-                "--upgrade-strategy=eager",
-                self.theme,
-                *requirements,
-            ),
+            (python, "-m", "pip", "install", self.theme, *requirements),
             cwd=self.checkout / "Doc",
         )
-        run((venv_path / "bin" / "python", "-m", "pip", "freeze", "--all"))
+        run((python, "-m", "pip", "freeze", "--all"))
+        self.built_venvs.add(venv_path)
         self.venv = venv_path
 
     def setup_indexsidebar(self) -> None:
@@ -1263,30 +1283,36 @@ def build_docs(args: argparse.Namespace) -> int:
         "https://github.com/python/cpython.git",
         args.build_root / _checkout_name(args.select_output),
     )
-    while todo:
-        build_props = todo.pop()
-        logging.root.handlers[0].setFormatter(
-            logging.Formatter(
-                f"%(asctime)s %(levelname)s {build_props.slug}: %(message)s"
+    built_venvs: set[Path] = set()
+    try:
+        while todo:
+            build_props = todo.pop()
+            logging.root.handlers[0].setFormatter(
+                logging.Formatter(
+                    f"%(asctime)s %(levelname)s {build_props.slug}: %(message)s"
+                )
             )
-        )
-        if sentry_sdk:
-            scope = sentry_sdk.get_isolation_scope()
-            scope.set_tag("version", build_props.version)
-            scope.set_tag("language", build_props.language)
-        cpython_repo.update()
-        builder = DocBuilder(
-            build_props,
-            cpython_repo,
-            docs_by_version_content,
-            switchers_content,
-            **vars(args),
-        )
-        built_successfully = builder.run(http, force_build=force_build)
-        if built_successfully:
-            build_succeeded.add(build_props.slug)
-        elif built_successfully is not None:
-            any_build_failed = True
+            if sentry_sdk:
+                scope = sentry_sdk.get_isolation_scope()
+                scope.set_tag("version", build_props.version)
+                scope.set_tag("language", build_props.language)
+            cpython_repo.update()
+            builder = DocBuilder(
+                build_props,
+                cpython_repo,
+                docs_by_version_content,
+                switchers_content,
+                built_venvs,
+                **vars(args),
+            )
+            built_successfully = builder.run(http, force_build=force_build)
+            if built_successfully:
+                build_succeeded.add(build_props.slug)
+            elif built_successfully is not None:
+                any_build_failed = True
+    finally:
+        for venv_path in built_venvs:
+            shutil.rmtree(venv_path, ignore_errors=True)
 
     logging.root.handlers[0].setFormatter(
         logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
