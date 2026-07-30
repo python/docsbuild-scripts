@@ -807,8 +807,7 @@ class DocBuilder:
         The venv is recreated from scratch for every build: pip considers
         a requirement satisfied when the installed version number matches,
         even if the requirement is a direct URL now pointing at different
-        code, so a reused venv can silently keep outdated packages
-        (see python/cpython#153227).
+        code, so a reused venv can silently keep outdated packages.
         """
         requirements = list(self.build_meta.dependencies)
         if self.includes_html:
