@@ -836,7 +836,7 @@ class DocBuilder:
         )
         python = venv_path / "bin" / "python"
 
-        if (self.checkout / "Doc" / "pylock.toml").exists():
+        if (self.checkout / "Doc" / "pylock.toml").is_file():
             requirements.remove("-rrequirements.txt")
             run(
                 (python, "-m", "pip", "install", "-rpylock.toml"),
