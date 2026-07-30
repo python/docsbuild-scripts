@@ -805,12 +805,12 @@ class DocBuilder:
     def build_venv(self) -> None:
         """Build a venv for the specific Python version.
 
-        The venv is created at most once per run and reused by later
-        builds of the same version: reusing a venv across runs can
-        silently keep outdated packages, because pip considers a
-        requirement satisfied when the installed version number matches,
-        even if the requirement is a direct URL now pointing at
-        different code.
+        The venv is created at most once per run, reused by later builds
+        of the same version, and removed at the end of the run: reusing
+        a venv across runs can silently keep outdated packages, because
+        pip considers a requirement satisfied when the installed version
+        number matches, even if the requirement is a direct URL now
+        pointing at different code.
         """
         venv_name = self.build_meta.venv_name
         if self.select_output is not None:
@@ -1284,31 +1284,35 @@ def build_docs(args: argparse.Namespace) -> int:
         args.build_root / _checkout_name(args.select_output),
     )
     built_venvs: set[Path] = set()
-    while todo:
-        build_props = todo.pop()
-        logging.root.handlers[0].setFormatter(
-            logging.Formatter(
-                f"%(asctime)s %(levelname)s {build_props.slug}: %(message)s"
+    try:
+        while todo:
+            build_props = todo.pop()
+            logging.root.handlers[0].setFormatter(
+                logging.Formatter(
+                    f"%(asctime)s %(levelname)s {build_props.slug}: %(message)s"
+                )
             )
-        )
-        if sentry_sdk:
-            scope = sentry_sdk.get_isolation_scope()
-            scope.set_tag("version", build_props.version)
-            scope.set_tag("language", build_props.language)
-        cpython_repo.update()
-        builder = DocBuilder(
-            build_props,
-            cpython_repo,
-            docs_by_version_content,
-            switchers_content,
-            built_venvs,
-            **vars(args),
-        )
-        built_successfully = builder.run(http, force_build=force_build)
-        if built_successfully:
-            build_succeeded.add(build_props.slug)
-        elif built_successfully is not None:
-            any_build_failed = True
+            if sentry_sdk:
+                scope = sentry_sdk.get_isolation_scope()
+                scope.set_tag("version", build_props.version)
+                scope.set_tag("language", build_props.language)
+            cpython_repo.update()
+            builder = DocBuilder(
+                build_props,
+                cpython_repo,
+                docs_by_version_content,
+                switchers_content,
+                built_venvs,
+                **vars(args),
+            )
+            built_successfully = builder.run(http, force_build=force_build)
+            if built_successfully:
+                build_succeeded.add(build_props.slug)
+            elif built_successfully is not None:
+                any_build_failed = True
+    finally:
+        for venv_path in built_venvs:
+            shutil.rmtree(venv_path, ignore_errors=True)
 
     logging.root.handlers[0].setFormatter(
         logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
