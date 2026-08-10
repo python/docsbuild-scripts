@@ -1,4 +1,4 @@
-GitPython
+GitPython>=3.1.58
 httpx
 tabulate
 zc.lockfile
