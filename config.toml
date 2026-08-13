@@ -103,6 +103,10 @@ translated_name = "Português brasileiro"
 name = "Romanian"
 translated_name = "Românește"
 
+[languages.ru]
+name = "Russian"
+translated_name = "Русский"
+
 [languages.sv]
 name = "Swedish"
 translated_name = "Svenska"
