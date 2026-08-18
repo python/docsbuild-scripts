@@ -102,6 +102,9 @@ translated_name = "Português brasileiro"
 [languages.fa]
 name = "Persian"
 translated_name = "فارسی"
+sphinxopts = [
+    '-D html_theme_options.is_rtl=true',
+]
 
 [languages.ro]
 name = "Romanian"
