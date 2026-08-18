@@ -99,6 +99,10 @@ translated_name = "polski"
 name = "Brazilian Portuguese"
 translated_name = "Português brasileiro"
 
+[languages.fa]
+name = "Persian"
+translated_name = "فارسی"
+
 [languages.ro]
 name = "Romanian"
 translated_name = "Românește"
