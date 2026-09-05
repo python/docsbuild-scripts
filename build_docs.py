@@ -756,8 +756,14 @@ class DocBuilder:
         else:
             maketarget = "autobuild-stable"
         if self.html_only:
-            maketarget += "-html"
-        logging.info("Running make %s", maketarget)
+            maketargets = [f"{maketarget}-html"]
+        else:
+            maketargets = [maketarget]
+            if self.includes_html and self.build_meta.version_tuple >= (3, 9):
+                # Since 3.9, the plain autobuild targets only build non-HTML
+                # (gh-139436), but a combined build needs HTML.
+                maketargets.append(f"{maketarget}-html")
+        logging.info("Running make %s", " ".join(maketargets))
         python = self.venv / "bin" / "python"
         sphinxbuild = self.venv / "bin" / "sphinx-build"
         blurb = self.venv / "bin" / "blurb"
@@ -792,7 +798,7 @@ class DocBuilder:
             f"VENVDIR={self.venv}",
             f"SPHINXOPTS={' '.join(sphinxopts)}",
             "SPHINXERRORHANDLING=",
-            maketarget,
+            *maketargets,
         ))
         self.log_directory.mkdir(parents=True, exist_ok=True)
         chgrp(self.log_directory, group=self.group, recursive=True)
