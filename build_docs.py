@@ -759,8 +759,8 @@ class DocBuilder:
             maketargets = [f"{maketarget}-html"]
         else:
             maketargets = [maketarget]
-            if self.includes_html and self.build_meta.version_tuple >= (3, 9):
-                # Since 3.9, the plain autobuild targets only build non-HTML
+            if self.includes_html:
+                # The plain autobuild targets only build non-HTML
                 # (gh-139436), but a combined build needs HTML.
                 maketargets.append(f"{maketarget}-html")
         logging.info("Running make %s", " ".join(maketargets))
