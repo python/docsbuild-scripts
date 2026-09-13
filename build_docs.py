@@ -125,18 +125,21 @@ class Versions:
 
         return cls(sorted(versions, key=Version.as_tuple))
 
-    def filter(self, branches: Sequence[str] = ()) -> Sequence[Version]:
+    def filter(
+        self, branches: Sequence[str] = (), *, include_security: bool = False
+    ) -> Sequence[Version]:
         """Filter the given versions.
 
         If *branches* is given, only *versions* matching *branches* are returned.
 
-        Else all live versions are returned (this means no EOL and no
-        security-fixes branches).
+        Else all live versions are returned (this means no EOL branches),
+        plus security-fixes branches if *include_security* is true.
         """
         if branches:
             branches = frozenset(branches)
             return [v for v in self if {v.name, v.branch_or_tag} & branches]
-        return [v for v in self if v.status not in {"EOL", "security-fixes"}]
+        excluded = {"EOL"} if include_security else {"EOL", "security-fixes"}
+        return [v for v in self if v.status not in excluded]
 
     @property
     def current_stable(self) -> Version:
@@ -1135,6 +1138,11 @@ def parse_args() -> argparse.Namespace:
         help="Versions to build (defaults to all maintained branches).",
     )
     parser.add_argument(
+        "--include-security-branches",
+        action="store_true",
+        help="Also build security-fixes branches (ignored when --branches is given).",
+    )
+    parser.add_argument(
         "-r",
         "--build-root",
         type=Path,
@@ -1272,10 +1280,13 @@ def build_docs(args: argparse.Namespace) -> int:
     # This runs languages in config.toml order and versions newest first.
     todo = [
         BuildMetadata(_version=version, _language=language)
-        for version in versions.filter(args.branches)
+        for version in versions.filter(
+            args.branches, include_security=args.include_security_branches
+        )
         for language in reversed(languages.filter(args.languages))
     ]
     del args.branches
+    del args.include_security_branches
     del args.languages
     force_build = args.force
     del args.force
