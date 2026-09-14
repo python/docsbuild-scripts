@@ -1135,7 +1135,7 @@ def parse_args() -> argparse.Namespace:
         "--branches",
         nargs="*",
         metavar="3.12",
-        help="Versions to build (defaults to all maintained branches).",
+        help="Versions to build (defaults to feature and bugfix branches).",
     )
     parser.add_argument(
         "--include-security-branches",
