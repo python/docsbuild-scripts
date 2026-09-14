@@ -126,7 +126,7 @@ class Versions:
         return cls(sorted(versions, key=Version.as_tuple))
 
     def filter(
-        self, branches: Sequence[str] = (), *, include_security: bool = False
+        self, branches: None | Sequence[str] = (), *, include_security: bool = False
     ) -> Sequence[Version]:
         """Filter the given versions.
 
