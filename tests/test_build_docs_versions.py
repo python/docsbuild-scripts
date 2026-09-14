@@ -16,6 +16,7 @@ def versions() -> Versions:
         Version(name="3.11", status="security-fixes", branch_or_tag=""),
         Version(name="3.10", status="security-fixes", branch_or_tag=""),
         Version(name="3.9", status="security-fixes", branch_or_tag=""),
+        Version(name="3.8", status="EOL", branch_or_tag=""),
     ])
 
 
@@ -24,7 +25,7 @@ def test_reversed(versions: Versions) -> None:
     output = list(reversed(versions))
 
     # Assert
-    assert output[0].name == "3.9"
+    assert output[0].name == "3.8"
     assert output[-1].name == "3.14"
 
 
@@ -101,32 +102,29 @@ def test_current_dev(versions) -> None:
     assert current_dev.status == "in development"
 
 
-def test_filter_default(versions) -> None:
+@pytest.mark.parametrize(
+    ("branches", "include_security", "expected"),
+    [
+        # Default: no EOL and no security-fixes branches
+        ((), False, ["3.14", "3.13", "3.12"]),
+        # Security-fixes branches included, EOL still excluded
+        ((), True, ["3.14", "3.13", "3.12", "3.11", "3.10", "3.9"]),
+        # Explicit branches are returned regardless of status
+        (["3.13"], False, ["3.13"]),
+        (["3.13", "3.14"], False, ["3.14", "3.13"]),
+        (["3.9", "3.8"], False, ["3.9", "3.8"]),
+        # Explicit branches take precedence over include_security
+        (["3.13"], True, ["3.13"]),
+    ],
+)
+def test_filter(
+    versions,
+    branches: list[str],
+    include_security: bool,
+    expected: list[str],
+) -> None:
     # Act
-    filtered = versions.filter()
+    filtered = versions.filter(branches, include_security=include_security)
 
     # Assert
-    assert filtered == [
-        Version(name="3.14", status="in development", branch_or_tag=""),
-        Version(name="3.13", status="stable", branch_or_tag=""),
-        Version(name="3.12", status="stable", branch_or_tag=""),
-    ]
-
-
-def test_filter_one(versions) -> None:
-    # Act
-    filtered = versions.filter(["3.13"])
-
-    # Assert
-    assert filtered == [Version(name="3.13", status="security-fixes", branch_or_tag="")]
-
-
-def test_filter_multiple(versions) -> None:
-    # Act
-    filtered = versions.filter(["3.13", "3.14"])
-
-    # Assert
-    assert filtered == [
-        Version(name="3.14", status="in development", branch_or_tag=""),
-        Version(name="3.13", status="security-fixes", branch_or_tag=""),
-    ]
+    assert [v.name for v in filtered] == expected

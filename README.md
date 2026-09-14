@@ -82,10 +82,11 @@ Or run `tox -e cog` (with a clone at `../cpython`) to directly update these tabl
 ## Manually rebuild a branch
 
 Docs for [feature and bugfix branches](https://devguide.python.org/versions/) are
-automatically built from a cron.
+automatically built from a cron. Security branches are also built from a cron
+(the crons passing `--include-security-branches`), but less frequently.
 
-Manual rebuilds are needed for new security releases,
-and to add the end-of-life banner for newly end-of-life branches.
+Manual rebuilds are needed to add the end-of-life banner for
+newly end-of-life branches.
 
 To manually rebuild a branch, for example 3.11:
 
