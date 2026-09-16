@@ -1,20 +1,20 @@
 #!/usr/bin/env python
 
 import argparse
-import asyncio
+import concurrent.futures
 import logging
 import re
 from pathlib import Path
 
 import git
-import httpx
 import urllib3
 from tabulate import tabulate
 
 import build_docs
 
 logger = logging.getLogger(__name__)
-http = urllib3.PoolManager()
+MAX_WORKERS = 16
+http = urllib3.PoolManager(maxsize=MAX_WORKERS)
 VERSIONS = build_docs.parse_versions_from_peps_site(http)
 LANGUAGES = build_docs.parse_languages_from_config()
 
@@ -87,33 +87,38 @@ def search_sphinx_versions_in_cpython(repo: git.Repo):
     print(tabulate(table, headers=headers, tablefmt="github", disable_numparse=True))
 
 
-async def get_version_in_prod(language: str, version: str) -> str:
+def get_version_in_prod(language: str, version: str) -> str:
     if language == "en":
         url = f"https://docs.python.org/{version}/"
     else:
         url = f"https://docs.python.org/{language}/{version}/"
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url, timeout=5)
-        except httpx.ConnectTimeout:
-            return "(timeout)"
+    try:
+        response = http.request("GET", url, timeout=5)
+    except urllib3.exceptions.HTTPError:
+        return "(timeout)"
     # Python 2.6--3.7: sphinx.pocoo.org
     # from Python 3.8: www.sphinx-doc.org
     if created_using := re.search(
-        r"(?:sphinx.pocoo.org|www.sphinx-doc.org).*?([0-9.]+[0-9])", response.text
+        r"(?:sphinx.pocoo.org|www.sphinx-doc.org).*?([0-9.]+[0-9])",
+        response.data.decode("utf-8", errors="replace"),
     ):
         return created_using.group(1)
     return "ø"
 
 
-async def which_sphinx_is_used_in_production():
+def which_sphinx_is_used_in_production():
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {
+            (version.name, language.tag): executor.submit(
+                get_version_in_prod, language.tag, version.name
+            )
+            for version in VERSIONS
+            for language in LANGUAGES
+        }
     table = [
         [
             version.name,
-            *await asyncio.gather(*[
-                get_version_in_prod(language.tag, version.name)
-                for language in LANGUAGES
-            ]),
+            *[futures[version.name, language.tag].result() for language in LANGUAGES],
         ]
         for version in VERSIONS
     ]
@@ -123,15 +128,12 @@ async def which_sphinx_is_used_in_production():
 
 def check_versions(cpython_clone: str) -> None:
     logging.basicConfig(level=logging.INFO)
-    logging.getLogger("charset_normalizer").setLevel(logging.WARNING)
-    logging.getLogger("asyncio").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
     repo = git.Repo(cpython_clone)
     print("Sphinx configuration in various branches:", end="\n\n")
     search_sphinx_versions_in_cpython(repo)
     print()
     print("Sphinx build as seen on docs.python.org:", end="\n\n")
-    asyncio.run(which_sphinx_is_used_in_production())
+    which_sphinx_is_used_in_production()
 
 
 def main():
