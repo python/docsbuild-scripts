@@ -18,6 +18,12 @@ sphinxopts = [
     "-D latex_elements.fontenc=",
 ]
 
+[languages.de]
+name = "German"
+translated_name = "Deutsch"
+in_prod = true
+html_only = false
+
 [languages.el]
 name = "Greek"
 translated_name = "Ελληνικά"
