@@ -90,6 +90,11 @@ sphinxopts = [
     '-D latex_elements.preamble=\\usepackage{kotex}\\setmainhangulfont{UnBatang}\\setsanshangulfont{UnDotum}\\setmonohangulfont{UnTaza}',
 ]
 
+[languages.pa]
+name = "Punjabi"
+translated_name = "ਪੰਜਾਬੀ"
+html_only = true
+
 [languages.pl]
 name = "Polish"
 translated_name = "polski"
