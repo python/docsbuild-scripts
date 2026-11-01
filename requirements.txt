@@ -1,6 +1,6 @@
 jinja2
 platformdirs
-sentry-sdk>=2.70.0
-tomlkit>=0.15.1
+sentry-sdk>=2.73.0
+tomlkit>=0.15.2
 urllib3>=2.8.0
 zc.lockfile
